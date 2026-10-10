@@ -1,7 +1,11 @@
 package com.noryan.romcore.core.primehack
 
 import android.app.Application
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Bundle
 import android.os.Process
@@ -60,6 +64,7 @@ class PrimeHackActivity : EmulationActivity() {
     private var hooks: RomCoreCoreHost.Hooks? = null
     private var gyro: PrimeHackGyro? = null
     private var system: System = System.GAMECUBE
+    private var debugReceiver: BroadcastReceiver? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val path = intent.getStringExtra(EXTRA_ROM_PATH)
@@ -84,6 +89,7 @@ class PrimeHackActivity : EmulationActivity() {
         session = PrimeHackSession(this, path ?: uri!!, this)
         hooks = RomCoreCoreHost.install(this, session, system)   // InputRouter + shared menu + hotkeys + keep-screen-on
 
+        registerDebugReceiver()
         gyro = PrimeHackGyro(this).also { if (PrimeHackPrefs.gyroAim(this)) it.start() }
 
         if (intent.getBooleanExtra(EXTRA_RESUME_STATE, false)) {
@@ -95,6 +101,28 @@ class PrimeHackActivity : EmulationActivity() {
                 session.loadState(0)
             }.start()
         }
+    }
+
+    /**
+     * Debuggable builds only: `adb shell am broadcast -a com.noryan.romcore.core.primehack.DEBUG --es cmd save|load|menu|close
+     * [--ei slot N] -p com.noryan.romcore` drives the session without a controller (used for on-device testing).
+     */
+    private fun registerDebugReceiver() {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return
+        val r = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                val slot = i.getIntExtra("slot", RomCoreCoreHost.QUICK_SLOT)
+                when (i.getStringExtra("cmd")) {
+                    "save" -> Thread { android.util.Log.i("PrimeHackDbg", "save($slot)=" + session.saveState(slot)) }.start()
+                    "load" -> Thread { android.util.Log.i("PrimeHackDbg", "load($slot)=" + session.loadState(slot)) }.start()
+                    "menu" -> runOnUiThread { hooks?.menu?.toggle() }
+                    "close" -> session.close()
+                }
+            }
+        }
+        debugReceiver = r
+        androidx.core.content.ContextCompat.registerReceiver(this, r, IntentFilter("com.noryan.romcore.core.primehack.DEBUG"),
+            androidx.core.content.ContextCompat.RECEIVER_EXPORTED)
     }
 
     /** Dolphin's Back handler lands here: show/hide the shared menu instead of the Dolphin pop-out. */
@@ -129,6 +157,7 @@ class PrimeHackActivity : EmulationActivity() {
     }
 
     override fun onDestroy() {
+        debugReceiver?.let { runCatching { unregisterReceiver(it) } }
         hooks?.onDestroy()
         super.onDestroy()
         // Dolphin's native core cannot be re-initialised in-process: take the whole :primehack process down with the game.

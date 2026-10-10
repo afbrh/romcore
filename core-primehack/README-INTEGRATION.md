@@ -9,7 +9,9 @@ Recreate the clone from scratch:
 
     cp -cR primehack-src primehack-romcore-src
     python3 romcore/core-primehack/tools/relocate_primehack.py primehack-romcore-src   # mechanical renames (below)
-    cd primehack-romcore-src && git checkout -b romcore && git am ../romcore/core-primehack/patches/*.patch
+    cd primehack-romcore-src && git checkout -b romcore && git add -A && git commit -m relocate   # relocation commit
+    git am ../romcore/core-primehack/patches/000*.patch
+    git -C Externals/libadrenotools am ../../../romcore/core-primehack/patches/libadrenotools/*.patch   # primehack_* hook lib names
 
 (`patches/` = `git format-patch` of the clone's `romcore` commits on top of the relocation commit.)
 
@@ -23,6 +25,8 @@ Recreate the clone from scratch:
 | Theme/style names | all 28 styles prefixed `PH` (`PHTheme.Dolphin.Main`) | another prefix |
 | Manifest components with fixed authorities (`${applicationId}.filesprovider`, `.user`), launcher activities, `DolphinApplication` | library manifest stripped to features/permissions; only `PrimeHackActivity` (declared in :core-primehack) exists | same |
 | Gradle coordinates `org.dolphinemu:app` (composite-build substitution) | clone's `group = "romcore.primehack"` -> `romcore.primehack:app` | use a different group |
+| Hook libs `libhook_impl.so`, `libmain_hook.so`, `libgsl_alloc_hook.so`, `libfile_redirect_hook.so` (Externals/libadrenotools, same names in any Dolphin build -> duplicate-.so merge error) | targets + dlopen strings prefixed `primehack_` (patch in `patches/libadrenotools`) | prefix `dolphin_` |
+| Old pre-AndroidX support libs via `com.nononsenseapps:filepicker` (duplicate classes; host has no Jetifier) and core-library desugaring | excluded / disabled (minSdk 30) | same |
 | Process / globals | `PrimeHackActivity` is `android:process=":primehack"`; process is killed when the game ends | `:dolphin` |
 | User data (Config, GC/Wii saves, Sys, drivers, cache, prefs key `sysDirectoryVersion`) both default to `getExternalFilesDir/Sys` etc. | `DirectoryInitialization` patched: everything under a `primehack/` subfolder (`<externalFiles>/primehack`, `<files>/primehack/{Sys,GPUDrivers}`, key `primehack.sysDirectoryVersion`) | `dolphin/` subfolder |
 

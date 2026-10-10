@@ -1,0 +1,29 @@
+From 809b41352f01bcb403b1ec336af1fe9793b3bc6e Mon Sep 17 00:00:00 2001
+From: Ry <noryanfound@gmail.com>
+Date: Sat, 10 Oct 2026 13:03:48 -0500
+Subject: [PATCH 3/5] RomCore: exclude pre-AndroidX support libs pulled by
+ filepicker
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ Source/Android/app/build.gradle.kts | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Source/Android/app/build.gradle.kts b/Source/Android/app/build.gradle.kts
+index f99f5109ec..eb0967d4ec 100644
+--- a/Source/Android/app/build.gradle.kts
++++ b/Source/Android/app/build.gradle.kts
+@@ -160,7 +160,9 @@ dependencies {
+ 
+     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+ 
+-    implementation("com.nononsenseapps:filepicker:4.2.1")
++    // RomCore: the file picker is never shown, but this artifact drags in the pre-AndroidX support libraries
++    // (com.android.support:*:24.2.1) whose classes duplicate androidx ones (the host app does not run Jetifier).
++    implementation("com.nononsenseapps:filepicker:4.2.1") { exclude(group = "com.android.support") }
+ }
+ 
+ fun getGitVersion(): String {
+-- 
+2.54.0 (Apple Git-157)
+

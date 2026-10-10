@@ -1,0 +1,35 @@
+From 0771e7156d7bd4ee135561d5e776802e91d2d367 Mon Sep 17 00:00:00 2001
+From: Ry <noryanfound@gmail.com>
+Date: Sat, 10 Oct 2026 13:06:03 -0500
+Subject: [PATCH 4/5] RomCore: drop core-library desugaring requirement
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ Source/Android/app/build.gradle.kts | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Source/Android/app/build.gradle.kts b/Source/Android/app/build.gradle.kts
+index eb0967d4ec..35a3037296 100644
+--- a/Source/Android/app/build.gradle.kts
++++ b/Source/Android/app/build.gradle.kts
+@@ -31,7 +31,8 @@ android {
+ 
+     compileOptions {
+         // Flag to enable support for the new language APIs
+-        isCoreLibraryDesugaringEnabled = true
++        // RomCore: no core-library desugaring (host minSdk is 30; the host app does not enable it).
++        isCoreLibraryDesugaringEnabled = false
+ 
+         sourceCompatibility = JavaVersion.VERSION_17
+         targetCompatibility = JavaVersion.VERSION_17
+@@ -129,7 +130,6 @@ android {
+ }
+ 
+ dependencies {
+-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+ 
+     implementation("androidx.core:core-ktx:1.17.0")
+     implementation("androidx.appcompat:appcompat:1.7.1")
+-- 
+2.54.0 (Apple Git-157)
+

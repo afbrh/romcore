@@ -1,7 +1,7 @@
 From 097c0993f6162caf3385223dbc561b08b99f9403 Mon Sep 17 00:00:00 2001
 From: Ry <noryanfound@gmail.com>
 Date: Sat, 10 Oct 2026 12:43:25 -0500
-Subject: [PATCH 2/2] RomCore: isolate user/Sys/driver/cache dirs under a
+Subject: [PATCH 2/5] RomCore: isolate user/Sys/driver/cache dirs under a
  primehack subfolder
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

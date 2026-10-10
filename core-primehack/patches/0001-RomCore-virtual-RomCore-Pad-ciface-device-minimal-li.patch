@@ -1,7 +1,7 @@
 From 7153ba804fbe5267e510ea5d936da4cd511dc25b Mon Sep 17 00:00:00 2001
 From: Ry <noryanfound@gmail.com>
 Date: Sat, 10 Oct 2026 12:42:44 -0500
-Subject: [PATCH 1/2] RomCore: virtual RomCore Pad ciface device, minimal
+Subject: [PATCH 1/5] RomCore: virtual RomCore Pad ciface device, minimal
  library manifest, open EmulationActivity, finish-only shutdown
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
