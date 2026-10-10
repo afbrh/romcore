@@ -15,7 +15,7 @@ object CoreBootstrap {
 
     private val DISPLAY_CASE = mapOf(
         "retroarch" to listOf("RetroArch", "Retroarch"), "primehack" to listOf("PrimeHack", "Primehack"),
-        "watermelonds" to listOf("WatermelonDS", "Watermelonds"), "armsx2" to listOf("ArmSX2", "Armsx2"),
+        "watermelonds" to listOf("WatermelonDs", "WatermelonDS", "Watermelonds"), "armsx2" to listOf("ArmSX2", "Armsx2"),
         "ppsspp" to listOf("PPSSPP", "Ppsspp")
     )
 
@@ -63,7 +63,7 @@ object CoreBootstrap {
     fun versionOf(core: CoreDescriptor): String {
         runCatching {
             val m = core.javaClass.methods.firstOrNull { it.name == "getVersion" && it.parameterCount == 0 }
-            (m?.invoke(core) as? String)?.let { return it }
+            (m?.invoke(core) as? String)?.takeIf { it != "unknown" }?.let { return it }
         }
         val pkg = "com.noryan.romcore.core.${core.id}"
         runCatching { return Class.forName("$pkg.BuildConfig").getField("VERSION_NAME").get(null) as String }
@@ -71,6 +71,16 @@ object CoreBootstrap {
             val p = core.javaClass.name.substringBeforeLast('.')
             return Class.forName("$p.BuildConfig").getField("VERSION_NAME").get(null) as String
         }
-        return "unknown"
+        return FALLBACK_VERSION[core.id] ?: "unknown"
     }
+
+    /** Engine revisions of the local source trees the cores are built from (for cores that don't report one). */
+    private val FALLBACK_VERSION = mapOf(
+        "retroarch" to "RetroArch fde5cf3 + libretro cores",
+        "primehack" to "PrimeHack 1.0.9-22 (romcore patches)",
+        "cemu" to "Cemu 0.5-4 (SSimco android port)",
+        "azahar" to "Azahar 95db543",
+        "armsx2" to "ARMSX2 0d7a2b9",
+        "dolphin" to "Dolphin mainline", "eden" to "Eden v0.2.0-371", "ppsspp" to "PPSSPP", "watermelonds" to "WatermelonDS 0.8.0.rc2",
+    )
 }

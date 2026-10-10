@@ -50,7 +50,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val prev = withContext(Dispatchers.IO) { dao.all() }
                 val prevMap = prev.associateBy { it.uri }
-                val res = RomScanner.scan(getApplication(), tree, prevMap) { scanProgress.value = it }
+                val res = RomScanner.scan(getApplication(), tree, prevMap, prefs.detectVersion == SystemDetector.VERSION) { scanProgress.value = it }
                 withContext(Dispatchers.IO) {
                     val (existing, fresh) = res.games.partition { it.id != 0L }
                     dao.updateAll(existing); dao.insertAll(fresh)
@@ -59,6 +59,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         dao.deleteIds(prev.filter { it.uri !in keep }.map { it.id })
                     }
                 }
+                if (res.trustworthy) prefs.detectVersion = SystemDetector.VERSION
                 status.value = if (res.trustworthy) "${res.games.size} GAMES" else "FOLDER EMPTY OR UNREADABLE"
             } catch (t: Throwable) {
                 status.value = "SCAN FAILED"
@@ -82,6 +83,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val r = RomResolver.resolve(ctx, g)
                 if (r == null) { toast(ctx, "Can't open ROM file"); return@launch }
+                if (r.kind == "fd") { toast(ctx, "Turn on ALL FILES ACCESS in SETTINGS so this core can open the ROM"); return@launch }
                 val req = LaunchRequest(romPath = r.path, romUri = g.uri, system = sys)
                 val intent = core.launchIntent(ctx, req)
                 if (intent.data == null && intent.clipData == null) {

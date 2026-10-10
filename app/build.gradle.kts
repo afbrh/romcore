@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp") version "2.3.12"
+    id("com.google.dagger.hilt.android") version "2.60.1"
 }
 
 android {
@@ -15,16 +16,36 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         ndk { abiFilters += "arm64-v8a" }
+        missingDimensionStrategy("edenVersion", "legacy")
     }
     buildTypes {
-        release { isMinifyEnabled = false }
+        // R8 is ON in debug too: ARMSX2's Settings class fails bytecode verification un-shrunk (VerifyError).
+        getByName("debug") {
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+        getByName("release") {
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures { compose = true; buildConfig = true }
-    packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
+    packaging {
+        resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+        // Several cores (adrenotools users: azahar, armsx2, eden, cemu, dolphin) load hook libs from nativeLibraryDir.
+        jniLibs.useLegacyPackaging = true
+        jniLibs.pickFirsts += listOf(
+            "lib/arm64-v8a/libhook_impl.so", "lib/arm64-v8a/libmain_hook.so",
+            "lib/arm64-v8a/libgsl_alloc_hook.so", "lib/arm64-v8a/libfile_redirect_hook.so",
+            "lib/arm64-v8a/libc++_shared.so", "lib/arm64-v8a/libusb-1.0.so",
+            "lib/arm64-v8a/libVkLayer_khronos_validation.so", "lib/arm64-v8a/libSPIRV-Tools-shared.so",
+            "lib/arm64-v8a/libshaderc_shared.so",
+        )
+    }
 }
 
 dependencies {
@@ -50,5 +71,15 @@ dependencies {
     implementation("androidx.room:room-runtime:2.8.5")
     implementation("androidx.room:room-ktx:2.8.5")
     ksp("androidx.room:room-compiler:2.8.5")
+    implementation("com.google.dagger:hilt-android:2.60.1")
+    ksp("com.google.dagger:hilt-android-compiler:2.60.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+}
+
+// Eden is compiled against Material 1.12.0 (newer drops R.attr.colorPrimary -> NoSuchFieldError); other cores ask for
+// 1.13-1.14. One Material in the APK: force the old one.
+configurations.configureEach {
+    resolutionStrategy.force("com.google.android.material:material:1.12.0")
+    // com.atlassian.commonmark:commonmark 0.13 and org.commonmark:commonmark 0.22 ship identical packages.
+    exclude(group = "com.atlassian.commonmark")
 }

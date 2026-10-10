@@ -30,6 +30,7 @@ import com.noryan.romcore.MainViewModel
 import com.noryan.romcore.R
 import com.noryan.romcore.api.System
 import com.noryan.romcore.data.CoreRouter
+import com.noryan.romcore.data.CoreSetup
 import com.noryan.romcore.data.GameEntity
 import com.noryan.romcore.ui.components.FocusLine
 
@@ -41,6 +42,22 @@ fun systemLabel(s: System): String = when (s) {
     System.WIIU -> "Wii U"; System.SWITCH -> "Switch"; System.PS1 -> "PS1"; System.PS2 -> "PS2"; System.PSP -> "PSP"
     System.GENESIS -> "Genesis"; System.MASTER_SYSTEM -> "Master System"; System.PCE -> "PC Engine"; System.ATARI -> "Atari"
     System.ARCADE -> "Arcade"; System.OTHER -> "Other"
+}
+
+internal fun openAllFilesAccess(ctx: android.content.Context) {
+    runCatching { ctx.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        .onFailure { runCatching { ctx.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+}
+
+@Composable
+private fun rememberAllFilesGranted(): State<Boolean> {
+    val st = remember { mutableStateOf(Environment.isExternalStorageManager()) }
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val ob = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) st.value = Environment.isExternalStorageManager() }
+        owner.lifecycle.addObserver(ob); onDispose { owner.lifecycle.removeObserver(ob) }
+    }
+    return st
 }
 
 private fun sysOf(g: GameEntity) = runCatching { System.valueOf(g.system) }.getOrNull()
@@ -73,7 +90,20 @@ private fun FirstRun(onPick: () -> Unit) {
         Spacer(Modifier.height(28.dp))
         Text("Choose the folder that holds your ROMs.", style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
         Spacer(Modifier.height(12.dp))
-        FocusLine("PICK ROM FOLDER", Modifier.focusRequester(fr).width(420.dp), style = MaterialTheme.typography.headlineSmall, onClick = onPick)
+        FocusLine("PICK ROM FOLDER", Modifier.focusRequester(fr).width(420.dp), center = true, style = MaterialTheme.typography.headlineSmall, onClick = onPick)
+        val ctx = LocalContext.current
+        var granted by remember { mutableStateOf(Environment.isExternalStorageManager()) }
+        val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+        DisposableEffect(owner) {
+            val ob = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) granted = Environment.isExternalStorageManager() }
+            owner.lifecycle.addObserver(ob); onDispose { owner.lifecycle.removeObserver(ob) }
+        }
+        if (!granted) {
+            Spacer(Modifier.height(8.dp))
+            FocusLine("GRANT ALL FILES ACCESS", Modifier.width(420.dp), center = true, style = MaterialTheme.typography.titleMedium) { openAllFilesAccess(ctx) }
+            Text("Lets every core open ROMs by real path (PS2, 3DS need it).", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+        }
     }
 }
 
@@ -130,7 +160,11 @@ private fun GamesTab(vm: MainViewModel) {
         }
         return
     }
+    val allFiles by rememberAllFilesGranted()
     LazyColumn(Modifier.fillMaxSize()) {
+        if (!allFiles) item {
+            FocusLine("ALL FILES ACCESS IS OFF - PRESS A TO GRANT", dim = false, style = MaterialTheme.typography.titleSmall) { openAllFilesAccess(ctx) }
+        }
         if (launching) item { Text("PREPARING ROM...", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium) }
         items(games, key = { it.id }) { g ->
             val sys = sysOf(g)
@@ -203,8 +237,18 @@ private fun SettingsTab(vm: MainViewModel, pickFolder: () -> Unit) {
     var open by remember { mutableStateOf<String?>(null) }
     fun toggle(k: String) { open = if (open == k) null else k }
     val cores = vm.cores
-    var allFiles by remember { mutableStateOf(Environment.isExternalStorageManager()) }
-    LaunchedEffect(open) { allFiles = Environment.isExternalStorageManager() }
+    val allFiles by rememberAllFilesGranted()
+    var importFor by remember { mutableStateOf<CoreSetup.Item?>(null) }
+    var importMsg by remember { mutableStateOf<String?>(null) }
+    var setupTick by remember { mutableIntStateOf(0) }
+    val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val item = importFor
+        if (uri != null && item != null) {
+            val ok = CoreSetup.import(ctx, item, uri)
+            importMsg = if (ok) "${item.label.removePrefix("IMPORT ")}: DONE" else "${item.label.removePrefix("IMPORT ")}: FAILED"
+            setupTick++
+        }
+    }
     val folderName = remember(tree) { tree?.let { Uri.parse(it).lastPathSegment?.substringAfter(':') } ?: "-" }
     LazyColumn(Modifier.fillMaxSize()) {
         item { Section("ROM FOLDER") }
@@ -214,7 +258,7 @@ private fun SettingsTab(vm: MainViewModel, pickFolder: () -> Unit) {
             item { FocusLine("RESCAN NOW", right = status.ifEmpty { null }, indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.rescan() } }
             item {
                 FocusLine("ALL FILES ACCESS", right = if (allFiles) "GRANTED" else "OFF (TAP)", indent = 28.dp, style = MaterialTheme.typography.titleSmall) {
-                    runCatching { ctx.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${ctx.packageName}"))) }
+                    openAllFilesAccess(ctx)
                 }
             }
             item { Note("All files access lets cores in their own processes open ROMs by real path. Without it ROMs are copied to cache on launch.") }
@@ -223,11 +267,18 @@ private fun SettingsTab(vm: MainViewModel, pickFolder: () -> Unit) {
         if (cores.isEmpty()) item { Note("No cores are installed in this build.") }
         items(cores, key = { it.id }) { c ->
             Column {
-                FocusLine(c.displayName, right = "v" + CoreBootstrap.versionOf(c).removePrefix("v"), onClick = { toggle("core:${c.id}") }, onAlt = { toggle("core:${c.id}") })
+                FocusLine(c.displayName, right = CoreBootstrap.versionOf(c), onClick = { toggle("core:${c.id}") }, onAlt = { toggle("core:${c.id}") })
                 if (open == "core:${c.id}") {
                     Note("id: ${c.id}")
                     Note("systems: " + c.systems.sortedBy { it.ordinal }.joinToString(", ") { systemLabel(it) })
                     Note("extensions: " + c.extensions.sorted().joinToString(" "))
+                    CoreSetup.itemsFor(c.id).forEach { item ->
+                        val st = remember(setupTick, open) { CoreSetup.status(ctx, item) }
+                        FocusLine(item.label, right = st, indent = 28.dp, style = MaterialTheme.typography.titleSmall) {
+                            importFor = item; importMsg = null; importPicker.launch(item.accept)
+                        }
+                    }
+                    if (importMsg != null && CoreSetup.itemsFor(c.id).isNotEmpty()) Note(importMsg!!)
                 }
             }
         }

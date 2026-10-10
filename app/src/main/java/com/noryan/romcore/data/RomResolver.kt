@@ -21,6 +21,11 @@ object RomResolver {
     data class Resolved(val path: String, val kind: String)
 
     suspend fun resolve(ctx: Context, g: GameEntity): Resolved? = withContext(Dispatchers.IO) {
+        if (g.isDir) {
+            // Unpacked title folder: a real directory when readable, otherwise the tree uri (cores that take uris).
+            g.realPath?.let { p -> if (File(p).isDirectory) return@withContext Resolved(p, "real") }
+            return@withContext Resolved(g.uri, "uri")
+        }
         g.realPath?.let { p -> File(p).let { if (it.isFile && it.canRead()) return@withContext Resolved(p, "real") } }
         val uri = Uri.parse(g.uri)
         if (g.sizeBytes in 1..MAX_COPY) {

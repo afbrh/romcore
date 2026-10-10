@@ -13,9 +13,9 @@ data class ScanResult(val games: List<GameEntity>, val trustworthy: Boolean)
 
 /** Recursive SAF walk (raw DocumentsContract queries — far faster than DocumentFile) on the IO dispatcher. */
 object RomScanner {
-    private class Raw(val uri: Uri, val name: String, val size: Long, val folders: List<String>)
+    private class Raw(val uri: Uri, val name: String, val size: Long, val folders: List<String>, val isDir: Boolean = false)
 
-    suspend fun scan(ctx: Context, tree: Uri, previous: Map<String, GameEntity>, onProgress: (Int) -> Unit): ScanResult =
+    suspend fun scan(ctx: Context, tree: Uri, previous: Map<String, GameEntity>, reuseSystems: Boolean, onProgress: (Int) -> Unit): ScanResult =
         withContext(Dispatchers.IO) {
             val wanted = SystemDetector.scanExtensions()
             val rootDoc = DocumentsContract.getTreeDocumentId(tree)
@@ -27,20 +27,33 @@ object RomScanner {
                 val cols = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME,
                     DocumentsContract.Document.COLUMN_MIME_TYPE, DocumentsContract.Document.COLUMN_SIZE)
                 val dirs = ArrayList<Pair<String, String>>()
+                val here = ArrayList<Raw>()
+                val names = ArrayList<String>()
                 try {
                     ctx.contentResolver.query(children, cols, null, null, null)?.use { c ->
                         readOk = true
                         while (c.moveToNext()) {
                             val id = c.getString(0); val name = c.getString(1) ?: continue
+                            names += name
                             if (c.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR) {
                                 if (!name.startsWith(".")) dirs += id to name
                             } else {
                                 val ext = name.substringAfterLast('.', "").lowercase()
-                                if (ext in wanted) raws += Raw(DocumentsContract.buildDocumentUriUsingTree(tree, id), name, c.getLong(3), folders)
+                                if (ext in wanted) here += Raw(DocumentsContract.buildDocumentUriUsingTree(tree, id), name, c.getLong(3), folders)
                             }
                         }
                     }
                 } catch (_: Exception) { }
+                // An unpacked Wii U title (code + content + meta) is ONE game; its code/*.rpx is not listed on its own.
+                if (names.isNotEmpty() && CoreSetup.cemuPresent() && CoreSetup.isWiiUTitleFolder(names)) {
+                    val authority = tree.authority
+                    val folderUri = if (authority != null) DocumentsContract.buildTreeDocumentUri(authority, docId) else null
+                    if (folderUri != null) {
+                        raws += Raw(folderUri, folders.lastOrNull() ?: docId.substringAfterLast('/').substringAfterLast(':'), 0, folders.dropLast(1), isDir = true)
+                        return
+                    }
+                }
+                raws += here
                 for ((id, name) in dirs) walk(id, folders + name)
             }
             walk(rootDoc, emptyList())
@@ -53,7 +66,7 @@ object RomScanner {
                 val ext = r.name.substringAfterLast('.', "").lowercase()
                 val prev = previous[uriStr]
                 val realPath = SafPathUtils.realPathFromDocumentUri(r.uri)
-                val system = if (prev != null && prev.system != "OTHER") {
+                val system = if (r.isDir) System.WIIU else if (reuseSystems && prev != null && prev.system != "OTHER") {
                     runCatching { System.valueOf(prev.system) }.getOrNull()
                 } else null
                 val detected = system ?: SystemDetector.detect(realPath ?: r.name, ext, r.folders, r.size) { readHeader(ctx, r.uri) }
@@ -61,7 +74,7 @@ object RomScanner {
                 out += GameEntity(
                     id = prev?.id ?: 0, uri = uriStr, realPath = realPath, fileName = r.name, title = cleanTitle(r.name),
                     system = detected.name, sizeBytes = r.size, coreOverride = prev?.coreOverride, favorite = prev?.favorite ?: false,
-                    lastPlayedAt = prev?.lastPlayedAt, playCount = prev?.playCount ?: 0
+                    lastPlayedAt = prev?.lastPlayedAt, playCount = prev?.playCount ?: 0, isDir = r.isDir
                 )
                 if (++n % 25 == 0) onProgress(n)
             }

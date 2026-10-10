@@ -35,6 +35,7 @@ fun FocusLine(
     indent: Dp = 0.dp,
     marked: Boolean = false,
     dim: Boolean = false,
+    center: Boolean = false,
     style: TextStyle = MaterialTheme.typography.titleMedium,
     onAlt: (() -> Unit)? = null,
     onClick: () -> Unit
@@ -55,9 +56,11 @@ fun FocusLine(
             }
             .combinedClickable(interactionSource = src, indication = null, onClick = onClick, onLongClick = onAlt)
             .padding(start = 16.dp + indent, end = 16.dp, top = 10.dp, bottom = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (center) Arrangement.Center else Arrangement.Start
     ) {
-        Text(text, style = style.copy(shadow = glow), color = c1, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(text, style = style.copy(shadow = glow), color = c1, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            textAlign = if (center) TextAlign.Center else TextAlign.Start, modifier = if (center) Modifier else Modifier.weight(1f))
         if (right != null) {
             Spacer(Modifier.width(12.dp))
             Text(right, style = style.copy(shadow = glow), color = c2, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End)

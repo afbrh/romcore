@@ -8,6 +8,10 @@ class Prefs(ctx: Context) {
     var treeUri: String?
         get() = sp.getString("tree_uri", null)
         set(v) { sp.edit().putString("tree_uri", v).apply() }
+    /** Detector revision the stored game systems were computed with (see SystemDetector.VERSION). */
+    var detectVersion: Int
+        get() = sp.getInt("detect_version", 0)
+        set(v) { sp.edit().putInt("detect_version", v).apply() }
     fun systemCore(s: System): String? = sp.getString("syscore_${s.name}", null)
     fun setSystemCore(s: System, id: String?) { sp.edit().apply { if (id == null) remove("syscore_${s.name}") else putString("syscore_${s.name}", id) }.apply() }
 }

@@ -17,7 +17,7 @@ object SystemDetector {
         put(System.WII, "wbfs", "wad")
         put(System.WIIU, "wux", "wud", "wua", "rpx")
         put(System.SWITCH, "nsp", "xci", "nsz", "xcz")
-        put(System.PSP, "cso", "pbp")
+        put(System.PSP, "pbp")
         put(System.GENESIS, "md", "gen", "smd", "32x")
         put(System.MASTER_SYSTEM, "sms", "gg")
         put(System.PCE, "pce", "sgx")
@@ -25,7 +25,11 @@ object SystemDetector {
     }
 
     /** Extensions that need folder/content hints. */
-    val AMBIGUOUS = setOf("iso", "bin", "cue", "chd", "img", "mdf", "ciso", "rvz", "zip", "7z", "dol", "elf", "gdi", "cdi")
+    /** Compressed/disc containers shared by several systems: each core's sniff() decides (cso: PSP or PS2, gz: PS2/GC, ...). */
+    val AMBIGUOUS = setOf("iso", "bin", "cue", "chd", "img", "mdf", "ciso", "rvz", "wia", "tgc", "zip", "7z", "dol", "elf", "gdi", "cdi",
+        "cso", "zso", "gz")
+    /** Detector revision: bump to re-detect already-scanned games after a detection change. */
+    const val VERSION = 2
 
     /** (normalised folder name -> system); exact match for short names, `contains` for long ones. */
     private val FOLDER_EXACT: List<Pair<Set<String>, System>> = listOf(
@@ -83,13 +87,16 @@ object SystemDetector {
         fromFolders(folders)?.let { return it }
         val h = header()
         if (h != null) {
-            for (c in CoreRegistry.all()) {
+            // Cores that only recognise specific titles (PrimeHack) go first so they win over the general GC/Wii sniffer.
+            for (c in CoreRegistry.all().sortedBy { if (it.id == "primehack") 0 else 1 }) {
                 if (ext !in c.extensions && c.extensions.isNotEmpty()) continue
                 runCatching { c.sniff(path, h) }.getOrNull()?.let { return it }
             }
             builtinSniff(h, ext, size)?.let { return it }
         }
-        if (ext == "rvz" || ext == "ciso" || ext == "dol") return System.GAMECUBE
+        if (ext == "rvz" || ext == "ciso" || ext == "dol" || ext == "wia" || ext == "tgc") return System.GAMECUBE
+        if (ext == "cso" || ext == "zso") return System.PSP
+        if (ext == "gz") return System.PS2
         return null
     }
 

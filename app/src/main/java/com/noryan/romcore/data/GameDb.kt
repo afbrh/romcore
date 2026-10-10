@@ -17,7 +17,9 @@ data class GameEntity(
     val coreOverride: String? = null,
     val favorite: Boolean = false,
     val lastPlayedAt: Long? = null,
-    val playCount: Int = 0
+    val playCount: Int = 0,
+    /** Unpacked title folder (Wii U loadiine layout): one game, not a file. */
+    val isDir: Boolean = false
 )
 
 @Dao
@@ -34,7 +36,7 @@ interface GameDao {
     @Query("UPDATE games SET lastPlayedAt = :t, playCount = playCount + 1 WHERE id = :id") suspend fun markPlayed(id: Long, t: Long)
 }
 
-@Database(entities = [GameEntity::class], version = 1, exportSchema = false)
+@Database(entities = [GameEntity::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun games(): GameDao
 }

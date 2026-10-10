@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Release only: drop the debug test activity and un-export the game activities the cores leave exported for the
+         adb debug drivers (the shell starts them explicitly from inside the app). -->
+    <application>
+        <activity android:name="com.noryan.romcore.api.menu.debug.MenuTestActivity" tools:node="remove" />
+        <activity android:name="com.noryan.romcore.core.ppsspp.RomCorePpssppActivity" android:exported="false" tools:node="merge" tools:replace="android:exported" />
+        <activity android:name="com.noryan.romcore.core.dolphin.DolphinActivity" android:exported="false" tools:node="merge" tools:replace="android:exported" />
+        <activity android:name="com.noryan.romcore.core.primehack.PrimeHackActivity" android:exported="false" tools:node="merge" tools:replace="android:exported" />
+    </application>
+</manifest>
