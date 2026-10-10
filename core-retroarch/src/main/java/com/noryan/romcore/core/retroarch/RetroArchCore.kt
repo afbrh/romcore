@@ -48,7 +48,9 @@ object RetroArchCore : CoreDescriptor {
     }
 
     override fun launchIntent(ctx: Context, request: LaunchRequest): Intent {
-        val spec = CoreTable.SYSTEM_CORE[request.system]
+        val ext = request.romPath.substringAfterLast('.', "").lowercase()
+        val spec = CoreTable.EXTENSION_CORE[ext]?.takeIf { request.system in CoreTable.SYSTEM_CORE.keys }
+            ?: CoreTable.SYSTEM_CORE[request.system]
             ?: throw IllegalArgumentException("RetroArch core has no libretro core for ${request.system}")
         val corePath = RaFiles.ensureCore(ctx, spec)
         val cfg = RaFiles.writeConfig(ctx, spec)
