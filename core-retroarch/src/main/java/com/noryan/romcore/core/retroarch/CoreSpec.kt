@@ -35,7 +35,10 @@ internal object CoreTable {
             "mupen64plus-ThreadedRenderer" to "False",
         ))
     val SWANSTATION = CoreSpec("swanstation", "swanstation_libretro_android.so", "SwanStation", setOf(System.PS1),
-        "GPL-3.0 (SwanStation fork of pre-2023 DuckStation; upstream DuckStation is now CC-BY-NC-ND)")
+        "GPL-3.0 (SwanStation fork of pre-2023 DuckStation; upstream DuckStation is now CC-BY-NC-ND)",
+        options = mapOf("swanstation_Controller1_ForceAnalog" to "true"),
+        // RETRO_DEVICE_ANALOG = "Analog Controller (DualShock)" so both sticks work.
+        cfg = mapOf("input_libretro_device_p1" to "5"))
 
     val ALL = listOf(NESTOPIA, SNES9X, MGBA, MUPEN, SWANSTATION)
 

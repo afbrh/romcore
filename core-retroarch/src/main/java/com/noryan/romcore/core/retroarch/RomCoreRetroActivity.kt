@@ -6,13 +6,8 @@ import android.os.Looper
 import android.os.Process
 import android.view.KeyEvent
 import android.view.MotionEvent
-import com.noryan.romcore.api.MenuAction
+import com.noryan.romcore.api.RomCoreCoreHost
 import com.noryan.romcore.api.System
-import com.noryan.romcore.api.input.HotkeyEvent
-import com.noryan.romcore.api.input.InputRouter
-import com.noryan.romcore.api.menu.MenuInputGate
-import com.noryan.romcore.api.menu.RomCoreMenu
-import com.noryan.romcore.api.menu.RomCoreMenuHost
 import com.retroarch.browser.retroactivity.RetroActivityFuture
 
 /**
@@ -31,8 +26,7 @@ class RomCoreRetroActivity : RetroActivityFuture() {
 
     private lateinit var system: System
     private lateinit var session: RaSession
-    private lateinit var router: InputRouter
-    private var menu: RomCoreMenuHost? = null
+    private lateinit var hooks: RomCoreCoreHost.Hooks
     private val main = Handler(Looper.getMainLooper())
     private var closing = false
 
@@ -51,31 +45,12 @@ class RomCoreRetroActivity : RetroActivityFuture() {
         val sv = android.view.SurfaceView(this)
         sv.holder.addCallback(this)
         setContentView(sv, android.view.ViewGroup.LayoutParams(-1, -1))
-        InputRouter.keepScreenOn(this)
 
-        router = InputRouter(this, session) { ev ->
-            when (ev) {
-                HotkeyEvent.ToggleMenu -> menu?.toggle()
-                is HotkeyEvent.Run -> runAction(ev.action)
-            }
-        }
-        menu = RomCoreMenu.attach(this, session, system,
-            gate = object : MenuInputGate { override fun setMenuOpen(open: Boolean) { router.gameInputEnabled = !open } })
+        hooks = RomCoreCoreHost.install(this, session, system)
 
         // Autosave-on-close only once the core has certainly started (otherwise we could overwrite slot 0 with nothing).
         main.postDelayed({ session.ready = true }, 6000)
         if (intent.getBooleanExtra(EXTRA_RESUME, false)) resumeWhenReady()
-    }
-
-    private fun runAction(a: MenuAction) {
-        Thread {
-            when (a) {
-                MenuAction.SAVE_STATE -> session.saveState(1)
-                MenuAction.LOAD_STATE -> session.loadState(1)
-                MenuAction.CLOSE_GAME -> session.close()
-                else -> menu?.open()
-            }
-        }.start()
     }
 
     /** Native startup (core load, content load) is async; retry the resume state until the core accepts it. */
@@ -90,25 +65,22 @@ class RomCoreRetroActivity : RetroActivityFuture() {
     }
 
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
-        if (!::router.isInitialized) return super.dispatchKeyEvent(e)
-        if (menu?.dispatchKeyEvent(e) == true) return true
-        if (router.onKeyEvent(e, system)) return true
+        if (!::hooks.isInitialized) return super.dispatchKeyEvent(e)
+        if (hooks.dispatchKey(e)) return true
         if (e.keyCode == KeyEvent.KEYCODE_BACK) { // never drop out of the game by accident; Back opens the menu
-            if (e.action == KeyEvent.ACTION_UP) menu?.open()
+            if (e.action == KeyEvent.ACTION_UP) hooks.menu.open()
             return true
         }
         return super.dispatchKeyEvent(e)
     }
 
     override fun dispatchGenericMotionEvent(e: MotionEvent): Boolean {
-        if (!::router.isInitialized) return super.dispatchGenericMotionEvent(e)
-        if (menu?.dispatchGenericMotionEvent(e) == true) return true
-        if (router.onMotionEvent(e, system)) return true
+        if (::hooks.isInitialized && hooks.dispatchMotion(e)) return true
         return super.dispatchGenericMotionEvent(e)
     }
 
     override fun onPause() {
-        if (::router.isInitialized) router.releaseAll()
+        if (::hooks.isInitialized) hooks.onPause()
         super.onPause()
     }
 
@@ -119,7 +91,7 @@ class RomCoreRetroActivity : RetroActivityFuture() {
     }
 
     override fun onDestroy() {
-        menu?.detach()
+        if (::hooks.isInitialized) hooks.onDestroy()
         super.onDestroy()
         // RetroArch keeps process-global native state; a fresh process per game is the only reliable reset.
         Process.killProcess(Process.myPid())
