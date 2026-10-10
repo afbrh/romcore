@@ -22,6 +22,7 @@ object EdenCore : CoreDescriptor {
     override val id = "eden"
     override val displayName = "Eden (Nintendo Switch)"
     override val systems = setOf(System.SWITCH)
+    override val version = "Eden (Yuzu lineage), local eden-src build"
     override val extensions = setOf("nsp", "xci", "nca", "nro", "nso", "kip")
 
     const val STATE_UNAVAILABLE_REASON =

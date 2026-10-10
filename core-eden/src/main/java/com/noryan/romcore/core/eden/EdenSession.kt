@@ -7,6 +7,7 @@ import com.noryan.romcore.api.CoreSession
 import com.noryan.romcore.api.Pad
 import com.noryan.romcore.api.menu.SlotInfo
 import com.noryan.romcore.api.menu.StateSlotProvider
+import com.noryan.romcore.api.menu.StateSupport
 import org.yuzu.yuzu_emu.NativeLibrary
 import org.yuzu.yuzu_emu.features.input.NativeInput
 import org.yuzu.yuzu_emu.features.input.model.NativeAnalog
@@ -17,7 +18,8 @@ import org.yuzu.yuzu_emu.features.input.model.NativeButton
  * "overlay" controller on port 0, so it works whether or not a physical pad is attached and independent of the
  * touch overlay being visible.
  */
-class EdenSession(private val context: android.content.Context) : CoreSession, StateSlotProvider {
+class EdenSession(private val context: android.content.Context) : CoreSession, StateSlotProvider, StateSupport {
+    override val stateUnavailableReason: String = EdenCore.STATE_UNAVAILABLE_REASON
     /** Slots never exist: Eden has no save states. */
     override fun slotInfo(slot: Int) = SlotInfo(slot, false)
 
