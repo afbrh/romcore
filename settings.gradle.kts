@@ -72,3 +72,10 @@ includeBuild("../azahar-src/src/android") {
     name = "azahar"
     dependencySubstitution { substitute(module("org.azahar_emu:app")).using(project(":app")) }
 }
+
+// :core-retroarch (libretro host). Local RetroArch build (retroarch-src, with the romcore JNI bridge patch) as a composite build.
+include(":core-retroarch")
+includeBuild("../retroarch-src/pkg/android/phoenix") {
+    name = "retroarch"
+    dependencySubstitution { substitute(module("com.retroarch:phoenix")).using(project(":")) }
+}

@@ -1,0 +1,26 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <!-- RomCore's only RetroArch entry point: own process so RetroArch's global native state / GL context
+             never shares an address space with the shell or other cores. The process dies with the activity. -->
+        <activity
+            android:name="com.noryan.romcore.core.retroarch.RomCoreRetroActivity"
+            android:process=":retroarch"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|fontScale|density">
+            <meta-data android:name="android.app.lib_name" android:value="retroarch-activity" />
+            <meta-data android:name="android.app.func_name" android:value="ANativeActivity_onCreate" />
+        </activity>
+
+        <!-- Drop RetroArch's own launcher-facing components: RomCore never exposes RetroArch's UI. -->
+        <activity android:name="com.retroarch.browser.retroactivity.RetroActivityFuture" tools:node="remove" />
+        <activity-alias android:name="com.retroarch.browser.mainmenu.MainMenuActivity" tools:node="remove" />
+        <activity android:name="com.retroarch.browser.debug.CoreSideloadActivity" tools:node="remove" />
+        <receiver android:name="com.retroarch.browser.receiver.InstalledCoresReceiver" tools:node="remove" />
+        <provider android:name="com.retroarch.browser.provider.RetroDocumentsProvider" tools:node="remove" />
+    </application>
+</manifest>
