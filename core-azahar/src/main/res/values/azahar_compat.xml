@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Azahar's layout/header_in_game.xml (stock drawer header, hidden by RomCore) references this style, which the
+         RomRunner-era host app used to provide. Defined here so the library links inside the RomCore app. -->
+    <style name="TextAppearance.RomRunnerMenuTitle" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:textColor">#FFFFFFFF</item>
+    </style>
+</resources>

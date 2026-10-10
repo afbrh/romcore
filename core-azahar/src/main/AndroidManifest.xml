@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <application>
+
+        <!-- Whole Azahar runtime lives in :azahar so libcitra-android.so and its GL/Vulkan state never share an
+             address space with other cores. The stock activity is reused unmodified; RomCore hooks it from outside. -->
+        <activity
+            android:name="org.citra.citra_emu.activities.EmulationActivity"
+            android:process=":azahar"
+            android:exported="false"
+            tools:node="merge"
+            tools:replace="android:exported">
+            <intent-filter tools:node="removeAll" />
+        </activity>
+
+        <!-- Azahar's own other activities are never used by RomCore; keep them out of the game process anyway. -->
+
+        <!-- Runs in :azahar before Application.onCreate: initialises Azahar (CitraApplication never runs because the
+             RomCore app has its own Application) and installs the RomCore menu/input hooks. -->
+        <provider
+            android:name="com.noryan.romcore.core.azahar.AzaharInitProvider"
+            android:authorities="${applicationId}.romcore.azahar.init"
+            android:process=":azahar"
+            android:exported="false"
+            android:initOrder="100" />
+    </application>
+</manifest>

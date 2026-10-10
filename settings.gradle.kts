@@ -65,3 +65,10 @@ includeBuild("../primehack-romcore-src/Source/Android") {
 
 // :core-ppsspp (PSP). PPSSPP (GPL-2.0+) native + Java built in-module from ../ppsspp-src (branch `romcore`); see core-ppsspp/patches.
 include(":core-ppsspp")
+
+// :core-azahar (3DS). Azahar (Citra lineage, GPL-2.0-only): ../azahar-src/src/android (:app already a library) as a composite build.
+include(":core-azahar")
+includeBuild("../azahar-src/src/android") {
+    name = "azahar"
+    dependencySubstitution { substitute(module("org.azahar_emu:app")).using(project(":app")) }
+}
