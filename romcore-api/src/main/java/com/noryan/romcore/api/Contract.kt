@@ -54,14 +54,11 @@ object CoreRegistry {
     @Synchronized fun forSystem(s: System): CoreDescriptor? = cores.values.firstOrNull { s in it.systems }
 }
 
-/** Default face-button remap by system family. Physical Android BUTTON_A/B/X/Y keycodes -> canonical Pad. */
-object FaceMap {
-    /** Returns the canonical button the emulated console should receive when the user presses [physical]. */
-    fun resolve(family: System.Family, physical: Pad): Pad = when (family) {
-        System.Family.PLAYSTATION -> when (physical) {   // A=Circle, B=Cross, X=Triangle, Y=Square
-            Pad.A -> Pad.A /* Circle */ ; Pad.B -> Pad.B /* Cross */ ; Pad.X -> Pad.X /* Triangle */ ; Pad.Y -> Pad.Y /* Square */
-            else -> physical
-        }
-        else -> physical                                // Nintendo: A-A, B-B, X-X, Y-Y
-    }
+/**
+ * Face-button rule (user spec): canonical Pad.A/B/X/Y == the label on the handheld's physical button.
+ * Nintendo cores receive them 1:1 (A-A, B-B, X-X, Y-Y). PlayStation/PS2/PSP core adapters translate
+ * Pad.A->Circle, Pad.B->Cross, Pad.X->Triangle, Pad.Y->Square. Use PsFace.of() so every PS core agrees.
+ */
+enum class PsFace { CIRCLE, CROSS, TRIANGLE, SQUARE;
+    companion object { fun of(p: Pad): PsFace? = when (p) { Pad.A -> CIRCLE; Pad.B -> CROSS; Pad.X -> TRIANGLE; Pad.Y -> SQUARE; else -> null } }
 }
