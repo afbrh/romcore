@@ -28,6 +28,15 @@ interface MappingBackend {
     /** Optional: capture analog motion (sticks/triggers). Return false if unsupported/not applicable. */
     fun bind(pad: com.noryan.romcore.api.Pad, event: MotionEvent): Boolean = false
     fun resetToDefaults()
+
+    /**
+     * True when the backend captures from the live input layer (canonical pad events, sticks/triggers/hat included):
+     * the menu then calls [beginCapture] instead of waiting for raw events itself.
+     */
+    val liveCapture: Boolean get() = false
+    /** Start live capture for [pad]; [onDone] gets true when bound, false when cancelled. UI thread. */
+    fun beginCapture(pad: com.noryan.romcore.api.Pad, onDone: (Boolean) -> Unit) {}
+    fun cancelCapture() {}
 }
 
 /** Hotkey assignment, implemented by the input layer's HotkeyManager (or fallback). Combos are sets of Android keycodes. */
@@ -37,4 +46,12 @@ interface HotkeyBackend {
     fun assign(action: com.noryan.romcore.api.MenuAction, keyCodes: Set<Int>)
     fun clear(action: com.noryan.romcore.api.MenuAction)
     fun resetToDefaults()
+
+    /** Row title override (e.g. "Open Menu"); null = the menu's default title for the action. */
+    fun title(action: com.noryan.romcore.api.MenuAction): String? = null
+    /** See [MappingBackend.liveCapture]: capture a combo of canonical pads from the live input layer. */
+    val liveCapture: Boolean get() = false
+    fun beginCapture(action: com.noryan.romcore.api.MenuAction, onDone: (Boolean) -> Unit) {}
+    fun cancelCapture() {}
 }
+

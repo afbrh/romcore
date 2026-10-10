@@ -11,6 +11,11 @@ import java.security.MessageDigest
 /** Info about one save-state slot, shown inline in the menu. */
 class SlotInfo(val slot: Int, val exists: Boolean, val timestampMs: Long = 0L, val thumbnail: Bitmap? = null)
 
+/** Optional: a CoreSession whose engine has no (working) save states reports why; the menu greys out Save/Load State. */
+interface StateSupport {
+    val stateUnavailableReason: String?
+}
+
 /** Optional: a CoreSession that can describe its slots. [CoreSessionBase] implements it from the file convention. */
 interface StateSlotProvider {
     fun slotInfo(slot: Int): SlotInfo

@@ -84,8 +84,9 @@ private fun RowItem(model: MenuModel, row: MenuRowModel, focused: Boolean, click
             Row(click.then(bg).fillMaxWidth().padding(MenuStyle.RowPaddingHorizontal, MenuStyle.RowPaddingVertical),
                 horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 BasicText(if (row.action == MenuAction.CHANGE_CONTROLLER_MAPPING) "Controller Mapping" else MenuModel.title(row.action),
-                    Modifier.weight(1f), style = style(if (row.action == MenuAction.CLOSE_GAME) MenuStyle.Danger else Color.White), maxLines = 2)
-                if (row.action != MenuAction.CLOSE_GAME || open) BasicText(if (open) "v" else ">", style = style(Dim))
+                    Modifier.weight(1f), style = style(if (model.isDisabled(row.action)) Dim else if (row.action == MenuAction.CLOSE_GAME) MenuStyle.Danger else Color.White), maxLines = 2)
+                if (model.isDisabled(row.action)) BasicText(model.stateUnavailableReason.orEmpty(), style = style(Dim), maxLines = 2)
+                else if (row.action != MenuAction.CLOSE_GAME || open) BasicText(if (open) "v" else ">", style = style(Dim))
             }
         }
         is MenuRowModel.Confirm -> Sub(click, bg, if (row.yes) "Yes, close game" else "Cancel", "", if (row.yes) MenuStyle.Danger else Color.White)
@@ -96,7 +97,7 @@ private fun RowItem(model: MenuModel, row: MenuRowModel, focused: Boolean, click
         }
         is MenuRowModel.Hot -> {
             val cap = model.capturingHotkey == row.action
-            Sub(click, bg, MenuModel.title(row.action).replace("Change Controller Mapping", "Mapping"),
+            Sub(click, bg, model.hotkeys.title(row.action) ?: MenuModel.title(row.action).replace("Change Controller Mapping", "Mapping"),
                 if (cap) "HOLD..." else model.hotkeys.describe(row.action), Color.White)
         }
         MenuRowModel.Reset -> Sub(click, bg, "Reset defaults", "", MenuStyle.Danger)

@@ -47,6 +47,8 @@ class MenuModel(
     var capturingHotkey by mutableStateOf<MenuAction?>(null); private set
     /** Bumped whenever slot/binding data may have changed so rows re-read it. */
     var revision by mutableStateOf(0); private set
+    /** True while a capture runs that must see RAW events (backend without live capture); router-routed otherwise. */
+    val capturingRaw get() = (capturingPad != null && !mapping.liveCapture) || (capturingHotkey != null && !hotkeys.liveCapture)
     val capturing get() = capturingPad != null || capturingHotkey != null
 
     private var comboPeak = emptySet<Int>()
@@ -78,6 +80,8 @@ class MenuModel(
     fun close() {
         if (!isOpen) return
         isOpen = false; expanded = null; capturingPad = null; capturingHotkey = null
+        main.removeCallbacks(timeout); repeatPad = null; main.removeCallbacks(repeater)
+        mapping.cancelCapture(); hotkeys.cancelCapture()
         gate.setMenuOpen(false)
         if (wasPausedByUs) { wasPausedByUs = false; session.resume() }
         onDismiss()
@@ -88,6 +92,10 @@ class MenuModel(
         val ps = if (system.family == com.noryan.romcore.api.System.Family.PLAYSTATION) com.noryan.romcore.api.PsFace.of(p) else null
         return if (ps != null) "${p.name} (${ps.name.lowercase().replaceFirstChar { it.uppercase() }})" else p.name
     }
+
+    /** Non-null when this core cannot save/load states (session implements [StateSupport]); shown inline, rows greyed. */
+    val stateUnavailableReason: String? get() = (session as? StateSupport)?.stateUnavailableReason
+    fun isDisabled(a: MenuAction) = (a == MenuAction.SAVE_STATE || a == MenuAction.LOAD_STATE) && stateUnavailableReason != null
 
     fun toggle() = if (isOpen) close() else open()
 
@@ -109,18 +117,31 @@ class MenuModel(
         }
     }
 
-    fun select(index: Int) { if (isOpen && !capturing) { cursor = index.coerceIn(0, rows.lastIndex); nav(MenuNav.SELECT) } }
+    fun select(index: Int) { if (isOpen && capturing) cancelCapture(); if (isOpen) { cursor = index.coerceIn(0, rows.lastIndex); nav(MenuNav.SELECT) } }
 
     private fun activate(row: MenuRowModel) {
         when (row) {
-            is MenuRowModel.Top -> if (expanded == row.action) collapse() else {
+            is MenuRowModel.Top -> if (isDisabled(row.action)) status = stateUnavailableReason.orEmpty()
+            else if (expanded == row.action) collapse() else {
                 expanded = row.action; status = ""
                 cursor = TOP.indexOf(row.action) + 1
             }
             is MenuRowModel.Confirm -> if (row.yes) { status = "Closing..."; val s = session; close(); s.close() } else collapse()
             is MenuRowModel.Slot -> doSlot(row.slot)
-            is MenuRowModel.Bind -> { capturingPad = row.pad; status = "Press a button for ${row.pad.name}" }
-            is MenuRowModel.Hot -> { capturingHotkey = row.action; heldCombo.clear(); comboPeak = emptySet(); status = "Hold buttons, then release" }
+            is MenuRowModel.Bind -> {
+                val pad = row.pad
+                capturingPad = pad; status = "Press a button for ${pad.name}"; armTimeout()
+                if (mapping.liveCapture) mapping.beginCapture(pad) { ok ->
+                    if (capturingPad == pad) { capturingPad = null; revision++; status = if (ok) "Bound ${pad.name}" else "Cancelled" }
+                }
+            }
+            is MenuRowModel.Hot -> {
+                val act = row.action
+                capturingHotkey = act; heldCombo.clear(); comboPeak = emptySet(); status = "Hold buttons, then release"; armTimeout()
+                if (hotkeys.liveCapture) hotkeys.beginCapture(act) { ok ->
+                    if (capturingHotkey == act) { capturingHotkey = null; revision++; status = if (ok) "Hotkey set" else "Cancelled" }
+                }
+            }
             MenuRowModel.Reset -> { if (expanded == MenuAction.SET_HOTKEYS) hotkeys.resetToDefaults() else mapping.resetToDefaults(); revision++; status = "Reset to defaults" }
             MenuRowModel.ClearHotkey -> {}
         }
@@ -139,7 +160,47 @@ class MenuModel(
         }
     }
 
-    private fun cancelCapture() { capturingPad = null; capturingHotkey = null; heldCombo.clear(); status = "" }
+    private fun cancelCapture() {
+        val was = capturing
+        capturingPad = null; capturingHotkey = null; heldCombo.clear(); status = ""
+        main.removeCallbacks(timeout)
+        if (was) { mapping.cancelCapture(); hotkeys.cancelCapture() }
+    }
+
+    private val timeout = Runnable { if (capturing) { cancelCapture(); status = "Capture timed out" } }
+    private fun armTimeout() { main.removeCallbacks(timeout); main.postDelayed(timeout, CAPTURE_TIMEOUT_MS) }
+
+    // ---- canonical (Pad) navigation: A = select, B = back by the handheld's own labels -----------------------
+    private var repeatPad: Pad? = null
+    private val repeater = object : Runnable {
+        override fun run() { val p = repeatPad ?: return; padNav(p); main.postDelayed(this, REPEAT_MS) }
+    }
+
+    private fun padNav(p: Pad) = when (p) {
+        Pad.DPAD_UP, Pad.LS_UP -> nav(MenuNav.UP)
+        Pad.DPAD_DOWN, Pad.LS_DOWN -> nav(MenuNav.DOWN)
+        Pad.DPAD_LEFT, Pad.LS_LEFT -> nav(MenuNav.LEFT)
+        Pad.DPAD_RIGHT, Pad.LS_RIGHT -> nav(MenuNav.RIGHT)
+        else -> {}
+    }
+
+    /**
+     * Navigation from canonical pad events (what [com.noryan.romcore.api.input.InputRouter.menuPadSink] delivers):
+     * D-pad / left stick move, A selects, B backs out, X clears the focused hotkey. UP/DOWN auto-repeat while held.
+     */
+    fun onPad(pad: Pad, pressed: Boolean) {
+        if (!isOpen) return
+        if (!pressed) { if (repeatPad == pad) { repeatPad = null; main.removeCallbacks(repeater) }; return }
+        when (pad) {
+            Pad.A -> nav(MenuNav.SELECT)
+            Pad.B -> nav(MenuNav.BACK)
+            Pad.X -> (rows.getOrNull(cursor) as? MenuRowModel.Hot)?.let { hotkeys.clear(it.action); revision++; status = "Cleared" }
+            Pad.DPAD_UP, Pad.LS_UP, Pad.DPAD_DOWN, Pad.LS_DOWN -> {
+                padNav(pad); repeatPad = pad; main.removeCallbacks(repeater); main.postDelayed(repeater, REPEAT_DELAY_MS)
+            }
+            else -> padNav(pad)
+        }
+    }
 
     /** Feed every key event while the menu is open. Returns true if consumed (always true while open). */
     fun onKeyEvent(e: KeyEvent): Boolean {
@@ -147,7 +208,7 @@ class MenuModel(
         val down = e.action == KeyEvent.ACTION_DOWN
         capturingPad?.let { pad ->
             if (e.keyCode == KeyEvent.KEYCODE_BACK && down) { cancelCapture(); return true }
-            if (down && e.repeatCount == 0 && mapping.bind(pad, e)) { capturingPad = null; revision++; status = "Bound ${pad.name}" }
+            if (down && e.repeatCount == 0 && mapping.bind(pad, e)) { capturingPad = null; mapping.cancelCapture(); revision++; status = "Bound ${pad.name}" }
             return true
         }
         capturingHotkey?.let { act ->
@@ -156,7 +217,7 @@ class MenuModel(
             else {
                 heldCombo.remove(e.keyCode)
                 if (heldCombo.isEmpty() && comboPeak.isNotEmpty()) {
-                    hotkeys.assign(act, comboPeak); comboPeak = emptySet(); capturingHotkey = null; revision++; status = "Hotkey set"
+                    hotkeys.assign(act, comboPeak); hotkeys.cancelCapture(); comboPeak = emptySet(); capturingHotkey = null; revision++; status = "Hotkey set"
                 }
             }
             return true
@@ -178,7 +239,7 @@ class MenuModel(
     fun onMotionEvent(e: MotionEvent): Boolean {
         if (!isOpen) return false
         if (e.source and android.view.InputDevice.SOURCE_JOYSTICK == 0) return false
-        capturingPad?.let { pad -> if (mapping.bind(pad, e)) { capturingPad = null; revision++; status = "Bound ${pad.name}" }; return true }
+        capturingPad?.let { pad -> if (mapping.bind(pad, e)) { capturingPad = null; mapping.cancelCapture(); revision++; status = "Bound ${pad.name}" }; return true }
         if (capturing) return true
         val y = if (Math.abs(e.getAxisValue(MotionEvent.AXIS_HAT_Y)) > 0.5f) e.getAxisValue(MotionEvent.AXIS_HAT_Y) else e.getAxisValue(MotionEvent.AXIS_Y)
         val now = android.os.SystemClock.uptimeMillis()
@@ -188,6 +249,9 @@ class MenuModel(
     }
 
     companion object {
+        const val CAPTURE_TIMEOUT_MS = 12_000L
+        private const val REPEAT_DELAY_MS = 350L
+        private const val REPEAT_MS = 90L
         val TOP = listOf(MenuAction.CLOSE_GAME, MenuAction.CHANGE_CONTROLLER_MAPPING, MenuAction.SAVE_STATE, MenuAction.LOAD_STATE, MenuAction.SET_HOTKEYS)
         fun title(a: MenuAction) = when (a) {
             MenuAction.CLOSE_GAME -> "Close Game"

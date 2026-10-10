@@ -37,6 +37,8 @@ interface CoreDescriptor {
     val id: String                       // "dolphin", "ppsspp", ...
     val displayName: String
     val systems: Set<System>
+    /** Engine version string for Settings; override per core. */
+    val version: String get() = "unknown"
     val extensions: Set<String>          // lowercase, no dot: "iso", "gcm", "wux"...
     /** Optional content sniffing for ambiguous extensions (e.g. .iso, .bin, .chd). Return null = don't know. */
     fun sniff(path: String, header: ByteArray): System? = null

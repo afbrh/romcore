@@ -9,6 +9,7 @@ import android.view.WindowManager
 import com.noryan.romcore.api.CoreSession
 import com.noryan.romcore.api.Pad
 import com.noryan.romcore.api.System
+import com.noryan.romcore.api.menu.MenuInputGate
 import java.util.EnumMap
 
 /**
@@ -35,7 +36,7 @@ class InputRouter(
     val mappings: MappingStore,
     val hotkeyStore: HotkeyStore,
     private val hotkeyListener: HotkeyListener,
-) {
+) : MenuInputGate {
     constructor(ctx: Context, session: CoreSession, hotkeyListener: HotkeyListener) : this(
         session,
         PrefsKeyValueStore(ctx).let { MappingStore(it) },
@@ -54,6 +55,31 @@ class InputRouter(
     private val injected = EnumMap<Pad, Float>(Pad::class.java)
     private var rebind: RebindSession? = null
     private var hotkeyCapture: HotkeyCapture? = null
+    private var pendingRebind: PendingRebind? = null
+    private val sinkDown = EnumMap<Pad, Boolean>(Pad::class.java)
+    private class PendingRebind(val target: Pad, val system: System?, val onState: (RebindState) -> Unit)
+
+    /**
+     * Receives canonical pad edges (post-mapping, sticks as digital with hysteresis) while the game is NOT receiving
+     * input (menu open), except combo pads swallowed by a hotkey and while a capture is running. Drives menu navigation.
+     */
+    var menuPadSink: PadSink? = null
+
+    /** The device that most recently produced gamepad input (scope for the mapping screen). Null until first input. */
+    @Volatile var lastDevice: DeviceInfo? = null
+        private set
+
+    /** [MenuInputGate]: menu open -> stop forwarding to the core, release held buttons; close -> resume forwarding. */
+    override fun setMenuOpen(open: Boolean) {
+        gameInputEnabled = !open
+        sinkDown.clear()
+        if (open) {
+            // keep held-state of the mappers so a still-held button doesn't re-trigger on release
+            hotkeys.reset()
+        } else {
+            cancelRebind(); cancelHotkeyCapture()
+        }
+    }
 
     // ---- public API -------------------------------------------------------------------------------
 
@@ -64,12 +90,14 @@ class InputRouter(
         val homeLike = code == KeyEvent.KEYCODE_HOME || code == KeyEvent.KEYCODE_BUTTON_MODE
         if (!gamepadish && !homeLike) return false
         refresh()
+        val dev = e.device?.let { DeviceInfo.from(it) } ?: DeviceInfo(name = "", deviceId = e.deviceId)
+        if (gamepadish) lastDevice = dev
+        startPending(dev)
         rebind?.let { r ->
             val consumed = r.offerKey(code, down)
             if (r.state !is RebindState.Listening) { rebind = null; releaseAll() }
             return consumed || gamepadish
         }
-        val dev = e.device?.let { DeviceInfo.from(it) } ?: DeviceInfo(name = "", deviceId = e.deviceId)
         val mapper = mapperFor(dev, system)
         if (!mapper.handlesKey(code)) return false
         if (down && e.repeatCount > 0) return gameInputEnabled || isHotkeyKey(mapper, code)
@@ -80,12 +108,14 @@ class InputRouter(
     fun onMotionEvent(e: MotionEvent, system: System): Boolean {
         if (e.action != MotionEvent.ACTION_MOVE || e.source and InputDevice.SOURCE_JOYSTICK != InputDevice.SOURCE_JOYSTICK) return false
         refresh()
+        val dev = e.device?.let { DeviceInfo.from(it) } ?: DeviceInfo(name = "", deviceId = e.deviceId)
+        lastDevice = dev
+        startPending(dev)
         rebind?.let { r ->
             for (axis in CAPTURE_AXES) { if (r.state !is RebindState.Listening) break; r.offerAxis(axis, e.getAxisValue(axis)) }
             if (r.state !is RebindState.Listening) { rebind = null; releaseAll() }
             return true
         }
-        val dev = e.device?.let { DeviceInfo.from(it) } ?: DeviceInfo(name = "", deviceId = e.deviceId)
         val mapper = mapperFor(dev, system)
         val events = ArrayList<PadEvent>()
         for (axis in mapper.profile.axes) events += mapper.onAxis(axis, e.getAxisValue(axis))
@@ -95,11 +125,29 @@ class InputRouter(
 
     /** Begin "press a button to rebind"; the session must already be in Listening state. Router swallows input meanwhile. */
     fun startRebind(s: RebindSession) { rebind = s; hotkeyCapture = null; releaseAll() }
-    fun cancelRebind() { rebind?.cancel(); rebind = null }
+    fun cancelRebind() { pendingRebind?.onState?.invoke(RebindState.Cancelled); pendingRebind = null; rebind?.cancel(); rebind = null }
+
+    /**
+     * Menu-friendly rebind: the next gamepad press/axis (from whichever device produces it) is bound to [target] in the
+     * device-wide scope ([system] = null) or per-system scope. [onState] sees Captured/Cancelled. Cancel with [cancelRebind].
+     */
+    fun beginRebind(target: Pad, system: System? = null, onState: (RebindState) -> Unit) {
+        cancelRebind(); hotkeyCapture = null
+        pendingRebind = PendingRebind(target, system, onState)
+        releaseAll()
+    }
 
     /** Begin capturing a hotkey combo from pad presses; [HotkeyCapture]'s callback delivers the combo. Swallows input. */
-    fun startHotkeyCapture(c: HotkeyCapture) { hotkeyCapture = c; rebind = null; releaseAll() }
-    fun cancelHotkeyCapture() { hotkeyCapture = null }
+    fun startHotkeyCapture(c: HotkeyCapture) { hotkeyCapture = c; rebind = null; pendingRebind = null; releaseAll() }
+    fun cancelHotkeyCapture() { hotkeyCapture = null; hotkeyCaptureCancel?.invoke(); hotkeyCaptureCancel = null }
+    private var hotkeyCaptureCancel: (() -> Unit)? = null
+
+    /** Capture a combo for [action] from the live pad; [onDone] gets the pads, or null if cancelled. */
+    fun beginHotkeyCapture(action: HotkeyAction, onDone: (Set<Pad>?) -> Unit) {
+        cancelHotkeyCapture(); cancelRebind()
+        hotkeyCaptureCancel = { onDone(null) }
+        startHotkeyCapture(HotkeyCapture(action) { hotkeyCaptureCancel = null; onDone(it) })
+    }
 
     /** Release everything the core currently thinks is held (call on pause/menu open/focus loss). */
     fun releaseHeld() {
@@ -114,7 +162,7 @@ class InputRouter(
         /** Prevents the screen sleeping (sleep silently drops all controller input on the AYN Thor). Call in onCreate. */
         fun keepScreenOn(a: Activity) { a.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
 
-        private val CAPTURE_AXES = intArrayOf(
+        internal val CAPTURE_AXES = intArrayOf(
             MotionEvent.AXIS_HAT_X, MotionEvent.AXIS_HAT_Y, MotionEvent.AXIS_X, MotionEvent.AXIS_Y, MotionEvent.AXIS_Z,
             MotionEvent.AXIS_RZ, MotionEvent.AXIS_RX, MotionEvent.AXIS_RY, MotionEvent.AXIS_LTRIGGER,
             MotionEvent.AXIS_RTRIGGER, MotionEvent.AXIS_BRAKE, MotionEvent.AXIS_GAS,
@@ -129,7 +177,7 @@ class InputRouter(
 
     // ---- internals --------------------------------------------------------------------------------
 
-    private fun refresh() {
+    internal fun refresh() {
         if (hotkeyRev != hotkeyStore.revision) { hotkeyRev = hotkeyStore.revision; hotkeys.config = hotkeyStore.load() }
         if (mapRev != mappings.revision) { mapRev = mappings.revision; mappers.clear(); releaseHeld() }
     }
@@ -145,15 +193,35 @@ class InputRouter(
         return hotkeys.config.combos.values.any { l -> l.any { pad in it } }
     }
 
-    private fun dispatch(events: List<PadEvent>, system: System) {
+    private fun startPending(dev: DeviceInfo) {
+        val p = pendingRebind ?: return
+        pendingRebind = null
+        rebind = RebindSession(mappings, dev, p.system, p.onState).also { it.listen(p.target) }
+    }
+
+    private fun sink(pad: Pad, value: Float) {
+        val s = menuPadSink ?: return
+        val was = sinkDown[pad] == true
+        val now = if (pad.isStick) (if (was) value >= 0.3f else value >= 0.6f) else value >= 0.5f
+        if (now == was) return
+        if (now) sinkDown[pad] = true else sinkDown.remove(pad)
+        s.onPad(pad, now)
+    }
+
+    internal fun dispatch(events: List<PadEvent>, system: System) {
         for (ev in events) {
-            if (ev.pad.isStick) { if (gameInputEnabled && hotkeyCapture == null) inject(forFamily(system, ev.pad), ev.value); continue }
+            if (ev.pad.isStick) {
+                if (gameInputEnabled && hotkeyCapture == null) inject(forFamily(system, ev.pad), ev.value)
+                else if (!gameInputEnabled && hotkeyCapture == null) sink(ev.pad, ev.value)
+                continue
+            }
             val digital = ev.value >= 0.5f
             hotkeyCapture?.let { c -> c.onPad(ev.pad, digital); if (c.finished) hotkeyCapture = null; continue }
             val r = hotkeys.onPad(ev.pad, digital)
             for (p in r.toRelease) if (injected[p] != null) inject(p, 0f)
             r.event?.let { hotkeyListener.onHotkey(it) }
-            if (r.swallow || ev.pad == Pad.HOME || !gameInputEnabled) continue
+            if (r.swallow || ev.pad == Pad.HOME) continue
+            if (!gameInputEnabled) { sink(ev.pad, ev.value); continue }
             inject(forFamily(system, ev.pad), ev.value)
         }
     }
@@ -173,3 +241,6 @@ class InputRouter(
         }
     }
 }
+
+/** Canonical pad edge consumer (see [InputRouter.menuPadSink]). */
+fun interface PadSink { fun onPad(pad: Pad, pressed: Boolean) }
