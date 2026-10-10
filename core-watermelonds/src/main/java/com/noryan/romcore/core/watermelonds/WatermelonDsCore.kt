@@ -32,8 +32,11 @@ object WatermelonDsCore : CoreDescriptor {
 
     override fun launchIntent(ctx: Context, request: LaunchRequest): Intent {
         WatermelonDsDefaults.applyIfNeeded(ctx)
-        val uri = request.romUri?.let { runCatching { Uri.parse(it) }.getOrNull() }
-            ?: Uri.fromFile(java.io.File(request.romPath))
+        // The bridge (RomUris.romDocumentFor) is built around plain file paths: prefer a readable real path, and only
+        // fall back to the shell's SAF uri when the file is not directly readable.
+        val real = java.io.File(request.romPath)
+        val uri = if (real.isFile && real.canRead()) Uri.fromFile(real)
+        else request.romUri?.let { runCatching { Uri.parse(it) }.getOrNull() } ?: Uri.fromFile(real)
         return Intent(ctx, EmulatorActivity::class.java).apply {
             data = uri
             putExtra(RomCoreBridge.EXTRA_ROMCORE, true)

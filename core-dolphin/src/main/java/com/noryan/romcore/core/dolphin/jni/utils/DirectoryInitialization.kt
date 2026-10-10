@@ -82,7 +82,7 @@ object DirectoryInitialization {
         val stamp = revision + "|" + packageStamp(context)
         if (preferences.getString("sysDirectoryVersion", "") != stamp || !sysDirectory.isDirectory) {
             deleteDirectoryRecursively(sysDirectory)
-            copyAssetFolder("Sys", sysDirectory, context)
+            copyAssetFolder("dolphin_assets/Sys", sysDirectory, context)
             preferences.edit().putString("sysDirectoryVersion", stamp).apply()
         }
 

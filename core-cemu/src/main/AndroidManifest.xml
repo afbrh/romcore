@@ -9,8 +9,7 @@
       otherwise leak into the merged app, and remove its stock activities/provider (Cemu's
       EmulationActivity also carries a VIEW filter for .wud/.rpx/.iso that would hijack file opens).
     -->
-    <application
-        tools:remove="android:name,android:icon,android:roundIcon,android:label,android:theme,android:allowBackup,android:dataExtractionRules,android:fullBackupContent,android:appCategory,android:supportsRtl">
+    <application>
 
         <activity
             android:name=".CemuGameActivity"

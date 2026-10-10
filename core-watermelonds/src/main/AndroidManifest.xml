@@ -2,8 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
 
-    <application
-        tools:remove="android:name,android:label,android:icon,android:allowBackup,android:fullBackupContent,android:networkSecurityConfig,android:supportsRtl,android:enableOnBackInvokedCallback,android:isGame,android:appCategory,android:theme">
+    <application>
 
         <!-- The whole DS runtime lives in its own process so libmelonDS-android-frontend.so and its GL/Vulkan state
              never share an address space with other RomCore cores. UI is hidden: only the game surface (+ the shared

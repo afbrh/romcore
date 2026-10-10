@@ -68,7 +68,7 @@ androidComponents {
 
 val stageDolphinSys = tasks.register<Copy>("stageDolphinSys") {
     from(File(dolphinSrc, "Data/Sys")) { exclude("Themes/**") }
-    into(layout.buildDirectory.dir("generated/dolphinAssets/Sys"))
+    into(layout.buildDirectory.dir("generated/dolphinAssets/dolphin_assets/Sys"))
 }
 tasks.matching { it.name.matches(Regex("merge.*Assets")) || it.name.matches(Regex("lintVitalAnalyze.*")) }
     .configureEach { dependsOn(stageDolphinSys) }

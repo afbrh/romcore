@@ -129,9 +129,8 @@ object AzaharHost {
         })
         router = r
         InputRouter.keepScreenOn(a)
-        val store = r.mappings
-        val gate = object : MenuInputGate { override fun setMenuOpen(open: Boolean) { r.gameInputEnabled = !open } }
-        host = RomCoreMenu.attach(a, s, SYSTEM, gate, RouterMapping(store), RouterHotkeys(r))
+        // Gate = the InputRouter itself: canonical (label-based) menu navigation + router-backed mapping/hotkey stores.
+        host = RomCoreMenu.attach(a, s, SYSTEM, r)
         menu = host
 
         // Everything the stock activity would do with keys/sticks goes through RomCore first (contract rule).
@@ -179,44 +178,5 @@ object AzaharHost {
                 Handler(Looper.getMainLooper()).postDelayed({ Process.killProcess(Process.myPid()) }, 250)
             }.start()
         }
-    }
-
-    // ---- adapters between the menu's backends and the router's stores ---------------------------------------------
-    private fun dev(): DeviceInfo = lastDevice ?: DeviceInfo.connected().firstOrNull() ?: DeviceInfo(name = "")
-
-    private class RouterMapping(val store: com.noryan.romcore.api.input.MappingStore) : MappingBackend {
-        override val pads = com.noryan.romcore.api.input.MappingStore.MAPPABLE_PADS
-        override fun describe(pad: Pad) = store.rows(dev(), SYSTEM).firstOrNull { it.pad == pad }?.label ?: "Unbound"
-        override fun bind(pad: Pad, event: KeyEvent): Boolean {
-            store.rebind(dev(), SYSTEM, pad, PhysicalControl.key(event.keyCode)); return true
-        }
-        override fun bind(pad: Pad, event: MotionEvent): Boolean {
-            val axes = intArrayOf(MotionEvent.AXIS_HAT_X, MotionEvent.AXIS_HAT_Y, MotionEvent.AXIS_X, MotionEvent.AXIS_Y,
-                MotionEvent.AXIS_Z, MotionEvent.AXIS_RZ, MotionEvent.AXIS_RX, MotionEvent.AXIS_RY,
-                MotionEvent.AXIS_LTRIGGER, MotionEvent.AXIS_RTRIGGER, MotionEvent.AXIS_BRAKE, MotionEvent.AXIS_GAS)
-            val best = axes.maxByOrNull { Math.abs(event.getAxisValue(it)) } ?: return false
-            val v = event.getAxisValue(best)
-            if (Math.abs(v) < 0.7f) return false
-            store.rebind(dev(), SYSTEM, pad, PhysicalControl.axis(best, if (v < 0) -1 else 1)); return true
-        }
-        override fun resetToDefaults() = store.reset(dev(), SYSTEM)
-    }
-
-    private class RouterHotkeys(val r: InputRouter) : HotkeyBackend {
-        private val map = mapOf(MenuAction.SAVE_STATE to HotkeyAction.SAVE_STATE, MenuAction.LOAD_STATE to HotkeyAction.LOAD_STATE,
-            MenuAction.CLOSE_GAME to HotkeyAction.CLOSE_GAME)
-        override val actions = map.keys.toList()
-        override fun describe(action: MenuAction): String {
-            val l = r.hotkeyStore.load().combos[map[action]].orEmpty()
-            return if (l.isEmpty()) "UNSET" else l.joinToString(" | ") { com.noryan.romcore.api.input.HotkeyConfig.comboLabel(it) }
-        }
-        override fun assign(action: MenuAction, keyCodes: Set<Int>) {
-            val ha = map[action] ?: return
-            val bindings = r.mappings.resolve(dev(), SYSTEM).bindings
-            val pads = keyCodes.mapNotNull { bindings[PhysicalControl.key(it)] }.toSet()
-            if (pads.isNotEmpty()) r.hotkeyStore.save(r.hotkeyStore.load().with(ha, listOf(pads)))
-        }
-        override fun clear(action: MenuAction) { map[action]?.let { r.hotkeyStore.save(r.hotkeyStore.load().with(it, emptyList())) } }
-        override fun resetToDefaults() = r.hotkeyStore.reset()
     }
 }
