@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      Cemu's own library manifest declares an <application android:name=".CemuApplication"> plus
+      MainActivity/EmulationActivity/DocumentsProvider. RomCore owns the Application and runs Cemu in
+      its own process via CemuGameActivity, so: strip the application-level attributes Cemu would
+      otherwise leak into the merged app, and remove its stock activities/provider (Cemu's
+      EmulationActivity also carries a VIEW filter for .wud/.rpx/.iso that would hijack file opens).
+    -->
+    <application
+        tools:remove="android:name,android:icon,android:roundIcon,android:label,android:theme,android:allowBackup,android:dataExtractionRules,android:fullBackupContent,android:appCategory,android:supportsRtl">
+
+        <activity
+            android:name=".CemuGameActivity"
+            android:exported="false"
+            android:process=":cemu"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|navigation|uiMode|smallestScreenSize"
+            android:screenOrientation="userLandscape"
+            android:theme="@style/Theme.Cemu" />
+
+        <activity android:name="info.cemu.cemu.MainActivity" tools:node="remove" />
+        <activity android:name="info.cemu.cemu.emulation.EmulationActivity" tools:node="remove" />
+        <provider android:name="info.cemu.cemu.provider.DocumentsProvider" tools:node="remove" />
+    </application>
+</manifest>
