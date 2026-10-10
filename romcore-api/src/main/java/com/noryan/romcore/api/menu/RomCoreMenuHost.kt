@@ -29,8 +29,11 @@ import com.noryan.romcore.api.input.PadSink
 class RomCoreMenuHost internal constructor(
     val activity: Activity,
     val model: MenuModel,
-    /** Key codes that open the menu while closed (also callable via [toggle] from the hotkey manager). */
-    var openKeyCodes: Set<Int> = setOf(KeyEvent.KEYCODE_BUTTON_MODE, KeyEvent.KEYCODE_HOME),
+    /**
+     * Key codes that open the menu while closed (also callable via [toggle] from the hotkey manager). Only Back by
+     * default: it opens on key DOWN (so the emulator never sees the press) and every Back event is consumed.
+     */
+    var openKeyCodes: Set<Int> = setOf(KeyEvent.KEYCODE_BACK),
     /** Non-null when attached with an [InputRouter] gate: menu navigation then follows canonical Pad events. */
     private val router: InputRouter? = null,
 ) {
@@ -46,6 +49,7 @@ class RomCoreMenuHost internal constructor(
 
     /** Call first in Activity.dispatchKeyEvent. Returns true if consumed (always, while the menu is open). */
     fun dispatchKeyEvent(e: KeyEvent): Boolean {
+        if (e.keyCode == KeyEvent.KEYCODE_BACK) lastBackKeyMs = android.os.SystemClock.uptimeMillis()
         if (model.isOpen) {
             // Canonical path: gamepad keys go through the router (profile + user mapping) and arrive as Pad events
             // (A select / B back by the handheld's own labels). BACK/ESC and non-gamepad sources (keyboard, adb) stay raw.
@@ -55,8 +59,34 @@ class RomCoreMenuHost internal constructor(
             }
             return model.onKeyEvent(e)
         }
-        if (e.keyCode in openKeyCodes) { if (e.action == KeyEvent.ACTION_UP && e.repeatCount == 0) open(); return true }
+        if (e.keyCode in openKeyCodes) { if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) open(); return true }
         return false
+    }
+
+    /** Uptime of the latest Back KEY event seen here; lets the predictive-back callback ignore the same press. */
+    @Volatile internal var lastBackKeyMs = -10_000L
+    private var backCallback: Any? = null
+
+    /**
+     * Android 13+ back (gesture, predictive back, or a Back key the activity did not consume) must also open this menu
+     * and never reach the emulator's own back handling: a PRIORITY_OVERLAY callback outranks every Activity /
+     * androidx OnBackPressedDispatcher callback. Skipped when the Back KEY was just handled (no double toggle).
+     */
+    internal fun registerBackCallback() {
+        if (android.os.Build.VERSION.SDK_INT < 33 || backCallback != null) return
+        val cb = android.window.OnBackInvokedCallback {
+            if (android.os.SystemClock.uptimeMillis() - lastBackKeyMs < BACK_DEDUPE_MS) return@OnBackInvokedCallback
+            lastBackKeyMs = android.os.SystemClock.uptimeMillis()
+            if (model.isOpen) model.nav(MenuNav.BACK) else open()
+        }
+        backCallback = cb
+        activity.onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_OVERLAY, cb)
+    }
+
+    private fun unregisterBackCallback() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return
+        (backCallback as? android.window.OnBackInvokedCallback)?.let { activity.onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) }
+        backCallback = null
     }
 
     /** Call first in Activity.dispatchGenericMotionEvent. */
@@ -69,6 +99,7 @@ class RomCoreMenuHost internal constructor(
 
     /** Call from Activity.onDestroy. */
     fun detach() {
+        unregisterBackCallback()
         (view.parent as? ViewGroup)?.removeView(view)
         owner?.destroy()
         if (model.isOpen) model.close()
@@ -77,6 +108,7 @@ class RomCoreMenuHost internal constructor(
     }
 
     private companion object {
+        const val BACK_DEDUPE_MS = 500L
         const val GAMEPAD_SOURCES = InputDevice.SOURCE_GAMEPAD or InputDevice.SOURCE_JOYSTICK or InputDevice.SOURCE_DPAD
     }
 
@@ -131,6 +163,7 @@ object RomCoreMenu {
         host.install(self)
         activity.addContentView(cv, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         hosts[activity] = host
+        host.registerBackCallback()
         return host
     }
 }

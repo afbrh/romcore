@@ -66,11 +66,8 @@ class RomCoreRetroActivity : RetroActivityFuture() {
 
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
         if (!::hooks.isInitialized) return super.dispatchKeyEvent(e)
-        if (hooks.dispatchKey(e)) return true
-        if (e.keyCode == KeyEvent.KEYCODE_BACK) { // never drop out of the game by accident; Back opens the menu
-            if (e.action == KeyEvent.ACTION_UP) hooks.menu.open()
-            return true
-        }
+        if (hooks.dispatchKey(e)) return true // Back is always consumed here and opens the shared menu
+        if (e.keyCode == KeyEvent.KEYCODE_BACK) return true
         return super.dispatchKeyEvent(e)
     }
 

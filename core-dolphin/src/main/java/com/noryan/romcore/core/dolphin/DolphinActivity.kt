@@ -179,12 +179,7 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
 
     // ---- input -------------------------------------------------------------------------------------------------
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (hooks.dispatchKey(event)) return true
-        // Android BACK opens the menu (never silently exits mid-game).
-        if (event.keyCode == KeyEvent.KEYCODE_BACK) {
-            if (event.action == KeyEvent.ACTION_UP) hooks.menu.toggle()
-            return true
-        }
+        if (hooks.dispatchKey(event)) return true // Back is always consumed here and opens the shared menu
         return super.dispatchKeyEvent(event)
     }
 

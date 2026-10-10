@@ -10,7 +10,7 @@ enum class HotkeyAction(val menuAction: MenuAction?) {
 }
 
 sealed interface HotkeyEvent {
-    /** HOME / SELECT+START etc: the host should open (or close) the shared menu. */
+    /** BACK (default) etc: the host should open (or close) the shared menu. */
     data object ToggleMenu : HotkeyEvent
     /** Run a menu action directly (quick save / quick load / close) without opening the menu. */
     data class Run(val action: MenuAction) : HotkeyEvent
@@ -21,17 +21,32 @@ fun interface HotkeyListener { fun onHotkey(event: HotkeyEvent) }
 /** Each action may have several alternative combos. A combo is a set of canonical pads that must be held together. */
 data class HotkeyConfig(val combos: Map<HotkeyAction, List<Set<Pad>>>) {
     companion object {
-        /** HOME or SELECT+START opens the menu; the other actions are optional and unbound by default. */
+        /** The always-available Open Menu combo (lockout-safety fallback and the default): the Back button alone. */
+        val BACK_ONLY: Set<Pad> = setOf(Pad.BACK)
+        /** Pre-"Back only" defaults, recognised so stored default configs migrate to [DEFAULT]. */
+        private val LEGACY_HOME_ONLY: Set<Pad> = setOf(Pad.HOME)
+        private val LEGACY_DEFAULT_OPEN: Set<Set<Pad>> = setOf(LEGACY_HOME_ONLY, setOf(Pad.SELECT, Pad.START))
+
+        /** Back opens the menu; the other actions are optional and unbound by default. SELECT+START does NOT open it. */
         val DEFAULT = HotkeyConfig(mapOf(
-            HotkeyAction.OPEN_MENU to listOf(setOf(Pad.HOME), setOf(Pad.SELECT, Pad.START)),
+            HotkeyAction.OPEN_MENU to listOf(BACK_ONLY),
             HotkeyAction.SAVE_STATE to emptyList(), HotkeyAction.LOAD_STATE to emptyList(), HotkeyAction.CLOSE_GAME to emptyList(),
         ))
+        /**
+         * Stored-config migration: an Open Menu list equal to the old default (HOME | SELECT+START) becomes the new
+         * default; a custom list has its old HOME-only fallback replaced by BACK and always keeps BACK as fallback.
+         */
+        internal fun normalizeOpenMenu(list: List<Set<Pad>>): List<Set<Pad>> {
+            if (list.toSet() == LEGACY_DEFAULT_OPEN) return listOf(BACK_ONLY)
+            val custom = list.filter { it != LEGACY_HOME_ONLY && it != BACK_ONLY }.distinct()
+            return custom + listOf(BACK_ONLY)
+        }
         fun comboLabel(c: Set<Pad>) = c.sortedBy { it.ordinal }.joinToString(" + ") { it.name.replace('_', ' ') }
     }
     fun with(action: HotkeyAction, list: List<Set<Pad>>) = HotkeyConfig(combos + (action to list))
 }
 
-/** Persists [HotkeyConfig]. Format "OPEN_MENU=HOME|SELECT+START;SAVE_STATE=;...". */
+/** Persists [HotkeyConfig]. Format "OPEN_MENU=BACK;SAVE_STATE=;...". Old "HOME|SELECT+START" defaults migrate to BACK on load. */
 class HotkeyStore(private val kv: KeyValueStore) {
     @Volatile var revision = 0
         private set
@@ -47,6 +62,7 @@ class HotkeyStore(private val kv: KeyValueStore) {
                 c.split('+').map { runCatching { Pad.valueOf(it) }.getOrNull() ?: return@mapNotNull null }.toSet().takeIf { it.isNotEmpty() }
             }
         }
+        m[HotkeyAction.OPEN_MENU] = HotkeyConfig.normalizeOpenMenu(m[HotkeyAction.OPEN_MENU].orEmpty())
         return HotkeyConfig(m)
     }
 

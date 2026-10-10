@@ -1,10 +1,8 @@
 package com.noryan.romcore.core.eden
 
-import android.os.Build
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.Window
-import android.window.OnBackInvokedDispatcher
 import androidx.appcompat.view.WindowCallbackWrapper
 import com.noryan.romcore.api.RomCoreCoreHost
 import com.noryan.romcore.api.System
@@ -31,12 +29,8 @@ object EdenHost {
             override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
                 h.dispatchMotion(event) || super.dispatchGenericMotionEvent(event)
         }
-        // Eden's own Back handling opens its (hidden-by-design) drawer; Back opens the RomCore menu instead.
-        if (Build.VERSION.SDK_INT >= 33) {
-            activity.onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_OVERLAY) {
-                h.menu.toggle()
-            }
-        }
+        // Eden's own Back handling (drawer) never runs: key Back is consumed by hooks.dispatchKey above and the
+        // predictive/gesture back is taken by the PRIORITY_OVERLAY callback RomCoreMenu.attach registers.
     }
 
     /** Called from the lifecycle hook when the Activity pauses/destroys. */

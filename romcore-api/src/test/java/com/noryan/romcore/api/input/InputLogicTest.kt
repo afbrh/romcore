@@ -124,15 +124,41 @@ class InputLogicTest {
         assertEquals(RebindState.Cancelled, r.state)
     }
 
-    @Test fun hotkeyHomeAndSelectStart() {
+    @Test fun defaultOpenMenuIsBackOnly() {
         val h = HotkeyManager()
-        assertEquals(HotkeyEvent.ToggleMenu, h.onPad(Pad.HOME, true).event)
-        h.onPad(Pad.HOME, false)
+        val r = h.onPad(Pad.BACK, true)
+        assertEquals(HotkeyEvent.ToggleMenu, r.event); assertTrue(r.swallow)
+        assertTrue(h.onPad(Pad.BACK, false).swallow)
+        // HOME and SELECT+START no longer open the menu by default and are forwarded normally
+        assertNull(h.onPad(Pad.HOME, true).event); h.onPad(Pad.HOME, false)
         assertNull(h.onPad(Pad.SELECT, true).event)
-        val r = h.onPad(Pad.START, true)
-        assertEquals(HotkeyEvent.ToggleMenu, r.event); assertEquals(setOf(Pad.SELECT), r.toRelease); assertTrue(r.swallow)
-        assertTrue(h.onPad(Pad.START, false).swallow); assertTrue(h.onPad(Pad.SELECT, false).swallow)
+        val s = h.onPad(Pad.START, true)
+        assertNull(s.event); assertFalse(s.swallow)
         assertFalse(h.onPad(Pad.A, true).swallow)
+    }
+
+    @Test fun legacyStoredDefaultMigratesToBack() {
+        val kv = MemoryKeyValueStore()
+        kv.put("hotkeys", "OPEN_MENU=HOME|SELECT+START;SAVE_STATE=;LOAD_STATE=;CLOSE_GAME=")
+        assertEquals(listOf(setOf(Pad.BACK)), HotkeyStore(kv).load().combos[HotkeyAction.OPEN_MENU])
+        kv.put("hotkeys", "OPEN_MENU=SELECT+START|HOME;SAVE_STATE=")
+        assertEquals(listOf(setOf(Pad.BACK)), HotkeyStore(kv).load().combos[HotkeyAction.OPEN_MENU])
+    }
+
+    @Test fun legacyCustomOpenMenuKeepsComboAndGainsBackFallback() {
+        val kv = MemoryKeyValueStore()
+        kv.put("hotkeys", "OPEN_MENU=L3+R3|HOME")
+        assertEquals(listOf(setOf(Pad.L3, Pad.R3), setOf(Pad.BACK)), HotkeyStore(kv).load().combos[HotkeyAction.OPEN_MENU])
+        kv.put("hotkeys", "OPEN_MENU=")
+        assertEquals(listOf(setOf(Pad.BACK)), HotkeyStore(kv).load().combos[HotkeyAction.OPEN_MENU])
+    }
+
+    @Test fun backKeyMapsToBackPadOnEveryProfile() {
+        for (p in listOf(DeviceProfiles.GENERIC, DeviceProfiles.forDevice(DeviceInfo(name = "AYN Thor Controller")))) {
+            val m = PadMapper(p)
+            assertEquals(listOf(PadEvent(Pad.BACK, 1f)), m.onKey(KeyEvent.KEYCODE_BACK, true))
+            assertEquals(listOf(PadEvent(Pad.BACK, 0f)), m.onKey(KeyEvent.KEYCODE_BACK, false))
+        }
     }
 
     @Test fun hotkeyLargestComboWinsAndPersists() {
@@ -143,7 +169,7 @@ class InputLogicTest {
             .with(HotkeyAction.LOAD_STATE, listOf(setOf(Pad.SELECT, Pad.START, Pad.L1))))
         val loaded = HotkeyStore(kv).load()
         assertEquals(listOf(setOf(Pad.SELECT, Pad.START, Pad.R1)), loaded.combos[HotkeyAction.SAVE_STATE])
-        assertEquals(2, loaded.combos[HotkeyAction.OPEN_MENU]!!.size)
+        assertEquals(listOf(setOf(Pad.BACK)), loaded.combos[HotkeyAction.OPEN_MENU])
         val h = HotkeyManager(loaded)
         h.onPad(Pad.R1, true); h.onPad(Pad.SELECT, true)
         val r = h.onPad(Pad.START, true)

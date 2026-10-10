@@ -114,7 +114,7 @@ internal class Armsx2Session(private val activity: Armsx2Activity) : CoreSession
             Pad.DPAD_UP -> 19; Pad.DPAD_DOWN -> 20; Pad.DPAD_LEFT -> 21; Pad.DPAD_RIGHT -> 22
             Pad.LS_UP -> 110; Pad.LS_RIGHT -> 111; Pad.LS_DOWN -> 112; Pad.LS_LEFT -> 113
             Pad.RS_UP -> 120; Pad.RS_RIGHT -> 121; Pad.RS_DOWN -> 122; Pad.RS_LEFT -> 123
-            Pad.HOME -> null
+            Pad.HOME, Pad.BACK -> null
         }
     }
 }

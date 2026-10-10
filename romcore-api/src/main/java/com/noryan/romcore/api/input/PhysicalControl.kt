@@ -38,7 +38,7 @@ data class PhysicalControl(val isAxis: Boolean, val code: Int, val sign: Int = 0
             KeyEvent.KEYCODE_BUTTON_L2 to "L2", KeyEvent.KEYCODE_BUTTON_R2 to "R2",
             KeyEvent.KEYCODE_BUTTON_THUMBL to "L3", KeyEvent.KEYCODE_BUTTON_THUMBR to "R3",
             KeyEvent.KEYCODE_BUTTON_START to "Start", KeyEvent.KEYCODE_BUTTON_SELECT to "Select",
-            KeyEvent.KEYCODE_BUTTON_MODE to "Guide", KeyEvent.KEYCODE_HOME to "Home",
+            KeyEvent.KEYCODE_BUTTON_MODE to "Guide", KeyEvent.KEYCODE_HOME to "Home", KeyEvent.KEYCODE_BACK to "Back",
             KeyEvent.KEYCODE_BUTTON_C to "Button C", KeyEvent.KEYCODE_BUTTON_Z to "Button Z",
             KeyEvent.KEYCODE_DPAD_UP to "D-pad Up", KeyEvent.KEYCODE_DPAD_DOWN to "D-pad Down",
             KeyEvent.KEYCODE_DPAD_LEFT to "D-pad Left", KeyEvent.KEYCODE_DPAD_RIGHT to "D-pad Right",

@@ -140,10 +140,7 @@ object AzaharHost {
                 if (host.dispatchKeyEvent(e)) return true
                 e.device?.let { if (e.source and 0x401 != 0) lastDevice = DeviceInfo.from(it) }
                 if (r.onKeyEvent(e, SYSTEM)) return true
-                if (e.keyCode == KeyEvent.KEYCODE_BACK) { // never let the stock drawer open
-                    if (e.action == KeyEvent.ACTION_UP) host.toggle()
-                    return true
-                }
+                if (e.keyCode == KeyEvent.KEYCODE_BACK) return true // never let the stock drawer open (host handles Back)
                 // Stock activity would map raw gamepad keys itself; those must not double-fire.
                 if (e.source and (android.view.InputDevice.SOURCE_GAMEPAD or android.view.InputDevice.SOURCE_DPAD) != 0) return true
                 return super.dispatchKeyEvent(e)
@@ -162,7 +159,7 @@ object AzaharHost {
     /** Called after every resume: (a) gesture-back toggles the RomCore menu, (b) keep the pause if the menu is open. */
     fun resumed(a: EmulationActivity) {
         if (backGuard == null) {
-            backGuard = object : OnBackPressedCallback(true) { override fun handleOnBackPressed() { menu?.toggle() } }
+            backGuard = object : OnBackPressedCallback(true) { override fun handleOnBackPressed() { menu?.let { if (it.isOpen) it.model.nav(com.noryan.romcore.api.menu.MenuNav.BACK) else it.open() } } }
                 .also { a.onBackPressedDispatcher.addCallback(a, it) } // added last => highest priority, beats the drawer
         }
         if (menu?.isOpen == true) NativeLibrary.pauseEmulation()

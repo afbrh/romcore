@@ -56,14 +56,25 @@ SharedPreferences ("romcore_input"), so give each process the same data via the 
 
 ## What the user gets
 
-- HOME / Guide (or SELECT+START) opens the menu: Close Game, Change Controller Mapping, Save State, Load State, Set Hotkeys.
+- The Back button (KEYCODE_BACK, any source) opens the menu and nothing else does by default (SELECT+START and HOME/Guide do not): Close Game, Change Controller Mapping, Save State, Load State, Set Hotkeys.
   The game is paused while open; held buttons are released.
 - Menu navigation uses canonical pads: D-pad / left stick move, **A select, B back** (by the handheld's own labels),
   X clears the focused hotkey. BACK/ESC and keyboard still work.
 - Change Controller Mapping: pick a pad row, press the physical button / push the stick or trigger to bind it (12 s
   timeout, BACK or B-row re-select cancels). Stored per controller (vendor/product), device-wide.
 - Set Hotkeys: rows Open Menu, Save State, Load State, Close Game. Hold the combo, release to save. Open Menu always
-  keeps HOME as a fallback. Save/Load hotkeys use slot `RomCoreCoreHost.QUICK_SLOT` (1) and show a toast.
+  keeps BACK as a fallback (a saved legacy HOME|SELECT+START default migrates to BACK on load). Save/Load hotkeys use slot `RomCoreCoreHost.QUICK_SLOT` (1) and show a toast.
+
+## Back handling (every core)
+
+Back belongs to the shared menu, never to the emulator. `RomCoreCoreHost.Hooks.dispatchKey` (and
+`RomCoreMenuHost.dispatchKeyEvent` for cores wired by hand) consume every KEYCODE_BACK event: the menu opens on key DOWN
+(so the emulator never sees the press), UP/repeat are swallowed, and with the menu open Back collapses a panel / closes
+the menu. `RomCoreMenu.attach` also registers an Android 13+ `OnBackInvokedDispatcher.PRIORITY_OVERLAY` callback
+(gesture / predictive back, or a Back the Activity did not consume) that outranks the Activity, androidx
+`OnBackPressedDispatcher` and the emulator's own callbacks; it ignores the press if the Back key was just handled
+(no double toggle). Cores must not add their own Back logic: call `hooks.dispatchKey` first and, if it returns false for
+Back, still return true. Window.Callback-wrapper cores (Eden, Azahar) call it from the wrapper's `dispatchKeyEvent`.
 
 ## Lower level
 

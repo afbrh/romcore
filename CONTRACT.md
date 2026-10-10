@@ -33,8 +33,8 @@ Canonical Pad = label on physical button. Nintendo: A-A,B-B,X-X,Y-Y. PS1/PS2/PSP
 Every core Activity routes dispatchKeyEvent/dispatchGenericMotionEvent through romcore-api InputRouter FIRST.
 
 ## In-game menu (owned by :romcore-api menu agent, hosted by every core Activity)
-Exactly: Close Game, Change Controller Mapping, Save State, Load State, Set Hotkeys. Opened by HOME/guide button
-(configurable hotkey). D-pad navigable, no popups (inline fold-down panels, "tabbing down" style), style from
+Exactly: Close Game, Change Controller Mapping, Save State, Load State, Set Hotkeys. Opened by the Back button
+(default Open Menu hotkey; configurable, Back always stays as fallback). Nothing else opens in-game. D-pad navigable, no popups (inline fold-down panels, "tabbing down" style), style from
 /Users/ry/Desktop/claude/romrunner-builtinemulators/menu-style-reference. Pause the core while open.
 
 ## Build rules

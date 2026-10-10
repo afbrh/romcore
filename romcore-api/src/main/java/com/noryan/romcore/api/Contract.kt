@@ -15,7 +15,9 @@ enum class System(val family: Family) {
 
 /** Buttons in RomCore's canonical (Nintendo-label) space. Physical Android keycodes map to these first. */
 enum class Pad { A, B, X, Y, L1, R1, L2, R2, L3, R3, START, SELECT, DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT,
-    LS_UP, LS_DOWN, LS_LEFT, LS_RIGHT, RS_UP, RS_DOWN, RS_LEFT, RS_RIGHT, HOME }
+    LS_UP, LS_DOWN, LS_LEFT, LS_RIGHT, RS_UP, RS_DOWN, RS_LEFT, RS_RIGHT, HOME,
+    /** The handheld's Android Back button (KEYCODE_BACK). Never injected into a game; default Open Menu hotkey. Appended last: never renumber. */
+    BACK }
 
 /** Actions the in-game menu / hotkeys can trigger. */
 enum class MenuAction { CLOSE_GAME, CHANGE_CONTROLLER_MAPPING, SAVE_STATE, LOAD_STATE, SET_HOTKEYS }

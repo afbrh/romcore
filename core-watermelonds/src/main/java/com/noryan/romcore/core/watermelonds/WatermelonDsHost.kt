@@ -65,12 +65,8 @@ internal object WatermelonDsHost {
 
         RomCoreBridge.host = object : RomCoreBridge.Host {
             override fun onKey(event: KeyEvent): Boolean {
-                if (hooks.dispatchKey(event)) return true
-                if (event.keyCode == KeyEvent.KEYCODE_BACK) { // BACK opens the shared menu (never finishes the game)
-                    if (event.action == KeyEvent.ACTION_UP && event.repeatCount == 0) hooks.menu.open()
-                    return true
-                }
-                return false
+                if (hooks.dispatchKey(event)) return true // Back opens the shared menu (never finishes the game)
+                return event.keyCode == KeyEvent.KEYCODE_BACK
             }
             override fun onMotion(event: MotionEvent): Boolean = hooks.dispatchMotion(event)
             override fun onMenuRequested() = hooks.menu.open()

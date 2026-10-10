@@ -25,7 +25,7 @@ import java.util.EnumMap
  *  - sticks (LS_*, RS_*): injectAxis(pad, 0..1) only, one pad per direction (opposite direction is 0).
  *  - L2/R2: injectAxis(pad, 0..1) AND injectButton on press (>=0.5) / release (<0.35).
  *  - everything else: injectButton only.
- *  - Pad.HOME is never injected; it only drives hotkeys.
+ *  - Pad.HOME and Pad.BACK are never injected; they only drive hotkeys (BACK, from any source incl. adb, is the default Open Menu).
  *  - Face buttons are always canonical (label on the physical button); PS cores map with [com.noryan.romcore.api.PsFace.of].
  *
  * While [gameInputEnabled] is false (menu open) nothing reaches the core and non-hotkey events return false so the
@@ -87,7 +87,7 @@ class InputRouter(
         val code = e.keyCode
         val down = when (e.action) { KeyEvent.ACTION_DOWN -> true; KeyEvent.ACTION_UP -> false; else -> return false }
         val gamepadish = isGamepadSource(e.source)
-        val homeLike = code == KeyEvent.KEYCODE_HOME || code == KeyEvent.KEYCODE_BUTTON_MODE
+        val homeLike = code == KeyEvent.KEYCODE_HOME || code == KeyEvent.KEYCODE_BUTTON_MODE || code == KeyEvent.KEYCODE_BACK
         if (!gamepadish && !homeLike) return false
         refresh()
         val dev = e.device?.let { DeviceInfo.from(it) } ?: DeviceInfo(name = "", deviceId = e.deviceId)
@@ -220,7 +220,7 @@ class InputRouter(
             val r = hotkeys.onPad(ev.pad, digital)
             for (p in r.toRelease) if (injected[p] != null) inject(p, 0f)
             r.event?.let { hotkeyListener.onHotkey(it) }
-            if (r.swallow || ev.pad == Pad.HOME) continue
+            if (r.swallow || ev.pad == Pad.HOME || ev.pad == Pad.BACK) continue
             if (!gameInputEnabled) { sink(ev.pad, ev.value); continue }
             inject(forFamily(system, ev.pad), ev.value)
         }

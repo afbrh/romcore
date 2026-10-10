@@ -77,9 +77,15 @@ class MenuRouterIntegrationTest {
         router.dispatch(listOf(PadEvent(Pad.LS_DOWN, 0.9f)), sys); assertEquals(2, model.cursor)
     }
 
-    @Test fun homeHotkeyTogglesViaListener() {
-        press(Pad.HOME)
+    @Test fun backHotkeyTogglesViaListener() {
+        press(Pad.BACK)
         assertEquals(listOf<HotkeyEvent>(HotkeyEvent.ToggleMenu), events)
+    }
+
+    @Test fun selectStartAndHomeNoLongerOpenMenuByDefault() {
+        press(Pad.SELECT); press(Pad.START); release(Pad.START); release(Pad.SELECT)
+        press(Pad.HOME); release(Pad.HOME)
+        assertTrue(events.isEmpty())
     }
 
     @Test fun mappingBackendReflectsStoreAndResets() {
@@ -106,12 +112,12 @@ class MenuRouterIntegrationTest {
     @Test fun hotkeyBackendDefaultsClearAssign() {
         val b = RouterHotkeyBackend(router)
         assertEquals("Open Menu", b.title(MenuAction.SET_HOTKEYS))
-        assertEquals("HOME / START + SELECT", b.describe(MenuAction.SET_HOTKEYS))
+        assertEquals("BACK", b.describe(MenuAction.SET_HOTKEYS))
         assertEquals("Unset", b.describe(MenuAction.SAVE_STATE))
         b.clear(MenuAction.SET_HOTKEYS)
-        assertEquals("HOME", b.describe(MenuAction.SET_HOTKEYS))   // menu can never be locked out
+        assertEquals("BACK", b.describe(MenuAction.SET_HOTKEYS))   // menu can never be locked out
         b.resetToDefaults()
-        assertEquals("HOME / START + SELECT", b.describe(MenuAction.SET_HOTKEYS))
+        assertEquals("BACK", b.describe(MenuAction.SET_HOTKEYS))
     }
 
     @Test fun liveHotkeyCaptureFromMenu() {
@@ -129,11 +135,11 @@ class MenuRouterIntegrationTest {
         assertEquals(listOf<HotkeyEvent>(HotkeyEvent.Run(MenuAction.SAVE_STATE)), events)
     }
 
-    @Test fun openMenuCaptureKeepsHomeFallback() {
+    @Test fun openMenuCaptureKeepsBackFallback() {
         val b = RouterHotkeyBackend(router)
         b.beginCapture(MenuAction.SET_HOTKEYS) { }
         press(Pad.L3); press(Pad.R3); release(Pad.L3); release(Pad.R3)
-        assertEquals("L3 + R3 / HOME", b.describe(MenuAction.SET_HOTKEYS))
+        assertEquals("L3 + R3 / BACK", b.describe(MenuAction.SET_HOTKEYS))
     }
 
     @Test fun xClearsFocusedHotkey() {

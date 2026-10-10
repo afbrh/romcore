@@ -91,7 +91,9 @@ class CemuGameActivity : AppCompatActivity() {
         // Shared InputRouter + in-game menu (pauses the core via session.pause()/resume() while open).
         hooks = RomCoreCoreHost.install(this, session, System.WIIU)
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() { hooks?.menu?.toggle() }
+            override fun handleOnBackPressed() {
+                hooks?.menu?.let { if (it.isOpen) it.model.nav(com.noryan.romcore.api.menu.MenuNav.BACK) else it.open() }
+            }
         })
     }
 
@@ -162,7 +164,7 @@ private fun GameScreen(launchPath: String, onFatal: () -> Unit) {
         }
         error?.let { e ->
             Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-                Text(describe(e) + "\n\n(Press Back to close)", color = Color.White, modifier = Modifier.padding(24.dp))
+                Text(describe(e) + "\n\n(Press Back for the menu, then Close Game)", color = Color.White, modifier = Modifier.padding(24.dp))
             }
             androidx.activity.compose.BackHandler(onBack = onFatal)
         }

@@ -72,6 +72,7 @@ data class InputProfile(
             k(KeyEvent.KEYCODE_BUTTON_THUMBL, Pad.L3); k(KeyEvent.KEYCODE_BUTTON_THUMBR, Pad.R3)
             k(KeyEvent.KEYCODE_BUTTON_START, Pad.START); k(KeyEvent.KEYCODE_BUTTON_SELECT, Pad.SELECT)
             k(KeyEvent.KEYCODE_BUTTON_MODE, Pad.HOME); k(KeyEvent.KEYCODE_HOME, Pad.HOME)
+            k(KeyEvent.KEYCODE_BACK, Pad.BACK)
             k(KeyEvent.KEYCODE_DPAD_UP, Pad.DPAD_UP); k(KeyEvent.KEYCODE_DPAD_DOWN, Pad.DPAD_DOWN)
             k(KeyEvent.KEYCODE_DPAD_LEFT, Pad.DPAD_LEFT); k(KeyEvent.KEYCODE_DPAD_RIGHT, Pad.DPAD_RIGHT)
             a(MotionEvent.AXIS_HAT_X, -1, Pad.DPAD_LEFT); a(MotionEvent.AXIS_HAT_X, 1, Pad.DPAD_RIGHT)

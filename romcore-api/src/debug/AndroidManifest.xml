@@ -1,11 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
-        <activity android:name="com.noryan.romcore.api.menu.debug.MenuTestActivity" android:exported="true"
-            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" android:label="RomCore Menu Test">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+        <!-- Preview-only harness. Deliberately NOT a launcher / exported entry: it is merged into the app's debug build
+             and must never appear as a second, older RomCore menu. -->
+        <activity android:name="com.noryan.romcore.api.menu.debug.MenuTestActivity" android:exported="false"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" android:label="RomCore Menu Test" />
     </application>
 </manifest>

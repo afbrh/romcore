@@ -64,6 +64,9 @@ object RomCoreCoreHost {
 
         /** Call first in Activity.dispatchKeyEvent; `if (hooks.dispatchKey(e)) return true`. */
         fun dispatchKey(e: KeyEvent): Boolean {
+            // Back is the shared menu's key in EVERY core: handled (opened on key down) and always consumed, whatever
+            // the source (hardware, adb) or the user's mapping, so it can never reach the emulator or the Activity.
+            if (e.keyCode == KeyEvent.KEYCODE_BACK) { menu.dispatchKeyEvent(e); return true }
             if (menu.isOpen) return menu.dispatchKeyEvent(e)
             return router.onKeyEvent(e, system) || menu.dispatchKeyEvent(e)
         }

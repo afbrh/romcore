@@ -23,7 +23,7 @@ class MenuTestActivity : Activity() {
     private val loop = object : Runnable {
         override fun run() {
             if (!session.paused) ticks++
-            tv.text = "GAME RUNNING  tick=$ticks\npaused=${session.paused} closed=${session.closed} gateOpen=$gateOpen\nPress HOME/MODE (or: adb input keyevent 188 → BUTTON_MODE)"
+            tv.text = "GAME RUNNING  tick=$ticks\npaused=${session.paused} closed=${session.closed} gateOpen=$gateOpen\nPress BACK (or: adb input keyevent 4)"
             tv.postDelayed(this, 100)
         }
     }

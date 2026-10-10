@@ -41,12 +41,9 @@ class RomCorePpssppActivity : PpssppActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        // Back button -> shared menu, never PPSSPP's pause screen.
-        if (event.keyCode == KeyEvent.KEYCODE_BACK && event.source and android.view.InputDevice.SOURCE_MOUSE == 0) {
-            if (event.action == KeyEvent.ACTION_UP) hooks?.menu?.toggle()
-            return true
-        }
+        // Back -> shared menu (opened on key down and fully consumed inside hooks.dispatchKey), never PPSSPP's pause screen.
         if (hooks?.dispatchKey(event) == true) return true
+        if (event.keyCode == KeyEvent.KEYCODE_BACK) return true // hooks not installed yet: still never reach PPSSPP
         return super.dispatchKeyEvent(event)
     }
 

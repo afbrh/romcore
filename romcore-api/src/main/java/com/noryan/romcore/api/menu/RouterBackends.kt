@@ -62,7 +62,7 @@ class RouterMappingBackend(private val router: InputRouter, private val scope: S
 /**
  * [HotkeyBackend] over [InputRouter.hotkeyStore]. Rows: "Open Menu" (reported as [MenuAction.SET_HOTKEYS], title
  * overridden), Save State, Load State, Close Game. Combos are sets of canonical pads captured live through
- * [InputRouter.beginHotkeyCapture] ([com.noryan.romcore.api.input.HotkeyCapture]). Open Menu always keeps HOME as a fallback.
+ * [InputRouter.beginHotkeyCapture] ([com.noryan.romcore.api.input.HotkeyCapture]). Open Menu always keeps BACK as a fallback.
  */
 class RouterHotkeyBackend(private val router: InputRouter) : HotkeyBackend {
     private val store get() = router.hotkeyStore
@@ -84,7 +84,7 @@ class RouterHotkeyBackend(private val router: InputRouter) : HotkeyBackend {
     }
 
     private fun save(h: HotkeyAction, combo: Set<Pad>) {
-        val list = if (h == HotkeyAction.OPEN_MENU && combo != HOME_ONLY) listOf(combo, HOME_ONLY) else listOf(combo)
+        val list = if (h == HotkeyAction.OPEN_MENU && combo != BACK_ONLY) listOf(combo, BACK_ONLY) else listOf(combo)
         store.save(store.load().with(h, list))
     }
 
@@ -99,7 +99,7 @@ class RouterHotkeyBackend(private val router: InputRouter) : HotkeyBackend {
 
     override fun clear(action: MenuAction) {
         val h = map(action) ?: return
-        store.save(store.load().with(h, if (h == HotkeyAction.OPEN_MENU) listOf(HOME_ONLY) else emptyList()))
+        store.save(store.load().with(h, if (h == HotkeyAction.OPEN_MENU) listOf(BACK_ONLY) else emptyList()))
     }
 
     override fun resetToDefaults() = store.reset()
@@ -111,5 +111,5 @@ class RouterHotkeyBackend(private val router: InputRouter) : HotkeyBackend {
     }
     override fun cancelCapture() = router.cancelHotkeyCapture()
 
-    private companion object { val HOME_ONLY = setOf(Pad.HOME) }
+    private companion object { val BACK_ONLY = HotkeyConfig.BACK_ONLY }
 }
