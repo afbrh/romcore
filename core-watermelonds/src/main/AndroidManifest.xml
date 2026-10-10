@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
+
+    <application
+        tools:remove="android:name,android:label,android:icon,android:allowBackup,android:fullBackupContent,android:networkSecurityConfig,android:supportsRtl,android:enableOnBackInvokedCallback,android:isGame,android:appCategory,android:theme">
+
+        <!-- The whole DS runtime lives in its own process so libmelonDS-android-frontend.so and its GL/Vulkan state
+             never share an address space with other RomCore cores. UI is hidden: only the game surface (+ the shared
+             RomCore menu, + WatermelonDS's own second-display presentation). Not exported; launched explicitly. -->
+        <activity
+            android:name="me.magnum.melonds.ui.emulator.EmulatorActivity"
+            android:process=":melonds"
+            android:taskAffinity="com.noryan.romcore.melonds"
+            android:exported="false"
+            tools:node="merge"
+            tools:replace="android:exported">
+            <intent-filter tools:node="removeAll" />
+        </activity>
+
+        <!-- WatermelonDS's own launcher / shortcut / settings entry points are not part of RomCore. -->
+        <activity android:name="me.magnum.melonds.ui.romlist.RomListActivity" tools:node="remove" />
+        <activity android:name="me.magnum.melonds.ui.shortcutsetup.ShortcutSetupActivity" tools:node="remove" />
+        <activity android:name="me.magnum.melonds.ui.shortcutsetup.DSFirmwareShortcutSetupActivity" tools:node="remove" />
+        <activity android:name="me.magnum.melonds.ui.shortcutsetup.DSiFirmwareShortcutSetupActivity" tools:node="remove" />
+        <receiver android:name="me.magnum.melondualds.RetroAchievementsHostOverrideReceiver" tools:node="remove" />
+        <!-- Exported adb/debug command receivers + self-updater of the stock app: never in RomCore. -->
+        <receiver android:name="me.magnum.melonds.debug.ReleaseStateCommandReceiver" tools:node="remove" />
+        <receiver android:name="me.magnum.melonds.debug.DebugCommandReceiver" tools:node="remove" />
+        <provider android:name="me.magnum.melonds.common.providers.UpdateContentProvider" tools:node="remove" />
+        <profileable tools:node="remove" />
+
+        <!-- WatermelonDS's androidx.startup initializers need the Hilt component; they are run by hand in :melonds only
+             (see WatermelonDsHost), so the main process never touches Hilt. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="me.magnum.melonds.initializer.AppForegroundStateTrackerInitializer"
+                tools:node="remove" />
+            <meta-data
+                android:name="me.magnum.melonds.initializer.CoilInitializer"
+                tools:node="remove" />
+            <meta-data
+                android:name="me.magnum.melonds.debug.DebugCommandInitializer"
+                tools:node="remove" />
+        </provider>
+    </application>
+</manifest>
