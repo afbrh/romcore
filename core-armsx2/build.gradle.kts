@@ -23,7 +23,16 @@ dependencies {
     // Native libs: libemucore_4k.so / libemucore_16k.so (unique among RomCore cores) + libshaderc_shared, libSPIRV-Tools-shared
     // (also shipped by azahar: identical sonames in different processes is fine, the packager picks one -- see report).
     // Java packages: com.armsx2, kr.co.iefriends.pcsx2, org.libsdl.app_armsx2 (SDL already relocated upstream-side).
-    implementation("com.armsx2:app:embedded")
+    // The dependency-level attribute pins ARMSX2's "store" flavor for the final app's runtime classpath too (a library's
+    // missingDimensionStrategy does not propagate), so :app needs no missingDimensionStrategy for it.
+    implementation("com.armsx2:app:embedded") {
+        attributes {
+            attribute(
+                com.android.build.api.attributes.ProductFlavorAttr.of("store"),
+                objects.named(com.android.build.api.attributes.ProductFlavorAttr::class.java, "github"),
+            )
+        }
+    }
     implementation("androidx.activity:activity-ktx:1.9.1")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.compose.runtime:runtime:1.7.0")

@@ -41,11 +41,14 @@ object Armsx2Core : CoreDescriptor {
             return Intent(ctx, Armsx2NoticeActivity::class.java)
                 .putExtra(Armsx2NoticeActivity.EXTRA_MESSAGE, missingBiosMessage(ctx))
         }
-        val uri: Uri? = request.romUri?.let { runCatching { Uri.parse(it) }.getOrNull() }
-            ?: File(request.romPath).takeIf { it.isFile }?.let { Uri.fromFile(it) }
+        // ARMSX2's native side wants either a plain POSIX path or a content:// uri (a file:// uri is NOT understood).
+        // Prefer the real path (RomCore holds all-files access); otherwise fall back to the SAF uri + a read grant.
+        val real = File(request.romPath).takeIf { it.isFile }
+        val content: Uri? = if (real == null) request.romUri?.let { runCatching { Uri.parse(it) }.getOrNull() } else null
         return Intent(ctx, Armsx2Activity::class.java).apply {
             action = Intent.ACTION_VIEW
-            if (uri != null) data = uri
+            if (real != null) putExtra("path", real.absolutePath) // key read by ARMSX2's extractLaunchUri
+            else if (content != null) data = content
             putExtra(EXTRA_ROM_PATH, request.romPath)
             putExtra(EXTRA_ROM_URI, request.romUri)
             putExtra(EXTRA_RESUME, request.resumeState)
@@ -76,17 +79,18 @@ object Armsx2Core : CoreDescriptor {
         return true
     }
 
-    /** Looks for `bios`/`BIOS` folders next to the ROM (or one level up) holding a PS2-sized BIOS and copies the first one. */
+    /** Looks for a folder whose name contains "bios" (bios, BIOS, _BIOS...) next to the ROM or one level up, and copies a PS2-sized BIOS. */
     private fun autoImportBios(ctx: Context, romPath: String) {
         val romDir = File(romPath).parentFile ?: return
-        val roots = listOfNotNull(romDir, romDir.parentFile)
-        for (root in roots) for (n in listOf("bios", "BIOS", "Bios")) {
-            val d = File(root, n); if (!d.isDirectory) continue
-            val cands = (d.listFiles().orEmpty().toList() + File(d, "ps2").listFiles().orEmpty().toList() +
-                File(d, "PS2").listFiles().orEmpty().toList()).filter { looksLikeBios(it) }
-            val pick = cands.firstOrNull() ?: continue
-            runCatching { pick.copyTo(File(biosDir(ctx), pick.name), overwrite = true) }
-            if (hasBios(ctx)) return
+        for (root in listOfNotNull(romDir, romDir.parentFile)) {
+            val dirs = root.listFiles { f -> f.isDirectory && f.name.contains("bios", ignoreCase = true) }.orEmpty()
+            for (d in dirs) {
+                val cands = d.listFiles().orEmpty().toList() + d.listFiles { f -> f.isDirectory && f.name.contains("ps2", ignoreCase = true) }
+                    .orEmpty().flatMap { it.listFiles().orEmpty().toList() }
+                val pick = cands.firstOrNull { looksLikeBios(it) } ?: continue
+                runCatching { pick.copyTo(File(biosDir(ctx), pick.name), overwrite = true) }
+                if (hasBios(ctx)) return
+            }
         }
     }
 

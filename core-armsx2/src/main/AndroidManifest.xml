@@ -4,14 +4,16 @@
     <!-- The sideload flavor of ARMSX2 merges an in-app APK updater; RomCore never self-updates. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
 
-    <application
-        tools:remove="android:name,android:label,android:icon,android:roundIcon,android:theme,android:fullBackupContent,android:dataExtractionRules,android:networkSecurityConfig,android:allowBackup,android:largeHeap,android:supportsRtl,android:isGame,android:appCategory,android:allowNativeHeapPointerTagging">
+    <!-- NOTE for :app: ARMSX2's <application> declares name/icon/label/roundIcon/theme (+ backup/rtl attrs). A library manifest
+         cannot override a *dependency's* application attributes, so the final app's own <application> needs
+         tools:replace="android:name,android:icon,android:label,android:roundIcon,android:theme" (same as every embedded core). -->
+    <application>
 
         <!-- The ARMSX2 library's own front-end (boot splash, library, setup wizard entry points, "recent games" provider,
              Discord helper) is never used: RomCore is the front-end. Drop every exported/launchable component. -->
         <activity android:name="com.armsx2.BootSplashActivity" tools:node="remove" />
         <activity android:name="com.armsx2.Main" tools:node="remove" />
-        <activity-alias android:name=".MainActivity" tools:node="remove" />
+        <activity-alias android:name="com.armsx2.MainActivity" tools:node="remove" />
         <receiver android:name="com.armsx2.RetroAchievementsHostOverrideReceiver" tools:node="remove" />
         <provider android:name="com.armsx2.data.library.RecentGamesContentProvider" tools:node="remove" />
         <activity android:name="com.armsx2.data.library.RecentGamesAccessActivity" tools:node="remove" />
