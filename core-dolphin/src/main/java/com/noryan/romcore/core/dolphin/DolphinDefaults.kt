@@ -1,0 +1,62 @@
+package com.noryan.romcore.core.dolphin
+
+import java.io.File
+
+/**
+ * RomCore first-run defaults, written straight into Dolphin's INI files BEFORE NativeLibrary.Initialize() loads
+ * them (no Dolphin settings UI exists). Bumping [VERSION] re-applies them once per install.
+ * Only keys listed here are touched; everything else the user/Dolphin wrote is preserved.
+ */
+internal object DolphinDefaults {
+    private const val VERSION = 1
+    private const val MARKER = ".romcore_defaults_v$VERSION"
+
+    // file -> section -> key -> value
+    private val DEFAULTS: Map<String, Map<String, Map<String, String>>> = mapOf(
+        "Dolphin.ini" to mapOf(
+            "Analytics" to mapOf("Enabled" to "False", "PermissionAsked" to "True"),
+            "Interface" to mapOf("ConfirmStop" to "False", "UsePanicHandlers" to "False"),
+            "Core" to mapOf(
+                "SIDevice0" to "6",          // GC port 1: standard controller (driven through the input overrider)
+                "AutoDiscChange" to "False",
+            ),
+            "Android" to mapOf("ShowInputOverlay" to "False"),
+        ),
+        "GFX.ini" to mapOf(
+            // Async ubershaders: avoids the cold-compile freezes RomRunner saw with PrimeHack.
+            "Settings" to mapOf("ShaderCompilationMode" to "2", "WaitForShadersBeforeStarting" to "True"),
+        ),
+        "WiimoteNew.ini" to mapOf(
+            "Wiimote1" to mapOf("Source" to "1", "Extension" to "Nunchuk"),
+        ),
+    )
+
+    fun apply(userDir: File) {
+        val cfg = File(userDir, "Config").apply { mkdirs() }
+        if (File(cfg, MARKER).exists()) return
+        for ((file, sections) in DEFAULTS) mergeIni(File(cfg, file), sections)
+        cfg.listFiles { f -> f.name.startsWith(".romcore_defaults_v") }?.forEach { it.delete() }
+        File(cfg, MARKER).writeText("1")
+    }
+
+    /** Minimal INI merge: set `key = value` inside `[section]`, creating sections/keys as needed. */
+    internal fun mergeIni(file: File, wanted: Map<String, Map<String, String>>) {
+        val lines = if (file.exists()) file.readLines().toMutableList() else mutableListOf()
+        for ((section, kv) in wanted) {
+            var start = lines.indexOfFirst { it.trim().equals("[$section]", ignoreCase = true) }
+            if (start < 0) {
+                if (lines.isNotEmpty() && lines.last().isNotBlank()) lines.add("")
+                lines.add("[$section]"); start = lines.lastIndex
+            }
+            var end = lines.size
+            for (i in start + 1 until lines.size) if (lines[i].trim().startsWith("[")) { end = i; break }
+            for ((k, v) in kv) {
+                val idx = (start + 1 until end).firstOrNull {
+                    val t = lines[it].trim(); t.substringBefore('=').trim().equals(k, ignoreCase = true) && t.contains('=')
+                }
+                if (idx != null) lines[idx] = "$k = $v" else { lines.add(end, "$k = $v"); end++ }
+            }
+        }
+        file.writeText(lines.joinToString("\n") + "\n")
+    }
+}

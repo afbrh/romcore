@@ -1,0 +1,3025 @@
+From 98ea5d136e67b872f04fa0f52d85895824c9b64f Mon Sep 17 00:00:00 2001
+From: Ry <ry@Rys-MacBook-Pro.local>
+Date: Sat, 10 Oct 2026 12:40:03 -0500
+Subject: [PATCH] RomCore: relocate JNI package to
+ com.noryan.romcore.core.dolphin.jni, rename lib to dolphin_main, make Sys
+ staging optional
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ Source/Android/jni/AchievementAdapter.cpp     |  10 +-
+ Source/Android/jni/ActivityTracker.cpp        |   4 +-
+ Source/Android/jni/AndroidCommon/IDCache.cpp  |  62 +++++-----
+ Source/Android/jni/CMakeLists.txt             |   7 ++
+ Source/Android/jni/Cheats/ARCheat.cpp         |  20 ++--
+ Source/Android/jni/Cheats/GeckoCheat.cpp      |  28 ++---
+ Source/Android/jni/Cheats/GraphicsMod.cpp     |  10 +-
+ .../Android/jni/Cheats/GraphicsModGroup.cpp   |   8 +-
+ Source/Android/jni/Cheats/PatchCheat.cpp      |  20 ++--
+ .../jni/Config/ConfigChangedCallback.cpp      |   4 +-
+ Source/Android/jni/Config/NativeConfig.cpp    |  32 +++---
+ Source/Android/jni/Config/PostProcessing.cpp  |   6 +-
+ Source/Android/jni/GameList/GameFile.cpp      |  52 ++++-----
+ Source/Android/jni/GameList/GameFileCache.cpp |  24 ++--
+ Source/Android/jni/GpuDriver.cpp              |  16 +--
+ Source/Android/jni/InfinityConfig.cpp         |  10 +-
+ Source/Android/jni/Input/Control.cpp          |   4 +-
+ Source/Android/jni/Input/ControlGroup.cpp     |  20 ++--
+ Source/Android/jni/Input/ControlReference.cpp |   8 +-
+ Source/Android/jni/Input/CoreDevice.cpp       |  10 +-
+ .../Android/jni/Input/EmulatedController.cpp  |  36 +++---
+ Source/Android/jni/Input/InputDetector.cpp    |  12 +-
+ Source/Android/jni/Input/InputOverrider.cpp   |  14 +--
+ Source/Android/jni/Input/MappingCommon.cpp    |   4 +-
+ Source/Android/jni/Input/NumericSetting.cpp   |  32 +++---
+ Source/Android/jni/MainAndroid.cpp            | 108 +++++++++---------
+ Source/Android/jni/NetPlay/Netplay.cpp        |  42 +++----
+ Source/Android/jni/RiivolutionPatches.cpp     |  28 ++---
+ Source/Android/jni/SkylanderConfig.cpp        |  14 +--
+ Source/Android/jni/WiiUtils.cpp               |  20 ++--
+ Source/Core/Core/HW/WiimoteReal/IOAndroid.cpp |   2 +-
+ .../ControllerInterface/Android/Android.cpp   |  28 ++---
+ Source/Core/InputCommon/GCAdapter.cpp         |   6 +-
+ 33 files changed, 354 insertions(+), 347 deletions(-)
+
+diff --git a/Source/Android/jni/AchievementAdapter.cpp b/Source/Android/jni/AchievementAdapter.cpp
+index d5df74c..64be5f6 100644
+--- a/Source/Android/jni/AchievementAdapter.cpp
++++ b/Source/Android/jni/AchievementAdapter.cpp
+@@ -13,13 +13,13 @@
+ extern "C" {
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_AchievementModel_init(JNIEnv* env, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_AchievementModel_init(JNIEnv* env, jclass)
+ {
+   AchievementManager::GetInstance().Init(nullptr);
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_AchievementModel_login(JNIEnv* env, jclass,
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_AchievementModel_login(JNIEnv* env, jclass,
+                                                                               jstring password)
+ {
+   auto& instance = AchievementManager::GetInstance();
+@@ -36,20 +36,20 @@ Java_org_dolphinemu_dolphinemu_features_settings_model_AchievementModel_login(JN
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_AchievementModel_logout(JNIEnv* env, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_AchievementModel_logout(JNIEnv* env, jclass)
+ {
+   AchievementManager::GetInstance().Logout();
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_AchievementModel_isHardcoreModeActive(
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_AchievementModel_isHardcoreModeActive(
+     JNIEnv* env, jclass)
+ {
+   return AchievementManager::GetInstance().IsHardcoreModeActive();
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_AchievementModel_shutdown(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_AchievementModel_shutdown(JNIEnv* env,
+                                                                                  jclass)
+ {
+   AchievementManager::GetInstance().Shutdown();
+diff --git a/Source/Android/jni/ActivityTracker.cpp b/Source/Android/jni/ActivityTracker.cpp
+index 35e06e4..53d042b 100644
+--- a/Source/Android/jni/ActivityTracker.cpp
++++ b/Source/Android/jni/ActivityTracker.cpp
+@@ -10,7 +10,7 @@
+ extern "C" {
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_ActivityTracker_setBackgroundExecutionAllowedNative(
++Java_com_noryan_romcore_core_dolphin_jni_utils_ActivityTracker_setBackgroundExecutionAllowedNative(
+     JNIEnv*, jclass, jboolean allowed)
+ {
+   // This is called with allowed == false when the app goes into the background.
+@@ -21,7 +21,7 @@ Java_org_dolphinemu_dolphinemu_utils_ActivityTracker_setBackgroundExecutionAllow
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_ActivityTracker_flushUnsavedData(JNIEnv*, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_utils_ActivityTracker_flushUnsavedData(JNIEnv*, jclass)
+ {
+   UICommon::FlushUnsavedData();
+ }
+diff --git a/Source/Android/jni/AndroidCommon/IDCache.cpp b/Source/Android/jni/AndroidCommon/IDCache.cpp
+index 58cec02..a703cb7 100644
+--- a/Source/Android/jni/AndroidCommon/IDCache.cpp
++++ b/Source/Android/jni/AndroidCommon/IDCache.cpp
+@@ -736,7 +736,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
+   const jclass string_class = env->FindClass("java/lang/String");
+   s_string_class = reinterpret_cast<jclass>(env->NewGlobalRef(string_class));
+ 
+-  const jclass native_library_class = env->FindClass("org/dolphinemu/dolphinemu/NativeLibrary");
++  const jclass native_library_class = env->FindClass("com/noryan/romcore/core/dolphin/jni/NativeLibrary");
+   s_native_library_class = reinterpret_cast<jclass>(env->NewGlobalRef(native_library_class));
+   s_display_toast_msg =
+       env->GetStaticMethodID(s_native_library_class, "displayToastMsg", "(Ljava/lang/String;Z)V");
+@@ -749,20 +749,20 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
+       env->GetStaticMethodID(s_native_library_class, "finishEmulationActivity", "()V");
+   env->DeleteLocalRef(native_library_class);
+ 
+-  const jclass game_file_class = env->FindClass("org/dolphinemu/dolphinemu/model/GameFile");
++  const jclass game_file_class = env->FindClass("com/noryan/romcore/core/dolphin/jni/model/GameFile");
+   s_game_file_class = reinterpret_cast<jclass>(env->NewGlobalRef(game_file_class));
+   s_game_file_pointer = env->GetFieldID(game_file_class, "pointer", "J");
+   s_game_file_constructor = env->GetMethodID(game_file_class, "<init>", "(J)V");
+   env->DeleteLocalRef(game_file_class);
+ 
+   const jclass game_file_cache_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/model/GameFileCache");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/model/GameFileCache");
+   s_game_file_cache_class = reinterpret_cast<jclass>(env->NewGlobalRef(game_file_cache_class));
+   s_game_file_cache_pointer = env->GetFieldID(game_file_cache_class, "pointer", "J");
+   env->DeleteLocalRef(game_file_cache_class);
+ 
+   const jclass netplay_session_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/netplay/NetplaySession");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/netplay/NetplaySession");
+   s_netplay_session_class = reinterpret_cast<jclass>(env->NewGlobalRef(netplay_session_class));
+   s_net_play_ui_callbacks_pointer =
+       env->GetFieldID(netplay_session_class, "netPlayUICallbacksPointer", "J");
+@@ -784,7 +784,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
+       env->GetMethodID(netplay_session_class, "onChatMessageReceived", "(Ljava/lang/String;)V");
+   s_netplay_update =
+       env->GetMethodID(netplay_session_class, "onUpdate",
+-                       "([Lorg/dolphinemu/dolphinemu/features/netplay/model/Player;)V");
++                       "([Lcom/noryan/romcore/core/dolphin/jni/features/netplay/model/Player;)V");
+   s_netplay_on_show_chunked_progress_dialog = env->GetMethodID(
+       netplay_session_class, "onShowChunkedProgressDialog", "(Ljava/lang/String;J[I)V");
+   s_netplay_on_set_chunked_progress =
+@@ -807,14 +807,14 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
+   env->DeleteLocalRef(netplay_session_class);
+ 
+   const jclass netplay_player_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/netplay/model/Player");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/netplay/model/Player");
+   s_netplay_player_class = reinterpret_cast<jclass>(env->NewGlobalRef(netplay_player_class));
+   s_netplay_player_constructor =
+       env->GetMethodID(netplay_player_class, "<init>",
+                        "(ILjava/lang/String;Ljava/lang/String;IZLjava/lang/String;)V");
+   env->DeleteLocalRef(netplay_player_class);
+ 
+-  const jclass analytics_class = env->FindClass("org/dolphinemu/dolphinemu/utils/Analytics");
++  const jclass analytics_class = env->FindClass("com/noryan/romcore/core/dolphin/jni/utils/Analytics");
+   s_analytics_class = reinterpret_cast<jclass>(env->NewGlobalRef(analytics_class));
+   s_get_analytics_value = env->GetStaticMethodID(s_analytics_class, "getValue",
+                                                  "(Ljava/lang/String;)Ljava/lang/String;");
+@@ -834,13 +834,13 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
+   env->DeleteLocalRef(hash_map_class);
+ 
+   const jclass compress_cb_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/utils/CompressCallback");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/utils/CompressCallback");
+   s_compress_cb_class = reinterpret_cast<jclass>(env->NewGlobalRef(compress_cb_class));
+   s_compress_cb_run = env->GetMethodID(s_compress_cb_class, "run", "(Ljava/lang/String;F)Z");
+   env->DeleteLocalRef(compress_cb_class);
+ 
+   const jclass content_handler_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/utils/ContentHandler");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/utils/ContentHandler");
+   s_content_handler_class = reinterpret_cast<jclass>(env->NewGlobalRef(content_handler_class));
+   s_content_handler_open_fd = env->GetStaticMethodID(s_content_handler_class, "openFd",
+                                                      "(Ljava/lang/String;Ljava/lang/String;)I");
+@@ -858,7 +858,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
+   env->DeleteLocalRef(content_handler_class);
+ 
+   const jclass network_helper_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/utils/NetworkHelper");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/utils/NetworkHelper");
+   s_network_helper_class = reinterpret_cast<jclass>(env->NewGlobalRef(network_helper_class));
+   s_network_helper_get_network_ip_address =
+       env->GetStaticMethodID(s_network_helper_class, "getNetworkIpAddress", "()I");
+@@ -869,34 +869,34 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
+   env->DeleteLocalRef(network_helper_class);
+ 
+   const jclass boolean_supplier_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/utils/BooleanSupplier");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/utils/BooleanSupplier");
+   s_boolean_supplier_class = reinterpret_cast<jclass>(env->NewGlobalRef(boolean_supplier_class));
+   s_boolean_supplier_get = env->GetMethodID(s_boolean_supplier_class, "get", "()Z");
+   env->DeleteLocalRef(boolean_supplier_class);
+ 
+   const jclass ar_cheat_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/cheats/model/ARCheat");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/cheats/model/ARCheat");
+   s_ar_cheat_class = reinterpret_cast<jclass>(env->NewGlobalRef(ar_cheat_class));
+   s_ar_cheat_pointer = env->GetFieldID(ar_cheat_class, "pointer", "J");
+   s_ar_cheat_constructor = env->GetMethodID(ar_cheat_class, "<init>", "(J)V");
+   env->DeleteLocalRef(ar_cheat_class);
+ 
+   const jclass gecko_cheat_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/cheats/model/GeckoCheat");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/cheats/model/GeckoCheat");
+   s_gecko_cheat_class = reinterpret_cast<jclass>(env->NewGlobalRef(gecko_cheat_class));
+   s_gecko_cheat_pointer = env->GetFieldID(gecko_cheat_class, "mPointer", "J");
+   s_gecko_cheat_constructor = env->GetMethodID(gecko_cheat_class, "<init>", "(J)V");
+   env->DeleteLocalRef(gecko_cheat_class);
+ 
+   const jclass patch_cheat_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/cheats/model/PatchCheat");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/cheats/model/PatchCheat");
+   s_patch_cheat_class = reinterpret_cast<jclass>(env->NewGlobalRef(patch_cheat_class));
+   s_patch_cheat_pointer = env->GetFieldID(patch_cheat_class, "pointer", "J");
+   s_patch_cheat_constructor = env->GetMethodID(patch_cheat_class, "<init>", "(J)V");
+   env->DeleteLocalRef(patch_cheat_class);
+ 
+   const jclass graphics_mod_group_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/cheats/model/GraphicsModGroup");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/cheats/model/GraphicsModGroup");
+   s_graphics_mod_group_class =
+       reinterpret_cast<jclass>(env->NewGlobalRef(graphics_mod_group_class));
+   s_graphics_mod_group_pointer = env->GetFieldID(graphics_mod_group_class, "pointer", "J");
+@@ -904,50 +904,50 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
+   env->DeleteLocalRef(graphics_mod_group_class);
+ 
+   const jclass graphics_mod_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/cheats/model/GraphicsMod");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/cheats/model/GraphicsMod");
+   s_graphics_mod_class = reinterpret_cast<jclass>(env->NewGlobalRef(graphics_mod_class));
+   s_graphics_mod_pointer = env->GetFieldID(graphics_mod_class, "pointer", "J");
+   s_graphics_mod_constructor =
+       env->GetMethodID(graphics_mod_class, "<init>",
+-                       "(JLorg/dolphinemu/dolphinemu/features/cheats/model/GraphicsModGroup;)V");
++                       "(JLcom/noryan/romcore/core/dolphin/jni/features/cheats/model/GraphicsModGroup;)V");
+   env->DeleteLocalRef(graphics_mod_class);
+ 
+   const jclass riivolution_patches_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/riivolution/model/RiivolutionPatches");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/riivolution/model/RiivolutionPatches");
+   s_riivolution_patches_class =
+       reinterpret_cast<jclass>(env->NewGlobalRef(riivolution_patches_class));
+   s_riivolution_patches_pointer = env->GetFieldID(riivolution_patches_class, "pointer", "J");
+   env->DeleteLocalRef(riivolution_patches_class);
+ 
+   const jclass wii_update_cb_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/utils/WiiUpdateCallback");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/utils/WiiUpdateCallback");
+   s_wii_update_cb_class = reinterpret_cast<jclass>(env->NewGlobalRef(wii_update_cb_class));
+   s_wii_update_cb_run = env->GetMethodID(s_wii_update_cb_class, "run", "(IIJ)Z");
+   env->DeleteLocalRef(wii_update_cb_class);
+ 
+   const jclass control_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/input/model/controlleremu/Control");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/input/model/controlleremu/Control");
+   s_control_class = reinterpret_cast<jclass>(env->NewGlobalRef(control_class));
+   s_control_pointer = env->GetFieldID(control_class, "pointer", "J");
+   s_control_constructor = env->GetMethodID(control_class, "<init>", "(J)V");
+   env->DeleteLocalRef(control_class);
+ 
+   const jclass control_group_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/input/model/controlleremu/ControlGroup");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/input/model/controlleremu/ControlGroup");
+   s_control_group_class = reinterpret_cast<jclass>(env->NewGlobalRef(control_group_class));
+   s_control_group_pointer = env->GetFieldID(control_group_class, "pointer", "J");
+   s_control_group_constructor = env->GetMethodID(control_group_class, "<init>", "(J)V");
+   env->DeleteLocalRef(control_group_class);
+ 
+   const jclass control_reference_class = env->FindClass(
+-      "org/dolphinemu/dolphinemu/features/input/model/controlleremu/ControlReference");
++      "com/noryan/romcore/core/dolphin/jni/features/input/model/controlleremu/ControlReference");
+   s_control_reference_class = reinterpret_cast<jclass>(env->NewGlobalRef(control_reference_class));
+   s_control_reference_pointer = env->GetFieldID(control_reference_class, "pointer", "J");
+   s_control_reference_constructor = env->GetMethodID(control_reference_class, "<init>", "(J)V");
+   env->DeleteLocalRef(control_reference_class);
+ 
+   const jclass control_group_container_class = env->FindClass(
+-      "org/dolphinemu/dolphinemu/features/input/model/controlleremu/ControlGroupContainer");
++      "com/noryan/romcore/core/dolphin/jni/features/input/model/controlleremu/ControlGroupContainer");
+   s_control_group_container_class =
+       reinterpret_cast<jclass>(env->NewGlobalRef(control_group_container_class));
+   s_control_group_container_pointer =
+@@ -957,7 +957,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
+   env->DeleteLocalRef(control_group_container_class);
+ 
+   const jclass emulated_controller_class = env->FindClass(
+-      "org/dolphinemu/dolphinemu/features/input/model/controlleremu/EmulatedController");
++      "com/noryan/romcore/core/dolphin/jni/features/input/model/controlleremu/EmulatedController");
+   s_emulated_controller_class =
+       reinterpret_cast<jclass>(env->NewGlobalRef(emulated_controller_class));
+   s_emulated_controller_pointer = env->GetFieldID(emulated_controller_class, "pointer", "J");
+@@ -965,37 +965,37 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
+   env->DeleteLocalRef(emulated_controller_class);
+ 
+   const jclass numeric_setting_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/input/model/controlleremu/NumericSetting");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/input/model/controlleremu/NumericSetting");
+   s_numeric_setting_class = reinterpret_cast<jclass>(env->NewGlobalRef(numeric_setting_class));
+   s_numeric_setting_pointer = env->GetFieldID(numeric_setting_class, "pointer", "J");
+   s_numeric_setting_constructor = env->GetMethodID(numeric_setting_class, "<init>", "(J)V");
+   env->DeleteLocalRef(numeric_setting_class);
+ 
+   const jclass core_device_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/input/model/CoreDevice");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/input/model/CoreDevice");
+   s_core_device_class = reinterpret_cast<jclass>(env->NewGlobalRef(core_device_class));
+   s_core_device_pointer = env->GetFieldID(core_device_class, "pointer", "J");
+   s_core_device_constructor = env->GetMethodID(core_device_class, "<init>", "(J)V");
+   env->DeleteLocalRef(core_device_class);
+ 
+   const jclass core_device_control_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/input/model/CoreDevice$Control");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/input/model/CoreDevice$Control");
+   s_core_device_control_class =
+       reinterpret_cast<jclass>(env->NewGlobalRef(core_device_control_class));
+   s_core_device_control_pointer = env->GetFieldID(core_device_control_class, "pointer", "J");
+   s_core_device_control_constructor =
+       env->GetMethodID(core_device_control_class, "<init>",
+-                       "(Lorg/dolphinemu/dolphinemu/features/input/model/CoreDevice;J)V");
++                       "(Lcom/noryan/romcore/core/dolphin/jni/features/input/model/CoreDevice;J)V");
+   env->DeleteLocalRef(core_device_control_class);
+ 
+   const jclass input_detector_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/input/model/InputDetector");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/input/model/InputDetector");
+   s_input_detector_class = reinterpret_cast<jclass>(env->NewGlobalRef(input_detector_class));
+   s_input_detector_pointer = env->GetFieldID(input_detector_class, "pointer", "J");
+   env->DeleteLocalRef(input_detector_class);
+ 
+   const jclass permission_handler_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/utils/PermissionsHandler");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/utils/PermissionsHandler");
+   s_permission_handler_class =
+       reinterpret_cast<jclass>(env->NewGlobalRef(permission_handler_class));
+   s_permission_handler_has_record_audio_permission = env->GetStaticMethodID(
+@@ -1008,7 +1008,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
+   s_runnable_run = env->GetMethodID(runnable_class, "run", "()V");
+   env->DeleteLocalRef(runnable_class);
+ 
+-  const jclass audio_utils_class = env->FindClass("org/dolphinemu/dolphinemu/utils/AudioUtils");
++  const jclass audio_utils_class = env->FindClass("com/noryan/romcore/core/dolphin/jni/utils/AudioUtils");
+   s_audio_utils_class = reinterpret_cast<jclass>(env->NewGlobalRef(audio_utils_class));
+   s_audio_utils_get_sample_rate = env->GetStaticMethodID(audio_utils_class, "getSampleRate", "()I");
+   s_audio_utils_get_frames_per_buffer =
+diff --git a/Source/Android/jni/CMakeLists.txt b/Source/Android/jni/CMakeLists.txt
+index a3a741a..b2e325d 100644
+--- a/Source/Android/jni/CMakeLists.txt
++++ b/Source/Android/jni/CMakeLists.txt
+@@ -63,12 +63,19 @@ PRIVATE
+     ${CMAKE_SOURCE_DIR}/Externals/VulkanMemoryAllocator/include
+ )
+ 
++# RomCore: the shared library is renamed libdolphin_main.so so it can coexist in one APK with other
++# Dolphin-derived cores (PrimeHack ships libprimehack_main.so) that would otherwise both be libmain.so.
++set_target_properties(main PROPERTIES OUTPUT_NAME dolphin_main)
++
++# RomCore: Sys data is staged by the :core-dolphin Gradle build, not into the source tree.
++if(NOT ROMCORE_SKIP_ASSETS)
+ file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/Source/Android/app/src/main/assets/)
+ file(REMOVE_RECURSE ${CMAKE_SOURCE_DIR}/Source/Android/app/src/main/assets/Sys/)
+ file(COPY ${CMAKE_SOURCE_DIR}/Data/Sys DESTINATION ${CMAKE_SOURCE_DIR}/Source/Android/app/src/main/assets/)
+ 
+ # Delete folders that aren't used by the Android version of Dolphin
+ file(REMOVE_RECURSE ${CMAKE_SOURCE_DIR}/Source/Android/app/src/main/assets/Sys/Themes/)
++endif()
+ 
+ set(CPACK_PACKAGE_EXECUTABLES ${CPACK_PACKAGE_EXECUTABLES} main)
+ 
+diff --git a/Source/Android/jni/Cheats/ARCheat.cpp b/Source/Android/jni/Cheats/ARCheat.cpp
+index 5214ee3..00b74f2 100644
+--- a/Source/Android/jni/Cheats/ARCheat.cpp
++++ b/Source/Android/jni/Cheats/ARCheat.cpp
+@@ -31,13 +31,13 @@ jobject ARCheatToJava(JNIEnv* env, const ActionReplay::ARCode& code)
+ extern "C" {
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_ARCheat_finalize(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_ARCheat_finalize(JNIEnv* env, jobject obj)
+ {
+   delete GetPointer(env, obj);
+ }
+ 
+ JNIEXPORT jlong JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_ARCheat_createNew(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_ARCheat_createNew(JNIEnv* env, jobject obj)
+ {
+   auto* code = new ActionReplay::ARCode;
+   code->user_defined = true;
+@@ -45,13 +45,13 @@ Java_org_dolphinemu_dolphinemu_features_cheats_model_ARCheat_createNew(JNIEnv* e
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_ARCheat_getName(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_ARCheat_getName(JNIEnv* env, jobject obj)
+ {
+   return ToJString(env, GetPointer(env, obj)->name);
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_ARCheat_getCode(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_ARCheat_getCode(JNIEnv* env, jobject obj)
+ {
+   ActionReplay::ARCode* code = GetPointer(env, obj);
+ 
+@@ -69,19 +69,19 @@ Java_org_dolphinemu_dolphinemu_features_cheats_model_ARCheat_getCode(JNIEnv* env
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_ARCheat_getUserDefined(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_ARCheat_getUserDefined(JNIEnv* env,
+                                                                             jobject obj)
+ {
+   return static_cast<jboolean>(GetPointer(env, obj)->user_defined);
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_ARCheat_getEnabled(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_ARCheat_getEnabled(JNIEnv* env, jobject obj)
+ {
+   return static_cast<jboolean>(GetPointer(env, obj)->enabled);
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_features_cheats_model_ARCheat_setCheatImpl(
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_ARCheat_setCheatImpl(
+     JNIEnv* env, jobject obj, jstring name, jstring creator, jstring notes, jstring code_string)
+ {
+   ActionReplay::ARCode* code = GetPointer(env, obj);
+@@ -125,14 +125,14 @@ JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_features_cheats_model_ARCh
+   return Cheats::TRY_SET_SUCCESS;
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_features_cheats_model_ARCheat_setEnabledImpl(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_ARCheat_setEnabledImpl(
+     JNIEnv* env, jobject obj, jboolean enabled)
+ {
+   GetPointer(env, obj)->enabled = static_cast<bool>(enabled);
+ }
+ 
+ JNIEXPORT jobjectArray JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_ARCheat_loadCodes(JNIEnv* env, jclass,
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_ARCheat_loadCodes(JNIEnv* env, jclass,
+                                                                        jstring jGameID,
+                                                                        jint revision)
+ {
+@@ -150,7 +150,7 @@ Java_org_dolphinemu_dolphinemu_features_cheats_model_ARCheat_loadCodes(JNIEnv* e
+   return VectorToJObjectArray(env, codes, IDCache::GetARCheatClass(), ARCheatToJava);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_features_cheats_model_ARCheat_saveCodes(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_ARCheat_saveCodes(
+     JNIEnv* env, jclass, jstring jGameID, jint revision, jobjectArray jCodes)
+ {
+   const jsize size = env->GetArrayLength(jCodes);
+diff --git a/Source/Android/jni/Cheats/GeckoCheat.cpp b/Source/Android/jni/Cheats/GeckoCheat.cpp
+index 3d12346..2a8063d 100644
+--- a/Source/Android/jni/Cheats/GeckoCheat.cpp
++++ b/Source/Android/jni/Cheats/GeckoCheat.cpp
+@@ -33,13 +33,13 @@ jobject GeckoCheatToJava(JNIEnv* env, const Gecko::GeckoCode& code)
+ extern "C" {
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_finalize(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GeckoCheat_finalize(JNIEnv* env, jobject obj)
+ {
+   delete GetPointer(env, obj);
+ }
+ 
+ JNIEXPORT jlong JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_createNew(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GeckoCheat_createNew(JNIEnv* env, jobject obj)
+ {
+   auto* code = new Gecko::GeckoCode;
+   code->user_defined = true;
+@@ -47,25 +47,25 @@ Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_createNew(JNIEnv
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_getName(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GeckoCheat_getName(JNIEnv* env, jobject obj)
+ {
+   return ToJString(env, GetPointer(env, obj)->name);
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_getCreator(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GeckoCheat_getCreator(JNIEnv* env, jobject obj)
+ {
+   return ToJString(env, GetPointer(env, obj)->creator);
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_getNotes(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GeckoCheat_getNotes(JNIEnv* env, jobject obj)
+ {
+   return ToJString(env, fmt::to_string(fmt::join(GetPointer(env, obj)->notes, "\n")));
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_getCode(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GeckoCheat_getCode(JNIEnv* env, jobject obj)
+ {
+   Gecko::GeckoCode* code = GetPointer(env, obj);
+ 
+@@ -83,26 +83,26 @@ Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_getCode(JNIEnv*
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_getUserDefined(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GeckoCheat_getUserDefined(JNIEnv* env,
+                                                                                jobject obj)
+ {
+   return static_cast<jboolean>(GetPointer(env, obj)->user_defined);
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_getEnabled(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GeckoCheat_getEnabled(JNIEnv* env, jobject obj)
+ {
+   return static_cast<jboolean>(GetPointer(env, obj)->enabled);
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_equalsImpl(JNIEnv* env, jobject obj,
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GeckoCheat_equalsImpl(JNIEnv* env, jobject obj,
+                                                                            jobject other)
+ {
+   return *GetPointer(env, obj) == *GetPointer(env, other);
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_setCheatImpl(
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GeckoCheat_setCheatImpl(
+     JNIEnv* env, jobject obj, jstring name, jstring creator, jstring notes, jstring code_string)
+ {
+   Gecko::GeckoCode* code = GetPointer(env, obj);
+@@ -136,7 +136,7 @@ JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_features_cheats_model_Geck
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_setEnabledImpl(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GeckoCheat_setEnabledImpl(JNIEnv* env,
+                                                                                jobject obj,
+                                                                                jboolean enabled)
+ {
+@@ -144,7 +144,7 @@ Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_setEnabledImpl(J
+ }
+ 
+ JNIEXPORT jobjectArray JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_loadCodes(JNIEnv* env, jclass,
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GeckoCheat_loadCodes(JNIEnv* env, jclass,
+                                                                           jstring jGameID,
+                                                                           jint revision)
+ {
+@@ -161,7 +161,7 @@ Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_loadCodes(JNIEnv
+   return VectorToJObjectArray(env, codes, IDCache::GetGeckoCheatClass(), GeckoCheatToJava);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_saveCodes(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GeckoCheat_saveCodes(
+     JNIEnv* env, jclass, jstring jGameID, jint revision, jobjectArray jCodes)
+ {
+   const jsize size = env->GetArrayLength(jCodes);
+@@ -185,7 +185,7 @@ JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_features_cheats_model_Geck
+ }
+ 
+ JNIEXPORT jobjectArray JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GeckoCheat_downloadCodes(JNIEnv* env, jclass,
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GeckoCheat_downloadCodes(JNIEnv* env, jclass,
+                                                                               jstring jGameTdbId)
+ {
+   const std::string gametdb_id = GetJString(env, jGameTdbId);
+diff --git a/Source/Android/jni/Cheats/GraphicsMod.cpp b/Source/Android/jni/Cheats/GraphicsMod.cpp
+index 627351f..b8ffa7b 100644
+--- a/Source/Android/jni/Cheats/GraphicsMod.cpp
++++ b/Source/Android/jni/Cheats/GraphicsMod.cpp
+@@ -18,33 +18,33 @@ static GraphicsModConfig* GetPointer(JNIEnv* env, jobject obj)
+ extern "C" {
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GraphicsMod_getName(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GraphicsMod_getName(JNIEnv* env, jobject obj)
+ {
+   return ToJString(env, GetPointer(env, obj)->m_title);
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GraphicsMod_getCreator(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GraphicsMod_getCreator(JNIEnv* env,
+                                                                             jobject obj)
+ {
+   return ToJString(env, GetPointer(env, obj)->m_author);
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GraphicsMod_getNotes(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GraphicsMod_getNotes(JNIEnv* env, jobject obj)
+ {
+   return ToJString(env, GetPointer(env, obj)->m_description);
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GraphicsMod_getEnabled(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GraphicsMod_getEnabled(JNIEnv* env,
+                                                                             jobject obj)
+ {
+   return static_cast<jboolean>(GetPointer(env, obj)->m_enabled);
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GraphicsMod_setEnabledImpl(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GraphicsMod_setEnabledImpl(JNIEnv* env,
+                                                                                 jobject obj,
+                                                                                 jboolean enabled)
+ {
+diff --git a/Source/Android/jni/Cheats/GraphicsModGroup.cpp b/Source/Android/jni/Cheats/GraphicsModGroup.cpp
+index 7affca0..7de82d5 100644
+--- a/Source/Android/jni/Cheats/GraphicsModGroup.cpp
++++ b/Source/Android/jni/Cheats/GraphicsModGroup.cpp
+@@ -26,14 +26,14 @@ jobject GraphicsModToJava(JNIEnv* env, GraphicsModConfig* mod, jobject jGraphics
+ extern "C" {
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GraphicsModGroup_finalize(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GraphicsModGroup_finalize(JNIEnv* env,
+                                                                                jobject obj)
+ {
+   delete GetPointer(env, obj);
+ }
+ 
+ JNIEXPORT jobjectArray JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GraphicsModGroup_getMods(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GraphicsModGroup_getMods(JNIEnv* env,
+                                                                               jobject obj)
+ {
+   GraphicsModGroupConfig* mod_group = GetPointer(env, obj);
+@@ -67,13 +67,13 @@ Java_org_dolphinemu_dolphinemu_features_cheats_model_GraphicsModGroup_getMods(JN
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GraphicsModGroup_save(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GraphicsModGroup_save(JNIEnv* env, jobject obj)
+ {
+   GetPointer(env, obj)->Save();
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_GraphicsModGroup_load(JNIEnv* env, jclass,
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_GraphicsModGroup_load(JNIEnv* env, jclass,
+                                                                            jstring jGameId)
+ {
+   auto* mod_group = new GraphicsModGroupConfig(GetJString(env, jGameId));
+diff --git a/Source/Android/jni/Cheats/PatchCheat.cpp b/Source/Android/jni/Cheats/PatchCheat.cpp
+index b9cb89c..e56c082 100644
+--- a/Source/Android/jni/Cheats/PatchCheat.cpp
++++ b/Source/Android/jni/Cheats/PatchCheat.cpp
+@@ -29,13 +29,13 @@ jobject PatchCheatToJava(JNIEnv* env, const PatchEngine::Patch& patch)
+ extern "C" {
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_PatchCheat_finalize(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_PatchCheat_finalize(JNIEnv* env, jobject obj)
+ {
+   delete GetPointer(env, obj);
+ }
+ 
+ JNIEXPORT jlong JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_PatchCheat_createNew(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_PatchCheat_createNew(JNIEnv* env, jobject obj)
+ {
+   auto* patch = new PatchEngine::Patch;
+   patch->user_defined = true;
+@@ -43,13 +43,13 @@ Java_org_dolphinemu_dolphinemu_features_cheats_model_PatchCheat_createNew(JNIEnv
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_PatchCheat_getName(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_PatchCheat_getName(JNIEnv* env, jobject obj)
+ {
+   return ToJString(env, GetPointer(env, obj)->name);
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_PatchCheat_getCode(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_PatchCheat_getCode(JNIEnv* env, jobject obj)
+ {
+   PatchEngine::Patch* patch = GetPointer(env, obj);
+ 
+@@ -67,19 +67,19 @@ Java_org_dolphinemu_dolphinemu_features_cheats_model_PatchCheat_getCode(JNIEnv*
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_PatchCheat_getUserDefined(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_PatchCheat_getUserDefined(JNIEnv* env,
+                                                                                jobject obj)
+ {
+   return static_cast<jboolean>(GetPointer(env, obj)->user_defined);
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_PatchCheat_getEnabled(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_PatchCheat_getEnabled(JNIEnv* env, jobject obj)
+ {
+   return static_cast<jboolean>(GetPointer(env, obj)->enabled);
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_features_cheats_model_PatchCheat_setCheatImpl(
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_PatchCheat_setCheatImpl(
+     JNIEnv* env, jobject obj, jstring name, jstring creator, jstring notes, jstring code_string)
+ {
+   PatchEngine::Patch* patch = GetPointer(env, obj);
+@@ -111,7 +111,7 @@ JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_features_cheats_model_Patc
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_PatchCheat_setEnabledImpl(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_PatchCheat_setEnabledImpl(JNIEnv* env,
+                                                                                jobject obj,
+                                                                                jboolean enabled)
+ {
+@@ -119,7 +119,7 @@ Java_org_dolphinemu_dolphinemu_features_cheats_model_PatchCheat_setEnabledImpl(J
+ }
+ 
+ JNIEXPORT jobjectArray JNICALL
+-Java_org_dolphinemu_dolphinemu_features_cheats_model_PatchCheat_loadCodes(JNIEnv* env, jclass,
++Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_PatchCheat_loadCodes(JNIEnv* env, jclass,
+                                                                           jstring jGameID,
+                                                                           jint revision)
+ {
+@@ -137,7 +137,7 @@ Java_org_dolphinemu_dolphinemu_features_cheats_model_PatchCheat_loadCodes(JNIEnv
+   return VectorToJObjectArray(env, patches, IDCache::GetPatchCheatClass(), PatchCheatToJava);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_features_cheats_model_PatchCheat_saveCodes(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_features_cheats_model_PatchCheat_saveCodes(
+     JNIEnv* env, jclass, jstring jGameID, jint revision, jobjectArray jCodes)
+ {
+   const jsize size = env->GetArrayLength(jCodes);
+diff --git a/Source/Android/jni/Config/ConfigChangedCallback.cpp b/Source/Android/jni/Config/ConfigChangedCallback.cpp
+index 2ec8b06..b65f4be 100644
+--- a/Source/Android/jni/Config/ConfigChangedCallback.cpp
++++ b/Source/Android/jni/Config/ConfigChangedCallback.cpp
+@@ -16,7 +16,7 @@ struct ConfigChangedCallbackContext
+ extern "C" {
+ 
+ JNIEXPORT jlong JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_ConfigChangedCallback_initialize(
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_ConfigChangedCallback_initialize(
+     JNIEnv* env, jclass, jobject runnable)
+ {
+   auto* context = new ConfigChangedCallbackContext;
+@@ -31,7 +31,7 @@ Java_org_dolphinemu_dolphinemu_features_settings_model_ConfigChangedCallback_ini
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_ConfigChangedCallback_deinitialize(
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_ConfigChangedCallback_deinitialize(
+     JNIEnv* env, jclass, jlong pointer)
+ {
+   auto* context = reinterpret_cast<ConfigChangedCallbackContext*>(pointer);
+diff --git a/Source/Android/jni/Config/NativeConfig.cpp b/Source/Android/jni/Config/NativeConfig.cpp
+index c524c0e..3203c21 100644
+--- a/Source/Android/jni/Config/NativeConfig.cpp
++++ b/Source/Android/jni/Config/NativeConfig.cpp
+@@ -113,7 +113,7 @@ static void Set(jint layer, const Config::Location& location, T value)
+ extern "C" {
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_isSettingSaveable(
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_NativeConfig_isSettingSaveable(
+     JNIEnv* env, jclass, jstring file, jstring section, jstring key)
+ {
+   const Config::Location location = GetLocation(env, file, section, key);
+@@ -121,7 +121,7 @@ Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_isSettingSav
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_loadGameInis(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_NativeConfig_loadGameInis(JNIEnv* env,
+                                                                                  jclass,
+                                                                                  jstring jGameId,
+                                                                                  jint jRevision)
+@@ -133,27 +133,27 @@ Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_loadGameInis
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_unloadGameInis(JNIEnv*, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_NativeConfig_unloadGameInis(JNIEnv*, jclass)
+ {
+   Config::RemoveLayer(Config::LayerType::GlobalGame);
+   Config::RemoveLayer(Config::LayerType::LocalGame);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_save(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_NativeConfig_save(
+     JNIEnv*, jclass, jint layer)
+ {
+   return GetLayer(layer, {})->Save();
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_deleteAllKeys(JNIEnv*, jclass,
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_NativeConfig_deleteAllKeys(JNIEnv*, jclass,
+                                                                                   jint layer)
+ {
+   return GetLayer(layer, {})->DeleteAllKeys();
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_isOverridden(
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_NativeConfig_isOverridden(
+     JNIEnv* env, jclass, jstring file, jstring section, jstring key)
+ {
+   const Config::Location location = GetLocation(env, file, section, key);
+@@ -162,7 +162,7 @@ Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_isOverridden
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_deleteKey(
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_NativeConfig_deleteKey(
+     JNIEnv* env, jclass, jint layer, jstring file, jstring section, jstring key)
+ {
+   const Config::Location location = GetLocation(env, file, section, key);
+@@ -173,7 +173,7 @@ Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_deleteKey(
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_exists(JNIEnv* env, jclass,
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_NativeConfig_exists(JNIEnv* env, jclass,
+                                                                            jint layer, jstring file,
+                                                                            jstring section,
+                                                                            jstring key)
+@@ -183,7 +183,7 @@ Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_exists(JNIEn
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_getString(
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_NativeConfig_getString(
+     JNIEnv* env, jclass, jint layer, jstring file, jstring section, jstring key,
+     jstring default_value)
+ {
+@@ -192,7 +192,7 @@ Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_getString(
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_getBoolean(
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_NativeConfig_getBoolean(
+     JNIEnv* env, jclass, jint layer, jstring file, jstring section, jstring key,
+     jboolean default_value)
+ {
+@@ -200,14 +200,14 @@ Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_getBoolean(
+   return static_cast<jboolean>(Get(layer, location, static_cast<bool>(default_value)));
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_getInt(
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_NativeConfig_getInt(
+     JNIEnv* env, jclass, jint layer, jstring file, jstring section, jstring key, jint default_value)
+ {
+   return Get(layer, GetLocation(env, file, section, key), default_value);
+ }
+ 
+ JNIEXPORT jfloat JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_getFloat(
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_NativeConfig_getFloat(
+     JNIEnv* env, jclass, jint layer, jstring file, jstring section, jstring key,
+     jfloat default_value)
+ {
+@@ -215,26 +215,26 @@ Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_getFloat(
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_setString(
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_NativeConfig_setString(
+     JNIEnv* env, jclass, jint layer, jstring file, jstring section, jstring key, jstring value)
+ {
+   return Set(layer, GetLocation(env, file, section, key), GetJString(env, value));
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_setBoolean(
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_NativeConfig_setBoolean(
+     JNIEnv* env, jclass, jint layer, jstring file, jstring section, jstring key, jboolean value)
+ {
+   return Set(layer, GetLocation(env, file, section, key), static_cast<bool>(value));
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_setInt(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_NativeConfig_setInt(
+     JNIEnv* env, jclass, jint layer, jstring file, jstring section, jstring key, jint value)
+ {
+   return Set(layer, GetLocation(env, file, section, key), value);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_features_settings_model_NativeConfig_setFloat(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_NativeConfig_setFloat(
+     JNIEnv* env, jclass, jint layer, jstring file, jstring section, jstring key, jfloat value)
+ {
+   return Set(layer, GetLocation(env, file, section, key), value);
+diff --git a/Source/Android/jni/Config/PostProcessing.cpp b/Source/Android/jni/Config/PostProcessing.cpp
+index 5576c2d..c3f3bec 100644
+--- a/Source/Android/jni/Config/PostProcessing.cpp
++++ b/Source/Android/jni/Config/PostProcessing.cpp
+@@ -12,21 +12,21 @@
+ extern "C" {
+ 
+ JNIEXPORT jobjectArray JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_PostProcessing_getShaderList(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_PostProcessing_getShaderList(JNIEnv* env,
+                                                                                     jclass)
+ {
+   return SpanToJStringArray(env, VideoCommon::PostProcessing::GetShaderList());
+ }
+ 
+ JNIEXPORT jobjectArray JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_PostProcessing_getAnaglyphShaderList(
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_PostProcessing_getAnaglyphShaderList(
+     JNIEnv* env, jclass)
+ {
+   return SpanToJStringArray(env, VideoCommon::PostProcessing::GetAnaglyphShaderList());
+ }
+ 
+ JNIEXPORT jobjectArray JNICALL
+-Java_org_dolphinemu_dolphinemu_features_settings_model_PostProcessing_getPassiveShaderList(
++Java_com_noryan_romcore_core_dolphin_jni_features_settings_model_PostProcessing_getPassiveShaderList(
+     JNIEnv* env, jclass)
+ {
+   return SpanToJStringArray(env, VideoCommon::PostProcessing::GetPassiveShaderList());
+diff --git a/Source/Android/jni/GameList/GameFile.cpp b/Source/Android/jni/GameList/GameFile.cpp
+index dc922d7..459ce7e 100644
+--- a/Source/Android/jni/GameList/GameFile.cpp
++++ b/Source/Android/jni/GameList/GameFile.cpp
+@@ -40,135 +40,135 @@ jobject GameFileToJava(JNIEnv* env, std::shared_ptr<const UICommon::GameFile> ga
+ 
+ extern "C" {
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_finalize(JNIEnv* env,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_finalize(JNIEnv* env,
+                                                                               jobject obj)
+ {
+   delete GetPointer(env, obj);
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getPlatform(JNIEnv* env,
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getPlatform(JNIEnv* env,
+                                                                                  jobject obj)
+ {
+   return static_cast<jint>(GetRef(env, obj)->GetPlatform());
+ }
+ 
+-JNIEXPORT jstring JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getTitle(JNIEnv* env,
++JNIEXPORT jstring JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getTitle(JNIEnv* env,
+                                                                                  jobject obj)
+ {
+   return ToJString(env,
+                    GetRef(env, obj)->GetName(UICommon::GameFile::Variant::LongAndPossiblyCustom));
+ }
+ 
+-JNIEXPORT jstring JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getDescription(JNIEnv* env,
++JNIEXPORT jstring JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getDescription(JNIEnv* env,
+                                                                                        jobject obj)
+ {
+   return ToJString(
+       env, GetRef(env, obj)->GetDescription(UICommon::GameFile::Variant::LongAndPossiblyCustom));
+ }
+ 
+-JNIEXPORT jstring JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getCompany(JNIEnv* env,
++JNIEXPORT jstring JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getCompany(JNIEnv* env,
+                                                                                    jobject obj)
+ {
+   return ToJString(env, DiscIO::GetCompanyFromID(GetRef(env, obj)->GetMakerID()));
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getCountry(JNIEnv* env,
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getCountry(JNIEnv* env,
+                                                                                 jobject obj)
+ {
+   return static_cast<jint>(GetRef(env, obj)->GetCountry());
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getRegion(JNIEnv* env,
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getRegion(JNIEnv* env,
+                                                                                jobject obj)
+ {
+   return static_cast<jint>(GetRef(env, obj)->GetRegion());
+ }
+ 
+-JNIEXPORT jstring JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getPath(JNIEnv* env,
++JNIEXPORT jstring JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getPath(JNIEnv* env,
+                                                                                 jobject obj)
+ {
+   return ToJString(env, GetRef(env, obj)->GetFilePath());
+ }
+ 
+-JNIEXPORT jstring JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getGameId(JNIEnv* env,
++JNIEXPORT jstring JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getGameId(JNIEnv* env,
+                                                                                   jobject obj)
+ {
+   return ToJString(env, GetRef(env, obj)->GetGameID());
+ }
+ 
+-JNIEXPORT jstring JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getGameTdbId(JNIEnv* env,
++JNIEXPORT jstring JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getGameTdbId(JNIEnv* env,
+                                                                                      jobject obj)
+ {
+   return ToJString(env, GetRef(env, obj)->GetGameTDBID());
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getDiscNumber(JNIEnv* env,
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getDiscNumber(JNIEnv* env,
+                                                                                    jobject obj)
+ {
+   return GetRef(env, obj)->GetDiscNumber();
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getRevision(JNIEnv* env,
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getRevision(JNIEnv* env,
+                                                                                  jobject obj)
+ {
+   return GetRef(env, obj)->GetRevision();
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getBlobType(JNIEnv* env,
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getBlobType(JNIEnv* env,
+                                                                                  jobject obj)
+ {
+   return static_cast<jint>(GetRef(env, obj)->GetBlobType());
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_model_GameFile_getFileFormatName(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getFileFormatName(JNIEnv* env, jobject obj)
+ {
+   return ToJString(env, GetRef(env, obj)->GetFileFormatName());
+ }
+ 
+-JNIEXPORT jlong JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getBlockSize(JNIEnv* env,
++JNIEXPORT jlong JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getBlockSize(JNIEnv* env,
+                                                                                    jobject obj)
+ {
+   return GetRef(env, obj)->GetBlockSize();
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_model_GameFile_getCompressionMethod(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getCompressionMethod(JNIEnv* env, jobject obj)
+ {
+   return ToJString(env, GetRef(env, obj)->GetCompressionMethod());
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_model_GameFile_shouldShowFileFormatDetails(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_shouldShowFileFormatDetails(JNIEnv* env, jobject obj)
+ {
+   return static_cast<jboolean>(GetRef(env, obj)->ShouldShowFileFormatDetails());
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_model_GameFile_shouldAllowConversion(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_shouldAllowConversion(JNIEnv* env, jobject obj)
+ {
+   return static_cast<jboolean>(GetRef(env, obj)->ShouldAllowConversion());
+ }
+ 
+-JNIEXPORT jlong JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getFileSize(JNIEnv* env,
++JNIEXPORT jlong JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getFileSize(JNIEnv* env,
+                                                                                   jobject obj)
+ {
+   return GetRef(env, obj)->GetFileSize();
+ }
+ 
+-JNIEXPORT jboolean JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_isDatelDisc(JNIEnv* env,
++JNIEXPORT jboolean JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_isDatelDisc(JNIEnv* env,
+                                                                                      jobject obj)
+ {
+   return static_cast<jboolean>(GetRef(env, obj)->IsDatelDisc());
+ }
+ 
+-JNIEXPORT jboolean JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_isNKit(JNIEnv* env,
++JNIEXPORT jboolean JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_isNKit(JNIEnv* env,
+                                                                                 jobject obj)
+ {
+   return static_cast<jboolean>(GetRef(env, obj)->IsNKit());
+ }
+ 
+-JNIEXPORT jintArray JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getBanner(JNIEnv* env,
++JNIEXPORT jintArray JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getBanner(JNIEnv* env,
+                                                                                     jobject obj)
+ {
+   const std::vector<u32>& buffer = GetRef(env, obj)->GetBannerImage().buffer;
+@@ -180,26 +180,26 @@ JNIEXPORT jintArray JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getBan
+   return out_array;
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getBannerWidth(JNIEnv* env,
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getBannerWidth(JNIEnv* env,
+                                                                                     jobject obj)
+ {
+   return static_cast<jint>(GetRef(env, obj)->GetBannerImage().width);
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_getBannerHeight(JNIEnv* env,
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getBannerHeight(JNIEnv* env,
+                                                                                      jobject obj)
+ {
+   return static_cast<jint>(GetRef(env, obj)->GetBannerImage().height);
+ }
+ 
+ JNIEXPORT jlong JNICALL
+-Java_org_dolphinemu_dolphinemu_model_GameFile_getTimePlayedMsInternal(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_getTimePlayedMsInternal(JNIEnv* env, jobject obj)
+ {
+   const std::chrono::milliseconds time = TimePlayed().GetTimePlayed(GetRef(env, obj)->GetGameID());
+   return time.count();
+ }
+ 
+-JNIEXPORT jobject JNICALL Java_org_dolphinemu_dolphinemu_model_GameFile_parse(JNIEnv* env, jclass,
++JNIEXPORT jobject JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFile_parse(JNIEnv* env, jclass,
+                                                                               jstring path)
+ {
+   auto game_file = std::make_shared<UICommon::GameFile>(GetJString(env, path));
+diff --git a/Source/Android/jni/GameList/GameFileCache.cpp b/Source/Android/jni/GameList/GameFileCache.cpp
+index c0a78c8..f1b89fd 100644
+--- a/Source/Android/jni/GameList/GameFileCache.cpp
++++ b/Source/Android/jni/GameList/GameFileCache.cpp
+@@ -23,18 +23,18 @@ static UICommon::GameFileCache* GetPointer(JNIEnv* env, jobject obj)
+ extern "C" {
+ 
+ JNIEXPORT jlong JNICALL
+-Java_org_dolphinemu_dolphinemu_model_GameFileCache_newGameFileCache(JNIEnv* env, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_model_GameFileCache_newGameFileCache(JNIEnv* env, jclass)
+ {
+   return reinterpret_cast<jlong>(new UICommon::GameFileCache());
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_model_GameFileCache_finalize(JNIEnv* env,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFileCache_finalize(JNIEnv* env,
+                                                                                    jobject obj)
+ {
+   delete GetPointer(env, obj);
+ }
+ 
+-JNIEXPORT jobjectArray JNICALL Java_org_dolphinemu_dolphinemu_model_GameFileCache_getAllGamePaths(
++JNIEXPORT jobjectArray JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFileCache_getAllGamePaths(
+     JNIEnv* env, jclass, jobjectArray folder_paths, jboolean recursive_scan)
+ {
+   const std::vector<std::string> paths = JStringArrayToVector(env, folder_paths);
+@@ -44,25 +44,25 @@ JNIEXPORT jobjectArray JNICALL Java_org_dolphinemu_dolphinemu_model_GameFileCach
+ }
+ 
+ JNIEXPORT jobjectArray JNICALL
+-Java_org_dolphinemu_dolphinemu_model_GameFileCache_getIsoPaths(JNIEnv* env, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_model_GameFileCache_getIsoPaths(JNIEnv* env, jclass)
+ {
+   return SpanToJStringArray(env, Config::GetIsoPaths());
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_model_GameFileCache_setIsoPaths(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFileCache_setIsoPaths(
+     JNIEnv* env, jclass, jobjectArray paths)
+ {
+   Config::SetIsoPaths(JStringArrayToVector(env, paths));
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_model_GameFileCache_getSize(JNIEnv* env,
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFileCache_getSize(JNIEnv* env,
+                                                                                   jobject obj)
+ {
+   return static_cast<jint>(GetPointer(env, obj)->GetSize());
+ }
+ 
+ JNIEXPORT jobjectArray JNICALL
+-Java_org_dolphinemu_dolphinemu_model_GameFileCache_getAllGames(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_model_GameFileCache_getAllGames(JNIEnv* env, jobject obj)
+ {
+   const UICommon::GameFileCache* ptr = GetPointer(env, obj);
+   const jobjectArray array =
+@@ -76,7 +76,7 @@ Java_org_dolphinemu_dolphinemu_model_GameFileCache_getAllGames(JNIEnv* env, jobj
+   return array;
+ }
+ 
+-JNIEXPORT jobject JNICALL Java_org_dolphinemu_dolphinemu_model_GameFileCache_addOrGet(JNIEnv* env,
++JNIEXPORT jobject JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFileCache_addOrGet(JNIEnv* env,
+                                                                                       jobject obj,
+                                                                                       jstring path)
+ {
+@@ -84,26 +84,26 @@ JNIEXPORT jobject JNICALL Java_org_dolphinemu_dolphinemu_model_GameFileCache_add
+   return GameFileToJava(env, GetPointer(env, obj)->AddOrGet(GetJString(env, path), &cache_changed));
+ }
+ 
+-JNIEXPORT jboolean JNICALL Java_org_dolphinemu_dolphinemu_model_GameFileCache_update(
++JNIEXPORT jboolean JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFileCache_update(
+     JNIEnv* env, jobject obj, jobjectArray game_paths)
+ {
+   return GetPointer(env, obj)->Update(JStringArrayToVector(env, game_paths));
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_model_GameFileCache_updateAdditionalMetadata(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_model_GameFileCache_updateAdditionalMetadata(JNIEnv* env,
+                                                                             jobject obj)
+ {
+   return GetPointer(env, obj)->UpdateAdditionalMetadata();
+ }
+ 
+-JNIEXPORT jboolean JNICALL Java_org_dolphinemu_dolphinemu_model_GameFileCache_load(JNIEnv* env,
++JNIEXPORT jboolean JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFileCache_load(JNIEnv* env,
+                                                                                    jobject obj)
+ {
+   return GetPointer(env, obj)->Load();
+ }
+ 
+-JNIEXPORT jboolean JNICALL Java_org_dolphinemu_dolphinemu_model_GameFileCache_save(JNIEnv* env,
++JNIEXPORT jboolean JNICALL Java_com_noryan_romcore_core_dolphin_jni_model_GameFileCache_save(JNIEnv* env,
+                                                                                    jobject obj)
+ {
+   return GetPointer(env, obj)->Save();
+diff --git a/Source/Android/jni/GpuDriver.cpp b/Source/Android/jni/GpuDriver.cpp
+index de37ab8..52fa53c 100644
+--- a/Source/Android/jni/GpuDriver.cpp
++++ b/Source/Android/jni/GpuDriver.cpp
+@@ -27,7 +27,7 @@ extern "C" {
+ #if defined(_M_ARM_64)
+ 
+ JNIEXPORT jobjectArray JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_GpuDriverHelper_00024Companion_getSystemDriverInfo(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_utils_GpuDriverHelper_00024Companion_getSystemDriverInfo(JNIEnv* env,
+                                                                                         jobject)
+ {
+   if (!Vulkan::LoadVulkanLibrary(true))
+@@ -93,7 +93,7 @@ Java_org_dolphinemu_dolphinemu_utils_GpuDriverHelper_00024Companion_getSystemDri
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_GpuDriverHelper_00024Companion_supportsCustomDriverLoading(
++Java_com_noryan_romcore_core_dolphin_jni_utils_GpuDriverHelper_00024Companion_supportsCustomDriverLoading(
+     JNIEnv* env, jobject instance)
+ {
+   // If the KGSL device exists custom drivers can be loaded using adrenotools
+@@ -101,7 +101,7 @@ Java_org_dolphinemu_dolphinemu_utils_GpuDriverHelper_00024Companion_supportsCust
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_GpuDriverHelper_00024Companion_supportsForceMaxGpuClocks(
++Java_com_noryan_romcore_core_dolphin_jni_utils_GpuDriverHelper_00024Companion_supportsForceMaxGpuClocks(
+     JNIEnv* env, jobject instance)
+ {
+   // If the KGSL device exists adrenotools can be used to set GPU turbo mode
+@@ -109,7 +109,7 @@ Java_org_dolphinemu_dolphinemu_utils_GpuDriverHelper_00024Companion_supportsForc
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_GpuDriverHelper_00024Companion_forceMaxGpuClocks(
++Java_com_noryan_romcore_core_dolphin_jni_utils_GpuDriverHelper_00024Companion_forceMaxGpuClocks(
+     JNIEnv* env, jobject instance, jboolean enable)
+ {
+   adrenotools_set_turbo(enable);
+@@ -118,7 +118,7 @@ Java_org_dolphinemu_dolphinemu_utils_GpuDriverHelper_00024Companion_forceMaxGpuC
+ #else
+ 
+ JNIEXPORT jobjectArray JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_GpuDriverHelper_00024Companion_getSystemDriverInfo(
++Java_com_noryan_romcore_core_dolphin_jni_utils_GpuDriverHelper_00024Companion_getSystemDriverInfo(
+     JNIEnv* env, jobject instance)
+ {
+   auto array = env->NewObjectArray(0, env->FindClass("java/lang/String"), nullptr);
+@@ -126,21 +126,21 @@ Java_org_dolphinemu_dolphinemu_utils_GpuDriverHelper_00024Companion_getSystemDri
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_GpuDriverHelper_00024Companion_supportsCustomDriverLoading(
++Java_com_noryan_romcore_core_dolphin_jni_utils_GpuDriverHelper_00024Companion_supportsCustomDriverLoading(
+     JNIEnv* env, jobject instance)
+ {
+   return false;
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_GpuDriverHelper_00024Companion_supportsForceMaxGpuClocks(
++Java_com_noryan_romcore_core_dolphin_jni_utils_GpuDriverHelper_00024Companion_supportsForceMaxGpuClocks(
+     JNIEnv* env, jobject instance)
+ {
+   return false;
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_GpuDriverHelper_00024Companion_forceMaxGpuClocks(
++Java_com_noryan_romcore_core_dolphin_jni_utils_GpuDriverHelper_00024Companion_forceMaxGpuClocks(
+     JNIEnv* env, jobject instance, jboolean enable)
+ {
+ }
+diff --git a/Source/Android/jni/InfinityConfig.cpp b/Source/Android/jni/InfinityConfig.cpp
+index a574053..db8e87a 100644
+--- a/Source/Android/jni/InfinityConfig.cpp
++++ b/Source/Android/jni/InfinityConfig.cpp
+@@ -15,7 +15,7 @@ using FigureUIPosition = IOS::HLE::USB::FigureUIPosition;
+ extern "C" {
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_infinitybase_InfinityConfig_getFigureMap(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_infinitybase_InfinityConfig_getFigureMap(JNIEnv* env,
+                                                                                  jobject obj)
+ {
+   auto& system = Core::System::GetInstance();
+@@ -39,7 +39,7 @@ Java_org_dolphinemu_dolphinemu_features_infinitybase_InfinityConfig_getFigureMap
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_infinitybase_InfinityConfig_getInverseFigureMap(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_infinitybase_InfinityConfig_getInverseFigureMap(JNIEnv* env,
+                                                                                         jobject obj)
+ {
+   auto& system = Core::System::GetInstance();
+@@ -63,7 +63,7 @@ Java_org_dolphinemu_dolphinemu_features_infinitybase_InfinityConfig_getInverseFi
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_infinitybase_InfinityConfig_removeFigure(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_infinitybase_InfinityConfig_removeFigure(JNIEnv* env,
+                                                                                  jclass clazz,
+                                                                                  jint position)
+ {
+@@ -72,7 +72,7 @@ Java_org_dolphinemu_dolphinemu_features_infinitybase_InfinityConfig_removeFigure
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_infinitybase_InfinityConfig_loadFigure(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_infinitybase_InfinityConfig_loadFigure(JNIEnv* env,
+                                                                                jclass clazz,
+                                                                                jint position,
+                                                                                jstring file_name)
+@@ -96,7 +96,7 @@ Java_org_dolphinemu_dolphinemu_features_infinitybase_InfinityConfig_loadFigure(J
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_infinitybase_InfinityConfig_createFigure(
++Java_com_noryan_romcore_core_dolphin_jni_features_infinitybase_InfinityConfig_createFigure(
+     JNIEnv* env, jclass clazz, jlong figure_number, jstring fileName, jint position)
+ {
+   u32 fig_num = static_cast<u32>(figure_number);
+diff --git a/Source/Android/jni/Input/Control.cpp b/Source/Android/jni/Input/Control.cpp
+index 3a0496b..75afc3c 100644
+--- a/Source/Android/jni/Input/Control.cpp
++++ b/Source/Android/jni/Input/Control.cpp
+@@ -32,7 +32,7 @@ jobject ControlToJava(JNIEnv* env, ControllerEmu::Control* control)
+ extern "C" {
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_Control_getUiName(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_Control_getUiName(JNIEnv* env,
+                                                                                     jobject obj)
+ {
+   ControllerEmu::Control* control = GetPointer(env, obj);
+@@ -43,7 +43,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_Control_getUiN
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_Control_getControlReference(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_Control_getControlReference(
+     JNIEnv* env, jobject obj)
+ {
+   return ControlReferenceToJava(env, GetPointer(env, obj)->control_ref.get());
+diff --git a/Source/Android/jni/Input/ControlGroup.cpp b/Source/Android/jni/Input/ControlGroup.cpp
+index 4c21f26..314a674 100644
+--- a/Source/Android/jni/Input/ControlGroup.cpp
++++ b/Source/Android/jni/Input/ControlGroup.cpp
+@@ -31,70 +31,70 @@ jobject ControlGroupToJava(JNIEnv* env, ControllerEmu::ControlGroup* group)
+ extern "C" {
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlGroup_getUiName(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_ControlGroup_getUiName(
+     JNIEnv* env, jobject obj)
+ {
+   return ToJString(env, Common::GetStringT(GetPointer(env, obj)->ui_name.c_str()));
+ }
+ 
+ JNIEXPORT jint JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlGroup_getGroupType(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_ControlGroup_getGroupType(
+     JNIEnv* env, jobject obj)
+ {
+   return static_cast<jint>(GetPointer(env, obj)->type);
+ }
+ 
+ JNIEXPORT jint JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlGroup_getDefaultEnabledValue(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_ControlGroup_getDefaultEnabledValue(
+     JNIEnv* env, jobject obj)
+ {
+   return static_cast<jint>(GetPointer(env, obj)->default_value);
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlGroup_getEnabled(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_ControlGroup_getEnabled(
+     JNIEnv* env, jobject obj)
+ {
+   return static_cast<jboolean>(GetPointer(env, obj)->enabled.GetValue());
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlGroup_setEnabled(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_ControlGroup_setEnabled(
+     JNIEnv* env, jobject obj, jboolean value)
+ {
+   GetPointer(env, obj)->enabled.SetValue(value);
+ }
+ 
+ JNIEXPORT jint JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlGroup_getControlCount(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_ControlGroup_getControlCount(
+     JNIEnv* env, jobject obj)
+ {
+   return static_cast<jint>(GetPointer(env, obj)->controls.size());
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlGroup_getControl(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_ControlGroup_getControl(
+     JNIEnv* env, jobject obj, jint i)
+ {
+   return ControlToJava(env, GetPointer(env, obj)->controls[i].get());
+ }
+ 
+ JNIEXPORT jint JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlGroup_getNumericSettingCount(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_ControlGroup_getNumericSettingCount(
+     JNIEnv* env, jobject obj)
+ {
+   return static_cast<jint>(GetPointer(env, obj)->numeric_settings.size());
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlGroup_getNumericSetting(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_ControlGroup_getNumericSetting(
+     JNIEnv* env, jobject obj, jint i)
+ {
+   return NumericSettingToJava(env, GetPointer(env, obj)->numeric_settings[i].get());
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlGroup_getAttachmentSetting(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_ControlGroup_getAttachmentSetting(
+     JNIEnv* env, jobject obj)
+ {
+   auto* group = reinterpret_cast<ControllerEmu::Attachments*>(GetPointer(env, obj));
+diff --git a/Source/Android/jni/Input/ControlReference.cpp b/Source/Android/jni/Input/ControlReference.cpp
+index 533c8cb..b0f470e 100644
+--- a/Source/Android/jni/Input/ControlReference.cpp
++++ b/Source/Android/jni/Input/ControlReference.cpp
+@@ -30,21 +30,21 @@ jobject ControlReferenceToJava(JNIEnv* env, ControlReference* control_reference)
+ extern "C" {
+ 
+ JNIEXPORT jdouble JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlReference_getState(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_ControlReference_getState(
+     JNIEnv* env, jobject obj)
+ {
+   return ControlReferenceFromJava(env, obj)->GetState<double>();
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlReference_getExpression(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_ControlReference_getExpression(
+     JNIEnv* env, jobject obj)
+ {
+   return ToJString(env, ControlReferenceFromJava(env, obj)->GetExpression());
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlReference_setExpression(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_ControlReference_setExpression(
+     JNIEnv* env, jobject obj, jstring expr)
+ {
+   const std::optional<std::string> result =
+@@ -53,7 +53,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlReferen
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlReference_isInput(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_ControlReference_isInput(
+     JNIEnv* env, jobject obj)
+ {
+   return static_cast<jboolean>(ControlReferenceFromJava(env, obj)->IsInput());
+diff --git a/Source/Android/jni/Input/CoreDevice.cpp b/Source/Android/jni/Input/CoreDevice.cpp
+index 4da2984..4bb62d1 100644
+--- a/Source/Android/jni/Input/CoreDevice.cpp
++++ b/Source/Android/jni/Input/CoreDevice.cpp
+@@ -58,33 +58,33 @@ jobject CoreDeviceToJava(JNIEnv* env, std::shared_ptr<ciface::Core::Device> devi
+ extern "C" {
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_CoreDevice_00024Control_getName(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_CoreDevice_00024Control_getName(JNIEnv* env,
+                                                                                     jobject obj)
+ {
+   return ToJString(env, GetControlPointer(env, obj)->GetName());
+ }
+ 
+ JNIEXPORT jdouble JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_CoreDevice_00024Control_getState(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_CoreDevice_00024Control_getState(JNIEnv* env,
+                                                                                      jobject obj)
+ {
+   return GetControlPointer(env, obj)->ToInput()->GetState();
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_CoreDevice_finalize(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_CoreDevice_finalize(JNIEnv* env, jobject obj)
+ {
+   delete GetDevicePointer(env, obj);
+ }
+ 
+ JNIEXPORT jobjectArray JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_CoreDevice_getInputs(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_CoreDevice_getInputs(JNIEnv* env, jobject obj)
+ {
+   return CoreDeviceControlVectorToJava(env, obj, (*GetDevicePointer(env, obj))->Inputs());
+ }
+ 
+ JNIEXPORT jobjectArray JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_CoreDevice_getOutputs(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_CoreDevice_getOutputs(JNIEnv* env, jobject obj)
+ {
+   return CoreDeviceControlVectorToJava(env, obj, (*GetDevicePointer(env, obj))->Outputs());
+ }
+diff --git a/Source/Android/jni/Input/EmulatedController.cpp b/Source/Android/jni/Input/EmulatedController.cpp
+index 495a376..8078dcd 100644
+--- a/Source/Android/jni/Input/EmulatedController.cpp
++++ b/Source/Android/jni/Input/EmulatedController.cpp
+@@ -56,28 +56,28 @@ static jobject EmulatedControllerToJava(JNIEnv* env, ControllerEmu::EmulatedCont
+ extern "C" {
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedController_getDefaultDevice(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_EmulatedController_getDefaultDevice(
+     JNIEnv* env, jobject obj)
+ {
+   return ToJString(env, EmulatedControllerFromJava(env, obj)->GetDefaultDevice().ToString());
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedController_setDefaultDevice(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_EmulatedController_setDefaultDevice(
+     JNIEnv* env, jobject obj, jstring j_device)
+ {
+   return EmulatedControllerFromJava(env, obj)->SetDefaultDevice(GetJString(env, j_device));
+ }
+ 
+ JNIEXPORT jint JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlGroupContainer_getGroupCount(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_ControlGroupContainer_getGroupCount(
+     JNIEnv* env, jobject obj)
+ {
+   return static_cast<jint>(ControlGroupContainerFromJava(env, obj)->groups.size());
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlGroupContainer_getGroup(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_ControlGroupContainer_getGroup(
+     JNIEnv* env, jobject obj, jint controller_index)
+ {
+   return ControlGroupToJava(
+@@ -85,7 +85,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_ControlGroupCo
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedController_updateSingleControlReference(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_EmulatedController_updateSingleControlReference(
+     JNIEnv* env, jobject obj, jobject control_reference)
+ {
+   ControllerEmu::EmulatedController* controller = EmulatedControllerFromJava(env, obj);
+@@ -95,7 +95,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedContro
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedController_loadDefaultSettings(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_EmulatedController_loadDefaultSettings(
+     JNIEnv* env, jobject obj)
+ {
+   ControllerEmu::EmulatedController* controller = EmulatedControllerFromJava(env, obj);
+@@ -106,7 +106,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedContro
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedController_clearSettings(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_EmulatedController_clearSettings(
+     JNIEnv* env, jobject obj)
+ {
+   ControllerEmu::EmulatedController* controller = EmulatedControllerFromJava(env, obj);
+@@ -120,7 +120,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedContro
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedController_loadProfile(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_EmulatedController_loadProfile(
+     JNIEnv* env, jobject obj, jstring j_path)
+ {
+   ControllerEmu::EmulatedController* controller = EmulatedControllerFromJava(env, obj);
+@@ -134,7 +134,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedContro
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedController_saveProfile(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_EmulatedController_saveProfile(
+     JNIEnv* env, jobject obj, jstring j_path)
+ {
+   const std::string path = GetJString(env, j_path);
+@@ -148,14 +148,14 @@ Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedContro
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedController_getProfileKey(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_EmulatedController_getProfileKey(
+     JNIEnv* env, jobject obj)
+ {
+   return ToJString(env, EmulatedControllerFromJava(env, obj)->GetConfig()->GetProfileKey());
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedController_getUserProfileDirectoryPath(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_EmulatedController_getUserProfileDirectoryPath(
+     JNIEnv* env, jobject obj)
+ {
+   return ToJString(
+@@ -163,7 +163,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedContro
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedController_getSysProfileDirectoryPath(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_EmulatedController_getSysProfileDirectoryPath(
+     JNIEnv* env, jobject obj)
+ {
+   return ToJString(env,
+@@ -171,28 +171,28 @@ Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedContro
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedController_getGcPad(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_EmulatedController_getGcPad(
+     JNIEnv* env, jclass, jint controller_index)
+ {
+   return EmulatedControllerToJava(env, Pad::GetConfig()->GetController(controller_index));
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedController_getGcKeyboard(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_EmulatedController_getGcKeyboard(
+     JNIEnv* env, jclass, jint controller_index)
+ {
+   return EmulatedControllerToJava(env, Keyboard::GetConfig()->GetController(controller_index));
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedController_getWiimote(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_EmulatedController_getWiimote(
+     JNIEnv* env, jclass, jint controller_index)
+ {
+   return EmulatedControllerToJava(env, Wiimote::GetConfig()->GetController(controller_index));
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedController_getWiimoteAttachment(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_EmulatedController_getWiimoteAttachment(
+     JNIEnv* env, jclass, jint controller_index, jint attachment_index)
+ {
+   auto* attachments = static_cast<ControllerEmu::Attachments*>(
+@@ -201,7 +201,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedContro
+ }
+ 
+ JNIEXPORT jint JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedController_getSelectedWiimoteAttachment(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_EmulatedController_getSelectedWiimoteAttachment(
+     JNIEnv* env, jclass, jint controller_index)
+ {
+   auto* attachments = static_cast<ControllerEmu::Attachments*>(
+@@ -210,7 +210,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedContro
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_EmulatedController_getSidewaysWiimoteSetting(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_EmulatedController_getSidewaysWiimoteSetting(
+     JNIEnv* env, jclass, jint controller_index)
+ {
+   ControllerEmu::ControlGroup* options =
+diff --git a/Source/Android/jni/Input/InputDetector.cpp b/Source/Android/jni/Input/InputDetector.cpp
+index 03ad75b..19374f4 100644
+--- a/Source/Android/jni/Input/InputDetector.cpp
++++ b/Source/Android/jni/Input/InputDetector.cpp
+@@ -25,18 +25,18 @@ static ciface::Core::InputDetector* GetPointer(JNIEnv* env, jobject obj)
+ extern "C" {
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_InputDetector_finalize(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_InputDetector_finalize(JNIEnv* env, jobject obj)
+ {
+   delete GetPointer(env, obj);
+ }
+ 
+ JNIEXPORT jlong JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_InputDetector_createNew(JNIEnv*, jobject)
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_InputDetector_createNew(JNIEnv*, jobject)
+ {
+   return reinterpret_cast<jlong>(new ciface::Core::InputDetector);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_features_input_model_InputDetector_start(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_features_input_model_InputDetector_start(
+     JNIEnv* env, jobject obj, jstring j_default_device, jboolean all_devices)
+ {
+   std::vector<std::string> device_strings;
+@@ -49,21 +49,21 @@ JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_features_input_model_Input
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_InputDetector_update(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_InputDetector_update(JNIEnv* env, jobject obj)
+ {
+   GetPointer(env, obj)->Update(INPUT_DETECT_INITIAL_TIME, INPUT_DETECT_CONFIRMATION_TIME,
+                                INPUT_DETECT_MAXIMUM_TIME);
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_InputDetector_isComplete(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_InputDetector_isComplete(JNIEnv* env,
+                                                                              jobject obj)
+ {
+   return GetPointer(env, obj)->IsComplete();
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_InputDetector_takeResults(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_InputDetector_takeResults(
+     JNIEnv* env, jobject obj, jstring j_default_device)
+ {
+   ciface::Core::DeviceQualifier default_device;
+diff --git a/Source/Android/jni/Input/InputOverrider.cpp b/Source/Android/jni/Input/InputOverrider.cpp
+index 26b823e..f3b02f4 100644
+--- a/Source/Android/jni/Input/InputOverrider.cpp
++++ b/Source/Android/jni/Input/InputOverrider.cpp
+@@ -9,35 +9,35 @@
+ extern "C" {
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_InputOverrider_registerGameCube(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_InputOverrider_registerGameCube(
+     JNIEnv*, jclass, int controller_index)
+ {
+   ciface::Touch::RegisterGameCubeInputOverrider(controller_index);
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_InputOverrider_registerWii(JNIEnv*, jclass,
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_InputOverrider_registerWii(JNIEnv*, jclass,
+                                                                                int controller_index)
+ {
+   ciface::Touch::RegisterWiiInputOverrider(controller_index);
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_InputOverrider_unregisterGameCube(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_InputOverrider_unregisterGameCube(
+     JNIEnv*, jclass, int controller_index)
+ {
+   ciface::Touch::UnregisterGameCubeInputOverrider(controller_index);
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_InputOverrider_unregisterWii(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_InputOverrider_unregisterWii(
+     JNIEnv*, jclass, int controller_index)
+ {
+   ciface::Touch::UnregisterWiiInputOverrider(controller_index);
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_InputOverrider_setControlState(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_InputOverrider_setControlState(
+     JNIEnv*, jclass, int controller_index, int control, double state)
+ {
+   ciface::Touch::SetControlState(controller_index, static_cast<ciface::Touch::ControlID>(control),
+@@ -45,7 +45,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_InputOverrider_setControlSta
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_InputOverrider_clearControlState(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_InputOverrider_clearControlState(
+     JNIEnv*, jclass, int controller_index, int control)
+ {
+   ciface::Touch::ClearControlState(controller_index,
+@@ -53,7 +53,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_InputOverrider_clearControlS
+ }
+ 
+ JNIEXPORT double JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_InputOverrider_getGateRadiusAtAngle(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_InputOverrider_getGateRadiusAtAngle(
+     JNIEnv*, jclass, int controller_index, int stick, double angle)
+ {
+   const auto casted_stick = static_cast<ciface::Touch::ControlID>(stick);
+diff --git a/Source/Android/jni/Input/MappingCommon.cpp b/Source/Android/jni/Input/MappingCommon.cpp
+index 2017c89..b4eedbb 100644
+--- a/Source/Android/jni/Input/MappingCommon.cpp
++++ b/Source/Android/jni/Input/MappingCommon.cpp
+@@ -21,7 +21,7 @@
+ extern "C" {
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_MappingCommon_getExpressionForControl(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_MappingCommon_getExpressionForControl(
+     JNIEnv* env, jclass, jstring j_control, jstring j_device, jstring j_default_device)
+ {
+   ciface::Core::DeviceQualifier device_qualifier, default_device_qualifier;
+@@ -34,7 +34,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_MappingCommon_getExpressionF
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_MappingCommon_save(JNIEnv* env, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_MappingCommon_save(JNIEnv* env, jclass)
+ {
+   Pad::GetConfig()->SaveConfig();
+   Pad::GetGBAConfig()->SaveConfig();
+diff --git a/Source/Android/jni/Input/NumericSetting.cpp b/Source/Android/jni/Input/NumericSetting.cpp
+index 1625d17..0d89d93 100644
+--- a/Source/Android/jni/Input/NumericSetting.cpp
++++ b/Source/Android/jni/Input/NumericSetting.cpp
+@@ -45,14 +45,14 @@ jobject NumericSettingToJava(JNIEnv* env, ControllerEmu::NumericSettingBase* num
+ extern "C" {
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting_getUiName(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_NumericSetting_getUiName(
+     JNIEnv* env, jobject obj)
+ {
+   return ToJString(env, Common::GetStringT(GetPointer(env, obj)->GetUIName()));
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting_getUiSuffix(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_NumericSetting_getUiSuffix(
+     JNIEnv* env, jobject obj)
+ {
+   const char* str = NullStringToEmptyString(GetPointer(env, obj)->GetUISuffix());
+@@ -60,7 +60,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting_getUiDescription(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_NumericSetting_getUiDescription(
+     JNIEnv* env, jobject obj)
+ {
+   const char* str = NullStringToEmptyString(GetPointer(env, obj)->GetUIDescription());
+@@ -68,91 +68,91 @@ Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting
+ }
+ 
+ JNIEXPORT jint JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting_getType(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_NumericSetting_getType(
+     JNIEnv* env, jobject obj)
+ {
+   return static_cast<int>(GetPointer(env, obj)->GetType());
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting_getControlReference(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_NumericSetting_getControlReference(
+     JNIEnv* env, jobject obj)
+ {
+   return ControlReferenceToJava(env, &GetPointer(env, obj)->GetInputReference());
+ }
+ 
+ JNIEXPORT jint JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting_getIntValue(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_NumericSetting_getIntValue(
+     JNIEnv* env, jobject obj)
+ {
+   return GetPointer<int>(env, obj)->GetValue();
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting_setIntValue(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_NumericSetting_setIntValue(
+     JNIEnv* env, jobject obj, jint value)
+ {
+   GetPointer<int>(env, obj)->SetValue(value);
+ }
+ 
+ JNIEXPORT jint JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting_getIntDefaultValue(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_NumericSetting_getIntDefaultValue(
+     JNIEnv* env, jobject obj)
+ {
+   return GetPointer<int>(env, obj)->GetDefaultValue();
+ }
+ 
+ JNIEXPORT jdouble JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting_getDoubleValue(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_NumericSetting_getDoubleValue(
+     JNIEnv* env, jobject obj)
+ {
+   return GetPointer<double>(env, obj)->GetValue();
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting_setDoubleValue(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_NumericSetting_setDoubleValue(
+     JNIEnv* env, jobject obj, jdouble value)
+ {
+   GetPointer<double>(env, obj)->SetValue(value);
+ }
+ 
+ JNIEXPORT jdouble JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting_getDoubleDefaultValue(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_NumericSetting_getDoubleDefaultValue(
+     JNIEnv* env, jobject obj)
+ {
+   return GetPointer<double>(env, obj)->GetDefaultValue();
+ }
+ 
+ JNIEXPORT jdouble JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting_getDoubleMin(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_NumericSetting_getDoubleMin(
+     JNIEnv* env, jobject obj)
+ {
+   return GetPointer<double>(env, obj)->GetMinValue();
+ }
+ 
+ JNIEXPORT jdouble JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting_getDoubleMax(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_NumericSetting_getDoubleMax(
+     JNIEnv* env, jobject obj)
+ {
+   return GetPointer<double>(env, obj)->GetMaxValue();
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting_getBooleanValue(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_NumericSetting_getBooleanValue(
+     JNIEnv* env, jobject obj)
+ {
+   return static_cast<jboolean>(GetPointer<bool>(env, obj)->GetValue());
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting_setBooleanValue(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_NumericSetting_setBooleanValue(
+     JNIEnv* env, jobject obj, jboolean value)
+ {
+   GetPointer<bool>(env, obj)->SetValue(static_cast<bool>(value));
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_controlleremu_NumericSetting_getBooleanDefaultValue(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_controlleremu_NumericSetting_getBooleanDefaultValue(
+     JNIEnv* env, jobject obj)
+ {
+   return static_cast<jboolean>(GetPointer<bool>(env, obj)->GetDefaultValue());
+diff --git a/Source/Android/jni/MainAndroid.cpp b/Source/Android/jni/MainAndroid.cpp
+index 4806c9a..e957f64 100644
+--- a/Source/Android/jni/MainAndroid.cpp
++++ b/Source/Android/jni/MainAndroid.cpp
+@@ -239,25 +239,25 @@ static std::string GetAnalyticValue(const std::string& key)
+ 
+ extern "C" {
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_UnPauseEmulation(JNIEnv*,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_UnPauseEmulation(JNIEnv*,
+                                                                                      jclass)
+ {
+   Core::SetState(Core::System::GetInstance(), Core::State::Running);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_PauseEmulation(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_PauseEmulation(
+     JNIEnv*, jclass, bool override_achievement_restrictions)
+ {
+   Core::SetState(Core::System::GetInstance(), Core::State::Paused, true,
+                  override_achievement_restrictions);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_ResetEmulation(JNIEnv*, jclass)
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_ResetEmulation(JNIEnv*, jclass)
+ {
+   Core::System::GetInstance().GetProcessorInterface().ResetButton_Tap();
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_StopEmulation(JNIEnv*, jclass)
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_StopEmulation(JNIEnv*, jclass)
+ {
+   Core::Stop(Core::System::GetInstance());
+ 
+@@ -265,83 +265,83 @@ JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_StopEmulatio
+   s_update_main_frame_event.Set();
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_SetIsBooting(JNIEnv*, jclass)
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_SetIsBooting(JNIEnv*, jclass)
+ {
+   s_is_booting.Set();
+ }
+ 
+-JNIEXPORT jboolean JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_IsRunning(JNIEnv*, jclass)
++JNIEXPORT jboolean JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_IsRunning(JNIEnv*, jclass)
+ {
+   return static_cast<jboolean>(Core::IsRunning(Core::System::GetInstance()));
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_NativeLibrary_IsRunningAndUnpaused(JNIEnv*, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_IsRunningAndUnpaused(JNIEnv*, jclass)
+ {
+   return static_cast<jboolean>(Core::GetState(Core::System::GetInstance()) == Core::State::Running);
+ }
+ 
+-JNIEXPORT jboolean JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_IsUninitialized(JNIEnv*,
++JNIEXPORT jboolean JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_IsUninitialized(JNIEnv*,
+                                                                                         jclass)
+ {
+   return static_cast<jboolean>(Core::IsUninitialized(Core::System::GetInstance()) &&
+                                !s_is_booting.IsSet());
+ }
+ 
+-JNIEXPORT jstring JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_GetVersionString(JNIEnv* env,
++JNIEXPORT jstring JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_GetVersionString(JNIEnv* env,
+                                                                                         jclass)
+ {
+   return ToJString(env, Common::GetScmRevStr());
+ }
+ 
+-JNIEXPORT jstring JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_GetGitRevision(JNIEnv* env,
++JNIEXPORT jstring JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_GetGitRevision(JNIEnv* env,
+                                                                                       jclass)
+ {
+   return ToJString(env, Common::GetScmRevGitStr());
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_SaveScreenShot(JNIEnv*, jclass)
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_SaveScreenShot(JNIEnv*, jclass)
+ {
+   Core::SaveScreenShot();
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_eglBindAPI(JNIEnv*, jclass,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_eglBindAPI(JNIEnv*, jclass,
+                                                                                jint api)
+ {
+   eglBindAPI(api);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_SaveState(JNIEnv*, jclass,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_SaveState(JNIEnv*, jclass,
+                                                                               jint slot)
+ {
+   State::Save(Core::System::GetInstance(), slot);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_SaveStateAs(JNIEnv* env, jclass,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_SaveStateAs(JNIEnv* env, jclass,
+                                                                                 jstring path)
+ {
+   State::SaveAs(Core::System::GetInstance(), GetJString(env, path));
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_LoadState(JNIEnv*, jclass,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_LoadState(JNIEnv*, jclass,
+                                                                               jint slot)
+ {
+   State::Load(Core::System::GetInstance(), slot);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_LoadStateAs(JNIEnv* env, jclass,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_LoadStateAs(JNIEnv* env, jclass,
+                                                                                 jstring path)
+ {
+   State::LoadAs(Core::System::GetInstance(), GetJString(env, path));
+ }
+ 
+ JNIEXPORT jlong JNICALL
+-Java_org_dolphinemu_dolphinemu_NativeLibrary_GetUnixTimeOfStateSlot(JNIEnv*, jclass, jint slot)
++Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_GetUnixTimeOfStateSlot(JNIEnv*, jclass, jint slot)
+ {
+   return static_cast<jlong>(State::GetUnixTimeOfSlot(slot));
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_utils_DirectoryInitialization_SetSysDirectory(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_utils_DirectoryInitialization_SetSysDirectory(
+     JNIEnv* env, jclass, jstring jPath)
+ {
+   const std::string path = GetJString(env, jPath);
+@@ -349,7 +349,7 @@ JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_utils_DirectoryInitializat
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_DirectoryInitialization_SetGpuDriverDirectories(
++Java_com_noryan_romcore_core_dolphin_jni_utils_DirectoryInitialization_SetGpuDriverDirectories(
+     JNIEnv* env, jclass, jstring jPath, jstring jLibPath)
+ {
+   const std::string path = GetJString(env, jPath);
+@@ -357,48 +357,48 @@ Java_org_dolphinemu_dolphinemu_utils_DirectoryInitialization_SetGpuDriverDirecto
+   File::SetGpuDriverDirectories(path, lib_path);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_SetUserDirectory(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_SetUserDirectory(
+     JNIEnv* env, jclass, jstring jDirectory)
+ {
+   UICommon::SetUserDirectory(GetJString(env, jDirectory));
+ }
+ 
+-JNIEXPORT jstring JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_GetUserDirectory(JNIEnv* env,
++JNIEXPORT jstring JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_GetUserDirectory(JNIEnv* env,
+                                                                                         jclass)
+ {
+   return ToJString(env, File::GetUserPath(D_USER_IDX));
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_SetCacheDirectory(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_SetCacheDirectory(
+     JNIEnv* env, jclass, jstring jDirectory)
+ {
+   File::SetUserPath(D_CACHE_IDX, GetJString(env, jDirectory));
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_NativeLibrary_GetCacheDirectory(JNIEnv* env, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_GetCacheDirectory(JNIEnv* env, jclass)
+ {
+   return ToJString(env, File::GetUserPath(D_CACHE_IDX));
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_DefaultCPUCore(JNIEnv*, jclass)
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_DefaultCPUCore(JNIEnv*, jclass)
+ {
+   return static_cast<jint>(PowerPC::DefaultCPUCore());
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_NativeLibrary_GetDefaultGraphicsBackendConfigName(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_GetDefaultGraphicsBackendConfigName(JNIEnv* env,
+                                                                                  jclass)
+ {
+   return ToJString(env, VideoBackendBase::GetDefaultBackendConfigName());
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_GetMaxLogLevel(JNIEnv*, jclass)
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_GetMaxLogLevel(JNIEnv*, jclass)
+ {
+   return static_cast<jint>(Common::Log::MAX_EFFECTIVE_LOGLEVEL);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_WipeJitBlockProfilingData(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_WipeJitBlockProfilingData(
+     JNIEnv* env, jclass native_library_class)
+ {
+   auto& system = Core::System::GetInstance();
+@@ -413,7 +413,7 @@ JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_WipeJitBlock
+   jit_interface.WipeBlockProfilingData(cpu_guard);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_WriteJitBlockLogDump(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_WriteJitBlockLogDump(
+     JNIEnv* env, jclass native_library_class)
+ {
+   auto& system = Core::System::GetInstance();
+@@ -443,7 +443,7 @@ JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_WriteJitBloc
+ }
+ 
+ // Surface Handling
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_SurfaceChanged(JNIEnv* env,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_SurfaceChanged(JNIEnv* env,
+                                                                                    jclass,
+                                                                                    jobject surf)
+ {
+@@ -459,7 +459,7 @@ JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_SurfaceChang
+   s_surface_cv.notify_all();
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_SurfaceDestroyed(JNIEnv*,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_SurfaceDestroyed(JNIEnv*,
+                                                                                      jclass)
+ {
+   {
+@@ -488,37 +488,37 @@ JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_SurfaceDestr
+   s_surface_cv.notify_all();
+ }
+ 
+-JNIEXPORT jboolean JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_HasSurface(JNIEnv*, jclass)
++JNIEXPORT jboolean JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_HasSurface(JNIEnv*, jclass)
+ {
+   std::lock_guard guard(s_surface_lock);
+ 
+   return s_surf ? JNI_TRUE : JNI_FALSE;
+ }
+ 
+-JNIEXPORT jfloat JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_GetGameAspectRatio(JNIEnv*,
++JNIEXPORT jfloat JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_GetGameAspectRatio(JNIEnv*,
+                                                                                          jclass)
+ {
+   return g_presenter->CalculateDrawAspectRatio();
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_RefreshWiimotes(JNIEnv*, jclass)
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_RefreshWiimotes(JNIEnv*, jclass)
+ {
+   WiimoteReal::Refresh();
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_ReloadConfig(JNIEnv*, jclass)
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_ReloadConfig(JNIEnv*, jclass)
+ {
+   SConfig::GetInstance().LoadSettings();
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_ResetDolphinSettings(JNIEnv*,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_ResetDolphinSettings(JNIEnv*,
+                                                                                          jclass)
+ {
+   SConfig::ResetAllSettings();
+   UICommon::SetUserDirectory(File::GetUserPath(D_USER_IDX));
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_Initialize(JNIEnv*, jclass)
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_Initialize(JNIEnv*, jclass)
+ {
+   UICommon::CreateDirectories();
+   Common::RegisterMsgAlertHandler(&MsgAlert);
+@@ -531,13 +531,13 @@ JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_Initialize(J
+   AchievementManager::GetInstance().Init(nullptr);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_ReportStartToAnalytics(JNIEnv*,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_ReportStartToAnalytics(JNIEnv*,
+                                                                                            jclass)
+ {
+   DolphinAnalytics::Instance().ReportDolphinStart(GetAnalyticValue("DEVICE_TYPE"));
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_GenerateNewStatisticsId(JNIEnv*,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_GenerateNewStatisticsId(JNIEnv*,
+                                                                                             jclass)
+ {
+   DolphinAnalytics::Instance().GenerateNewIdentity();
+@@ -547,7 +547,7 @@ JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_GenerateNewS
+ // Based on the scaledDensity of the device's display metrics.
+ static float GetRenderSurfaceScale(JNIEnv* env)
+ {
+-  jclass native_library_class = env->FindClass("org/dolphinemu/dolphinemu/NativeLibrary");
++  jclass native_library_class = env->FindClass("com/noryan/romcore/core/dolphin/jni/NativeLibrary");
+   jmethodID get_render_surface_scale_method =
+       env->GetStaticMethodID(native_library_class, "getRenderSurfaceScale", "()F");
+   return env->CallStaticFloatMethod(native_library_class, get_render_surface_scale_method);
+@@ -606,14 +606,14 @@ static void Run(JNIEnv* env, const std::vector<std::string>& paths, bool riivolu
+   Run(env, BootParameters::GenerateFromFile(paths, std::move(boot_session_data)), riivolution);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_Run___3Ljava_lang_String_2Z(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_Run___3Ljava_lang_String_2Z(
+     JNIEnv* env, jclass, jobjectArray jPaths, jboolean jRiivolution)
+ {
+   Run(env, JStringArrayToVector(env, jPaths), jRiivolution);
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_NativeLibrary_Run___3Ljava_lang_String_2ZLjava_lang_String_2Z(
++Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_Run___3Ljava_lang_String_2ZLjava_lang_String_2Z(
+     JNIEnv* env, jclass, jobjectArray jPaths, jboolean jRiivolution, jstring jSavestate,
+     jboolean jDeleteSavestate)
+ {
+@@ -623,7 +623,7 @@ Java_org_dolphinemu_dolphinemu_NativeLibrary_Run___3Ljava_lang_String_2ZLjava_la
+       BootSessionData(GetJString(env, jSavestate), delete_state));
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_RunNetPlay(
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_RunNetPlay(
+     JNIEnv* env, jclass, jobjectArray jPaths, jboolean jRiivolution, jlong jBootSessionData)
+ {
+   auto boot_session_data =
+@@ -639,13 +639,13 @@ JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_RunNetPlay(
+   Run(env, JStringArrayToVector(env, jPaths), jRiivolution, std::move(*boot_session_data));
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_RunSystemMenu(JNIEnv* env,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_RunSystemMenu(JNIEnv* env,
+                                                                                   jclass)
+ {
+   Run(env, std::make_unique<BootParameters>(BootParameters::NANDTitle{Titles::SYSTEM_MENU}), false);
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_ChangeDisc(JNIEnv* env, jclass,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_ChangeDisc(JNIEnv* env, jclass,
+                                                                                jstring jFile)
+ {
+   const std::string path = GetJString(env, jFile);
+@@ -655,7 +655,7 @@ JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_ChangeDisc(J
+ }
+ 
+ JNIEXPORT jobjectArray JNICALL
+-Java_org_dolphinemu_dolphinemu_NativeLibrary_GetLogTypeNames(JNIEnv* env, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_GetLogTypeNames(JNIEnv* env, jclass)
+ {
+   using LogManager = Common::Log::LogManager;
+ 
+@@ -675,13 +675,13 @@ Java_org_dolphinemu_dolphinemu_NativeLibrary_GetLogTypeNames(JNIEnv* env, jclass
+       });
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_ReloadLoggerConfig(JNIEnv*,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_ReloadLoggerConfig(JNIEnv*,
+                                                                                        jclass)
+ {
+   Common::Log::LogManager::Init();
+ }
+ 
+-JNIEXPORT jboolean JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_ConvertDiscImage(
++JNIEXPORT jboolean JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_ConvertDiscImage(
+     JNIEnv* env, jclass, jstring jInPath, jstring jOutPath, jint jPlatform, jint jFormat,
+     jint jBlockSize, jint jCompression, jint jCompressionLevel, jboolean jScrub, jobject jCallback)
+ {
+@@ -745,7 +745,7 @@ JNIEXPORT jboolean JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_ConvertD
+   return static_cast<jboolean>(success);
+ }
+ 
+-JNIEXPORT jstring JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_FormatSize(JNIEnv* env,
++JNIEXPORT jstring JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_FormatSize(JNIEnv* env,
+                                                                                   jclass,
+                                                                                   jlong bytes,
+                                                                                   jint decimals)
+@@ -754,37 +754,37 @@ JNIEXPORT jstring JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_FormatSiz
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_NativeLibrary_SetObscuredPixelsLeft(JNIEnv*, jclass, jint width)
++Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_SetObscuredPixelsLeft(JNIEnv*, jclass, jint width)
+ {
+   OSD::SetObscuredPixelsLeft(width);
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_NativeLibrary_SetObscuredPixelsTop(JNIEnv*, jclass, jint height)
++Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_SetObscuredPixelsTop(JNIEnv*, jclass, jint height)
+ {
+   OSD::SetObscuredPixelsTop(height);
+ }
+ 
+-JNIEXPORT jboolean JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_IsGameMetadataValid(JNIEnv*,
++JNIEXPORT jboolean JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_IsGameMetadataValid(JNIEnv*,
+                                                                                             jclass)
+ {
+   return s_game_metadata_is_valid;
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_NativeLibrary_IsEmulatingWiiUnchecked(JNIEnv*, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_IsEmulatingWiiUnchecked(JNIEnv*, jclass)
+ {
+   return Core::System::GetInstance().IsWii();
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_NativeLibrary_GetCurrentGameIDUnchecked(JNIEnv* env, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_GetCurrentGameIDUnchecked(JNIEnv* env, jclass)
+ {
+   return ToJString(env, SConfig::GetInstance().GetGameID());
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_NativeLibrary_GetCurrentTitleDescriptionUnchecked(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_GetCurrentTitleDescriptionUnchecked(JNIEnv* env,
+                                                                                  jclass)
+ {
+   // Prefer showing just the name. If no name is available, show just the game ID.
+diff --git a/Source/Android/jni/NetPlay/Netplay.cpp b/Source/Android/jni/NetPlay/Netplay.cpp
+index 16804b8..b6cac17 100644
+--- a/Source/Android/jni/NetPlay/Netplay.cpp
++++ b/Source/Android/jni/NetPlay/Netplay.cpp
+@@ -68,7 +68,7 @@ static bool JIntArrayToPadMappingArray(JNIEnv* env, jintArray jmapping,
+ extern "C" {
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeSendMessage(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeSendMessage(JNIEnv* env,
+                                                                                  jobject obj,
+                                                                                  jstring jmessage)
+ {
+@@ -77,7 +77,7 @@ Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeSendMessage
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeSetHostInputAuthority(
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeSetHostInputAuthority(
+     JNIEnv* env, jobject obj, jboolean enable)
+ {
+   if (auto* server = GetServerPointer(env, obj))
+@@ -85,7 +85,7 @@ Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeSetHostInpu
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeAdjustClientPadBufferSize(
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeAdjustClientPadBufferSize(
+     JNIEnv* env, jobject obj, jint buffer)
+ {
+   if (auto* client = GetClientPointer(env, obj))
+@@ -93,7 +93,7 @@ Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeAdjustClien
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeAdjustServerPadBufferSize(
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeAdjustServerPadBufferSize(
+     JNIEnv* env, jobject obj, jint buffer)
+ {
+   if (auto* server = GetServerPointer(env, obj))
+@@ -101,7 +101,7 @@ Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeAdjustServe
+ }
+ 
+ JNIEXPORT jlong JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeCreateUICallbacks(
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeCreateUICallbacks(
+     JNIEnv* env, jobject obj, jobjectArray jgame_files)
+ {
+   std::vector<std::shared_ptr<const UICommon::GameFile>> games;
+@@ -121,7 +121,7 @@ Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeCreateUICal
+ }
+ 
+ JNIEXPORT jlong JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeJoin(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeJoin(JNIEnv* env, jobject obj)
+ {
+   auto* ui = GetUICallbacksPointer(env, obj);
+ 
+@@ -160,7 +160,7 @@ Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeJoin(JNIEnv
+ }
+ 
+ JNIEXPORT jlong JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeHost(JNIEnv* env, jobject obj)
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeHost(JNIEnv* env, jobject obj)
+ {
+   auto* ui = GetUICallbacksPointer(env, obj);
+ 
+@@ -191,7 +191,7 @@ Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeHost(JNIEnv
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeChangeGame(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeChangeGame(JNIEnv* env,
+                                                                                 jobject obj,
+                                                                                 jobject jgame_file)
+ {
+@@ -206,7 +206,7 @@ Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeChangeGame(
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeDoAllPlayersHaveGame(
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeDoAllPlayersHaveGame(
+     JNIEnv* env, jobject obj)
+ {
+   if (auto* client = GetClientPointer(env, obj))
+@@ -215,7 +215,7 @@ Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeDoAllPlayer
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeStartGame(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeStartGame(JNIEnv* env,
+                                                                                jobject obj)
+ {
+   auto* server = GetServerPointer(env, obj);
+@@ -225,7 +225,7 @@ Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeStartGame(J
+   server->RequestStartGame();
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeGetPort(
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeGetPort(
+     JNIEnv* env, jobject obj)
+ {
+   if (auto* server = GetServerPointer(env, obj))
+@@ -234,7 +234,7 @@ JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySe
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeGetExternalIpAddress(
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeGetExternalIpAddress(
+     JNIEnv* env, jobject)
+ {
+   std::string ip = NetPlay::GetExternalIPAddress();
+@@ -244,7 +244,7 @@ Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeGetExternal
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeReconnectTraversal(JNIEnv*,
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeReconnectTraversal(JNIEnv*,
+                                                                                         jobject)
+ {
+   if (Common::g_TraversalClient)
+@@ -252,7 +252,7 @@ Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeReconnectTr
+ }
+ 
+ JNIEXPORT jintArray JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeGetPadMapping(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeGetPadMapping(JNIEnv* env,
+                                                                                    jobject obj)
+ {
+   auto* server = GetServerPointer(env, obj);
+@@ -263,7 +263,7 @@ Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeGetPadMappi
+ }
+ 
+ JNIEXPORT jintArray JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeGetWiimoteMapping(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeGetWiimoteMapping(JNIEnv* env,
+                                                                                        jobject obj)
+ {
+   auto* server = GetServerPointer(env, obj);
+@@ -274,7 +274,7 @@ Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeGetWiimoteM
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeSetPadMapping(
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeSetPadMapping(
+     JNIEnv* env, jobject obj, jintArray jmapping)
+ {
+   auto* server = GetServerPointer(env, obj);
+@@ -287,7 +287,7 @@ Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeSetPadMappi
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeSetWiimoteMapping(
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeSetWiimoteMapping(
+     JNIEnv* env, jobject obj, jintArray jmapping)
+ {
+   auto* server = GetServerPointer(env, obj);
+@@ -300,28 +300,28 @@ Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeSetWiimoteM
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeReleaseUICallbacks(
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeReleaseUICallbacks(
+     JNIEnv*, jobject, jlong pointer)
+ {
+   delete reinterpret_cast<NetPlay::NetPlayUICallbacks*>(pointer);
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeReleaseBootSessionData(
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeReleaseBootSessionData(
+     JNIEnv*, jobject, jlong pointer)
+ {
+   delete reinterpret_cast<BootSessionData*>(pointer);
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeReleaseClient(JNIEnv*, jobject,
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeReleaseClient(JNIEnv*, jobject,
+                                                                                    jlong pointer)
+ {
+   delete reinterpret_cast<NetPlay::NetPlayClient*>(pointer);
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_netplay_NetplaySession_nativeReleaseServer(JNIEnv*, jobject,
++Java_com_noryan_romcore_core_dolphin_jni_features_netplay_NetplaySession_nativeReleaseServer(JNIEnv*, jobject,
+                                                                                    jlong pointer)
+ {
+   delete reinterpret_cast<NetPlay::NetPlayServer*>(pointer);
+diff --git a/Source/Android/jni/RiivolutionPatches.cpp b/Source/Android/jni/RiivolutionPatches.cpp
+index 6d088fe..9d26968 100644
+--- a/Source/Android/jni/RiivolutionPatches.cpp
++++ b/Source/Android/jni/RiivolutionPatches.cpp
+@@ -29,28 +29,28 @@ static std::vector<DiscIO::Riivolution::Disc>& GetReference(JNIEnv* env, jobject
+ extern "C" {
+ 
+ JNIEXPORT jlong JNICALL
+-Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_initialize(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_riivolution_model_RiivolutionPatches_initialize(JNIEnv* env,
+                                                                                         jclass obj)
+ {
+   return reinterpret_cast<jlong>(new std::vector<DiscIO::Riivolution::Disc>);
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_finalize(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_riivolution_model_RiivolutionPatches_finalize(JNIEnv* env,
+                                                                                       jobject obj)
+ {
+   delete GetPointer(env, obj);
+ }
+ 
+ JNIEXPORT jint JNICALL
+-Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_getDiscCount(
++Java_com_noryan_romcore_core_dolphin_jni_features_riivolution_model_RiivolutionPatches_getDiscCount(
+     JNIEnv* env, jobject obj)
+ {
+   return GetReference(env, obj).size();
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_getDiscName(
++Java_com_noryan_romcore_core_dolphin_jni_features_riivolution_model_RiivolutionPatches_getDiscName(
+     JNIEnv* env, jobject obj, jint disc_index)
+ {
+   std::string filename, extension;
+@@ -59,28 +59,28 @@ Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_get
+ }
+ 
+ JNIEXPORT jint JNICALL
+-Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_getSectionCount(
++Java_com_noryan_romcore_core_dolphin_jni_features_riivolution_model_RiivolutionPatches_getSectionCount(
+     JNIEnv* env, jobject obj, jint disc_index)
+ {
+   return GetReference(env, obj)[disc_index].m_sections.size();
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_getSectionName(
++Java_com_noryan_romcore_core_dolphin_jni_features_riivolution_model_RiivolutionPatches_getSectionName(
+     JNIEnv* env, jobject obj, jint disc_index, jint section_index)
+ {
+   return ToJString(env, GetReference(env, obj)[disc_index].m_sections[section_index].m_name);
+ }
+ 
+ JNIEXPORT jint JNICALL
+-Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_getOptionCount(
++Java_com_noryan_romcore_core_dolphin_jni_features_riivolution_model_RiivolutionPatches_getOptionCount(
+     JNIEnv* env, jobject obj, jint disc_index, jint section_index)
+ {
+   return GetReference(env, obj)[disc_index].m_sections[section_index].m_options.size();
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_getOptionName(
++Java_com_noryan_romcore_core_dolphin_jni_features_riivolution_model_RiivolutionPatches_getOptionName(
+     JNIEnv* env, jobject obj, jint disc_index, jint section_index, jint option_index)
+ {
+   return ToJString(
+@@ -89,7 +89,7 @@ Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_get
+ }
+ 
+ JNIEXPORT jint JNICALL
+-Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_getChoiceCount(
++Java_com_noryan_romcore_core_dolphin_jni_features_riivolution_model_RiivolutionPatches_getChoiceCount(
+     JNIEnv* env, jobject obj, jint disc_index, jint section_index, jint option_index)
+ {
+   return GetReference(env, obj)[disc_index]
+@@ -99,7 +99,7 @@ Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_get
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_getChoiceName(
++Java_com_noryan_romcore_core_dolphin_jni_features_riivolution_model_RiivolutionPatches_getChoiceName(
+     JNIEnv* env, jobject obj, jint disc_index, jint section_index, jint option_index,
+     jint choice_index)
+ {
+@@ -111,7 +111,7 @@ Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_get
+ }
+ 
+ JNIEXPORT jint JNICALL
+-Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_getSelectedChoice(
++Java_com_noryan_romcore_core_dolphin_jni_features_riivolution_model_RiivolutionPatches_getSelectedChoice(
+     JNIEnv* env, jobject obj, jint disc_index, jint section_index, jint option_index)
+ {
+   return GetReference(env, obj)[disc_index]
+@@ -121,7 +121,7 @@ Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_get
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_setSelectedChoiceImpl(
++Java_com_noryan_romcore_core_dolphin_jni_features_riivolution_model_RiivolutionPatches_setSelectedChoiceImpl(
+     JNIEnv* env, jobject obj, jint disc_index, jint section_index, jint option_index,
+     jint choice_index)
+ {
+@@ -143,7 +143,7 @@ static std::optional<DiscIO::Riivolution::Config> LoadConfigXML(const std::strin
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_loadConfigImpl(
++Java_com_noryan_romcore_core_dolphin_jni_features_riivolution_model_RiivolutionPatches_loadConfigImpl(
+     JNIEnv* env, jobject obj, jstring j_game_id, jint revision, jint disc_number)
+ {
+   const std::string game_id = GetJString(env, j_game_id);
+@@ -165,7 +165,7 @@ Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_loa
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_riivolution_model_RiivolutionPatches_saveConfigImpl(
++Java_com_noryan_romcore_core_dolphin_jni_features_riivolution_model_RiivolutionPatches_saveConfigImpl(
+     JNIEnv* env, jobject obj, jstring j_game_id)
+ {
+   const std::string game_id = GetJString(env, j_game_id);
+diff --git a/Source/Android/jni/SkylanderConfig.cpp b/Source/Android/jni/SkylanderConfig.cpp
+index 51c621c..829dac5 100644
+--- a/Source/Android/jni/SkylanderConfig.cpp
++++ b/Source/Android/jni/SkylanderConfig.cpp
+@@ -13,14 +13,14 @@
+ extern "C" {
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_skylanders_SkylanderConfig_getSkylanderMap(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_skylanders_SkylanderConfig_getSkylanderMap(JNIEnv* env,
+                                                                                    jclass clazz)
+ {
+   jobject hash_map_obj = env->NewObject(IDCache::GetHashMapClass(), IDCache::GetHashMapInit(),
+                                         static_cast<u16>(IOS::HLE::USB::list_skylanders.size()));
+ 
+   jclass skylander_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/skylanders/model/SkylanderPair");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/skylanders/model/SkylanderPair");
+ 
+   jmethodID skylander_init = env->GetMethodID(skylander_class, "<init>", "(II)V");
+ 
+@@ -38,14 +38,14 @@ Java_org_dolphinemu_dolphinemu_features_skylanders_SkylanderConfig_getSkylanderM
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_skylanders_SkylanderConfig_getInverseSkylanderMap(
++Java_com_noryan_romcore_core_dolphin_jni_features_skylanders_SkylanderConfig_getInverseSkylanderMap(
+     JNIEnv* env, jclass clazz)
+ {
+   jobject hash_map_obj = env->NewObject(IDCache::GetHashMapClass(), IDCache::GetHashMapInit(),
+                                         static_cast<u16>(IOS::HLE::USB::list_skylanders.size()));
+ 
+   jclass skylander_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/skylanders/model/SkylanderPair");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/skylanders/model/SkylanderPair");
+ 
+   jmethodID skylander_init = env->GetMethodID(skylander_class, "<init>", "(II)V");
+ 
+@@ -63,7 +63,7 @@ Java_org_dolphinemu_dolphinemu_features_skylanders_SkylanderConfig_getInverseSky
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_skylanders_SkylanderConfig_removeSkylander(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_skylanders_SkylanderConfig_removeSkylander(JNIEnv* env,
+                                                                                    jclass clazz,
+                                                                                    jint slot)
+ {
+@@ -72,7 +72,7 @@ Java_org_dolphinemu_dolphinemu_features_skylanders_SkylanderConfig_removeSkyland
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_skylanders_SkylanderConfig_loadSkylander(JNIEnv* env,
++Java_com_noryan_romcore_core_dolphin_jni_features_skylanders_SkylanderConfig_loadSkylander(JNIEnv* env,
+                                                                                  jclass clazz,
+                                                                                  jint slot,
+                                                                                  jstring file_name)
+@@ -116,7 +116,7 @@ Java_org_dolphinemu_dolphinemu_features_skylanders_SkylanderConfig_loadSkylander
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_skylanders_SkylanderConfig_createSkylander(
++Java_com_noryan_romcore_core_dolphin_jni_features_skylanders_SkylanderConfig_createSkylander(
+     JNIEnv* env, jclass clazz, jint id, jint var, jstring fileName, jint slot)
+ {
+   u16 sky_id = static_cast<u16>(id);
+diff --git a/Source/Android/jni/WiiUtils.cpp b/Source/Android/jni/WiiUtils.cpp
+index 995f0d0..679a7ed 100644
+--- a/Source/Android/jni/WiiUtils.cpp
++++ b/Source/Android/jni/WiiUtils.cpp
+@@ -74,7 +74,7 @@ static jint ConvertUpdateResult(WiiUtils::UpdateResult result)
+ 
+ extern "C" {
+ 
+-JNIEXPORT jboolean JNICALL Java_org_dolphinemu_dolphinemu_utils_WiiUtils_installWAD(JNIEnv* env,
++JNIEXPORT jboolean JNICALL Java_com_noryan_romcore_core_dolphin_jni_utils_WiiUtils_installWAD(JNIEnv* env,
+                                                                                     jclass,
+                                                                                     jstring jFile)
+ {
+@@ -82,7 +82,7 @@ JNIEXPORT jboolean JNICALL Java_org_dolphinemu_dolphinemu_utils_WiiUtils_install
+   return static_cast<jboolean>(WiiUtils::InstallWAD(path));
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_utils_WiiUtils_importWiiSave(
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_utils_WiiUtils_importWiiSave(
+     JNIEnv* env, jclass, jstring jFile, jobject jCanOverwrite)
+ {
+   const std::string path = GetJString(env, jFile);
+@@ -94,7 +94,7 @@ JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_utils_WiiUtils_importWiiSa
+   return ConvertCopyResult(WiiSave::Import(path, can_overwrite));
+ }
+ 
+-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_utils_WiiUtils_importNANDBin(JNIEnv* env,
++JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_utils_WiiUtils_importNANDBin(JNIEnv* env,
+                                                                                    jclass,
+                                                                                    jstring jFile)
+ {
+@@ -116,7 +116,7 @@ JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_utils_WiiUtils_importNANDB
+       });
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_utils_WiiUtils_doOnlineUpdate(
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_utils_WiiUtils_doOnlineUpdate(
+     JNIEnv* env, jclass, jstring jRegion, jobject jCallback)
+ {
+   const std::string region = GetJString(env, jRegion);
+@@ -135,7 +135,7 @@ JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_utils_WiiUtils_doOnlineUpd
+   return ConvertUpdateResult(result);
+ }
+ 
+-JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_utils_WiiUtils_doDiscUpdate(JNIEnv* env,
++JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_utils_WiiUtils_doDiscUpdate(JNIEnv* env,
+                                                                                   jclass,
+                                                                                   jstring jPath,
+                                                                                   jobject jCallback)
+@@ -157,7 +157,7 @@ JNIEXPORT jint JNICALL Java_org_dolphinemu_dolphinemu_utils_WiiUtils_doDiscUpdat
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_WiiUtils_isSystemMenuInstalled(JNIEnv* env, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_utils_WiiUtils_isSystemMenuInstalled(JNIEnv* env, jclass)
+ {
+   IOS::HLE::Kernel ios;
+   const auto tmd = ios.GetESCore().FindInstalledTMD(Titles::SYSTEM_MENU);
+@@ -166,7 +166,7 @@ Java_org_dolphinemu_dolphinemu_utils_WiiUtils_isSystemMenuInstalled(JNIEnv* env,
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_WiiUtils_isSystemMenuvWii(JNIEnv* env, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_utils_WiiUtils_isSystemMenuvWii(JNIEnv* env, jclass)
+ {
+   IOS::HLE::Kernel ios;
+   const auto tmd = ios.GetESCore().FindInstalledTMD(Titles::SYSTEM_MENU);
+@@ -175,7 +175,7 @@ Java_org_dolphinemu_dolphinemu_utils_WiiUtils_isSystemMenuvWii(JNIEnv* env, jcla
+ }
+ 
+ JNIEXPORT jstring JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_WiiUtils_getSystemMenuVersion(JNIEnv* env, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_utils_WiiUtils_getSystemMenuVersion(JNIEnv* env, jclass)
+ {
+   IOS::HLE::Kernel ios;
+   const auto tmd = ios.GetESCore().FindInstalledTMD(Titles::SYSTEM_MENU);
+@@ -189,13 +189,13 @@ Java_org_dolphinemu_dolphinemu_utils_WiiUtils_getSystemMenuVersion(JNIEnv* env,
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_WiiUtils_syncSdFolderToSdImage(JNIEnv* env, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_utils_WiiUtils_syncSdFolderToSdImage(JNIEnv* env, jclass)
+ {
+   return static_cast<jboolean>(Common::SyncSDFolderToSDImage([]() { return false; }, false));
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_WiiUtils_syncSdImageToSdFolder(JNIEnv* env, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_utils_WiiUtils_syncSdImageToSdFolder(JNIEnv* env, jclass)
+ {
+   return static_cast<jboolean>(Common::SyncSDImageToSDFolder([]() { return false; }));
+ }
+diff --git a/Source/Core/Core/HW/WiimoteReal/IOAndroid.cpp b/Source/Core/Core/HW/WiimoteReal/IOAndroid.cpp
+index 5e201d6..6199b85 100644
+--- a/Source/Core/Core/HW/WiimoteReal/IOAndroid.cpp
++++ b/Source/Core/Core/HW/WiimoteReal/IOAndroid.cpp
+@@ -155,7 +155,7 @@ int WiimoteAndroid::IOWrite(u8 const* buf, size_t len)
+ void InitAdapterClass()
+ {
+   JNIEnv* env = IDCache::GetEnvForThread();
+-  jclass adapter_class = env->FindClass("org/dolphinemu/dolphinemu/utils/WiimoteAdapter");
++  jclass adapter_class = env->FindClass("com/noryan/romcore/core/dolphin/jni/utils/WiimoteAdapter");
+   s_adapter_class = reinterpret_cast<jclass>(env->NewGlobalRef(adapter_class));
+   env->DeleteLocalRef(adapter_class);
+ }
+diff --git a/Source/Core/InputCommon/ControllerInterface/Android/Android.cpp b/Source/Core/InputCommon/ControllerInterface/Android/Android.cpp
+index 1aa5275..9252337 100644
+--- a/Source/Core/InputCommon/ControllerInterface/Android/Android.cpp
++++ b/Source/Core/InputCommon/ControllerInterface/Android/Android.cpp
+@@ -882,7 +882,7 @@ InputBackend::InputBackend(ControllerInterface* controller_interface)
+   env->DeleteLocalRef(motion_event_class);
+ 
+   const jclass controller_interface_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/input/model/ControllerInterface");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/input/model/ControllerInterface");
+   s_controller_interface_class =
+       reinterpret_cast<jclass>(env->NewGlobalRef(controller_interface_class));
+   s_controller_interface_register_input_device_listener =
+@@ -891,11 +891,11 @@ InputBackend::InputBackend(ControllerInterface* controller_interface)
+       env->GetStaticMethodID(s_controller_interface_class, "unregisterInputDeviceListener", "()V");
+   s_controller_interface_get_vibrator_manager =
+       env->GetStaticMethodID(s_controller_interface_class, "getVibratorManager",
+-                             "(Landroid/view/InputDevice;)Lorg/dolphinemu/dolphinemu/features/"
++                             "(Landroid/view/InputDevice;)Lcom/noryan/romcore/core/dolphin/jni/features/"
+                              "input/model/DolphinVibratorManager;");
+   s_controller_interface_get_system_vibrator_manager = env->GetStaticMethodID(
+       s_controller_interface_class, "getSystemVibratorManager",
+-      "()Lorg/dolphinemu/dolphinemu/features/input/model/DolphinVibratorManager;");
++      "()Lcom/noryan/romcore/core/dolphin/jni/features/input/model/DolphinVibratorManager;");
+   s_controller_interface_vibrate =
+       env->GetStaticMethodID(s_controller_interface_class, "vibrate", "(Landroid/os/Vibrator;)V");
+   s_controller_interface_cancel_vibration = env->GetStaticMethodID(
+@@ -903,7 +903,7 @@ InputBackend::InputBackend(ControllerInterface* controller_interface)
+   env->DeleteLocalRef(controller_interface_class);
+ 
+   const jclass sensor_event_listener_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/input/model/DolphinSensorEventListener");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/input/model/DolphinSensorEventListener");
+   s_sensor_event_listener_class =
+       reinterpret_cast<jclass>(env->NewGlobalRef(sensor_event_listener_class));
+   s_sensor_event_listener_constructor =
+@@ -921,7 +921,7 @@ InputBackend::InputBackend(ControllerInterface* controller_interface)
+   env->DeleteLocalRef(sensor_event_listener_class);
+ 
+   const jclass dolphin_vibrator_manager_class =
+-      env->FindClass("org/dolphinemu/dolphinemu/features/input/model/DolphinVibratorManager");
++      env->FindClass("com/noryan/romcore/core/dolphin/jni/features/input/model/DolphinVibratorManager");
+   s_dolphin_vibrator_manager_class =
+       reinterpret_cast<jclass>(env->NewGlobalRef(dolphin_vibrator_manager_class));
+   s_dolphin_vibrator_manager_get_vibrator =
+@@ -1051,7 +1051,7 @@ void InputBackend::PopulateDevices()
+ extern "C" {
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_ControllerInterface_dispatchKeyEventNative(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_ControllerInterface_dispatchKeyEventNative(
+     JNIEnv* env, jclass, jobject key_event)
+ {
+   const jint action = env->CallIntMethod(key_event, s_key_event_get_action);
+@@ -1095,7 +1095,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_ControllerInterface_dispatch
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_ControllerInterface_dispatchGenericMotionEventNative(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_ControllerInterface_dispatchGenericMotionEventNative(
+     JNIEnv* env, jclass, jobject motion_event)
+ {
+   const jint device_id = env->CallIntMethod(motion_event, s_input_event_get_device_id);
+@@ -1139,7 +1139,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_ControllerInterface_dispatch
+ }
+ 
+ JNIEXPORT jboolean JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_ControllerInterface_dispatchSensorEventNative(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_ControllerInterface_dispatchSensorEventNative(
+     JNIEnv* env, jclass, jstring j_device_qualifier, jstring j_axis_name, jfloat value)
+ {
+   ciface::Core::DeviceQualifier device_qualifier;
+@@ -1168,7 +1168,7 @@ Java_org_dolphinemu_dolphinemu_features_input_model_ControllerInterface_dispatch
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_ControllerInterface_notifySensorSuspendedState(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_ControllerInterface_notifySensorSuspendedState(
+     JNIEnv* env, jclass, jstring j_device_qualifier, jobjectArray j_axis_names, jboolean suspended)
+ {
+   ciface::Core::DeviceQualifier device_qualifier;
+@@ -1191,21 +1191,21 @@ Java_org_dolphinemu_dolphinemu_features_input_model_ControllerInterface_notifySe
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_ControllerInterface_00024InputDeviceListener_onInputDeviceAdded(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_ControllerInterface_00024InputDeviceListener_onInputDeviceAdded(
+     JNIEnv* env, jobject, jint device_id)
+ {
+   ciface::Android::InputBackend::AddDevice(env, device_id);
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_ControllerInterface_00024InputDeviceListener_onInputDeviceRemoved(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_ControllerInterface_00024InputDeviceListener_onInputDeviceRemoved(
+     JNIEnv*, jobject, jint device_id)
+ {
+   ciface::Android::InputBackend::RemoveDevice(device_id);
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_ControllerInterface_00024InputDeviceListener_onInputDeviceChanged(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_ControllerInterface_00024InputDeviceListener_onInputDeviceChanged(
+     JNIEnv* env, jobject, jint device_id)
+ {
+   // AddDevice will automatically remove the existing device
+@@ -1213,14 +1213,14 @@ Java_org_dolphinemu_dolphinemu_features_input_model_ControllerInterface_00024Inp
+ }
+ 
+ JNIEXPORT jobjectArray JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_ControllerInterface_getAllDeviceStrings(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_ControllerInterface_getAllDeviceStrings(
+     JNIEnv* env, jclass)
+ {
+   return SpanToJStringArray(env, g_controller_interface.GetAllDeviceStrings());
+ }
+ 
+ JNIEXPORT jobject JNICALL
+-Java_org_dolphinemu_dolphinemu_features_input_model_ControllerInterface_getDevice(
++Java_com_noryan_romcore_core_dolphin_jni_features_input_model_ControllerInterface_getDevice(
+     JNIEnv* env, jclass, jstring j_device_string)
+ {
+   ciface::Core::DeviceQualifier qualifier;
+diff --git a/Source/Core/InputCommon/GCAdapter.cpp b/Source/Core/InputCommon/GCAdapter.cpp
+index dbffc4d..6d94e5c 100644
+--- a/Source/Core/InputCommon/GCAdapter.cpp
++++ b/Source/Core/InputCommon/GCAdapter.cpp
+@@ -384,7 +384,7 @@ static int HotplugCallback(libusb_context* ctx, libusb_device* dev, libusb_hotpl
+ extern "C" {
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_GCAdapter_onAdapterConnected(JNIEnv* env, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_utils_GCAdapter_onAdapterConnected(JNIEnv* env, jclass)
+ {
+   INFO_LOG_FMT(CONTROLLERINTERFACE, "GC adapter connected");
+   if (!s_detected)
+@@ -392,7 +392,7 @@ Java_org_dolphinemu_dolphinemu_utils_GCAdapter_onAdapterConnected(JNIEnv* env, j
+ }
+ 
+ JNIEXPORT void JNICALL
+-Java_org_dolphinemu_dolphinemu_utils_GCAdapter_onAdapterDisconnected(JNIEnv* env, jclass)
++Java_com_noryan_romcore_core_dolphin_jni_utils_GCAdapter_onAdapterDisconnected(JNIEnv* env, jclass)
+ {
+   INFO_LOG_FMT(CONTROLLERINTERFACE, "GC adapter disconnected");
+   if (s_detected)
+@@ -564,7 +564,7 @@ void Init()
+ #elif GCADAPTER_USE_ANDROID_IMPLEMENTATION
+   JNIEnv* const env = IDCache::GetEnvForThread();
+ 
+-  const jclass adapter_class = env->FindClass("org/dolphinemu/dolphinemu/utils/GCAdapter");
++  const jclass adapter_class = env->FindClass("com/noryan/romcore/core/dolphin/jni/utils/GCAdapter");
+   s_adapter_class = reinterpret_cast<jclass>(env->NewGlobalRef(adapter_class));
+ #endif
+ 
+-- 
+2.54.0 (Apple Git-157)
+

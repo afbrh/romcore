@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature android:glEsVersion="0x00030000" />
+    <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application>
+        <!--
+          Only RomCore's own game Activity is declared; none of Dolphin's stock Activities/Services/Providers are
+          (they were not imported). Own android:process so Dolphin's libdolphin_main.so, its EGL/Vulkan
+          contexts and global native state never share a process with the shell or any other core.
+        -->
+        <activity
+            android:name="com.noryan.romcore.core.dolphin.DolphinActivity"
+            android:exported="false"
+            android:process=":dolphin"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|navigation|uiMode|smallestScreenSize|density"
+            android:screenOrientation="userLandscape"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.noryan.romcore.dolphin"
+            android:preferMinimalPostProcessing="true"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
+    </application>
+</manifest>
