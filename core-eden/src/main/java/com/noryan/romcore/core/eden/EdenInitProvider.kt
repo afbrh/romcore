@@ -1,0 +1,72 @@
+package com.noryan.romcore.core.eden
+
+import android.app.Activity
+import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.ContentProvider
+import android.content.ContentValues
+import android.database.Cursor
+import android.net.Uri
+import android.os.Bundle
+import android.util.Log
+import org.yuzu.yuzu_emu.R
+import org.yuzu.yuzu_emu.YuzuApplication
+import org.yuzu.yuzu_emu.activities.EmulationActivity
+import org.yuzu.yuzu_emu.features.settings.model.BooleanSetting
+import org.yuzu.yuzu_emu.utils.NativeConfig
+
+/**
+ * Declared with android:process=":eden" so it only runs in the Eden game process, before Application.onCreate.
+ * Eden's own YuzuApplication is never instantiated (RomCore has its own Application), so we call the embedding
+ * entry point that eden-src provides (YuzuApplication.initializeForEmbedding), then hide Eden's touch overlay
+ * (the game surface is the only UI; the shared RomCore menu replaces Eden's drawer) and hook EmulationActivity.
+ */
+class EdenInitProvider : ContentProvider() {
+    override fun onCreate(): Boolean {
+        val app = context?.applicationContext as? Application ?: return false
+        createNotificationChannels(app)
+        try {
+            YuzuApplication.initializeForEmbedding(app)
+            BooleanSetting.SHOW_INPUT_OVERLAY.setBoolean(false)
+            NativeConfig.saveGlobalConfig()
+        } catch (t: Throwable) {
+            Log.e(TAG, "Eden embedding init failed", t)
+        }
+        app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityPostCreated(activity: Activity, savedInstanceState: Bundle?) {
+                if (activity is EmulationActivity) EdenHost.attach(activity)
+            }
+            override fun onActivityDestroyed(activity: Activity) {
+                if (activity is EmulationActivity) EdenHost.detach(activity)
+            }
+            override fun onActivityCreated(a: Activity, s: Bundle?) {}
+            override fun onActivityStarted(a: Activity) {}
+            override fun onActivityResumed(a: Activity) {}
+            override fun onActivityPaused(a: Activity) { if (a is EmulationActivity) EdenHost.onPause() }
+            override fun onActivityStopped(a: Activity) {}
+            override fun onActivitySaveInstanceState(a: Activity, o: Bundle) {}
+        })
+        return true
+    }
+
+    /** YuzuApplication.createNotificationChannels() is private and only runs from its own onCreate; Eden's
+     *  ForegroundService crashes the process ("Bad notification for startForeground") without the channel. */
+    private fun createNotificationChannels(app: Application) {
+        val nm = app.getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(NotificationChannel(
+            app.getString(R.string.app_notification_channel_id), app.getString(R.string.app_notification_channel_name),
+            NotificationManager.IMPORTANCE_DEFAULT).apply { setSound(null, null); vibrationPattern = null })
+        nm.createNotificationChannel(NotificationChannel(
+            app.getString(R.string.notice_notification_channel_id), app.getString(R.string.notice_notification_channel_name),
+            NotificationManager.IMPORTANCE_HIGH).apply { setSound(null, null) })
+    }
+
+    override fun query(u: Uri, p: Array<String>?, s: String?, a: Array<String>?, o: String?): Cursor? = null
+    override fun getType(uri: Uri): String? = null
+    override fun insert(uri: Uri, values: ContentValues?): Uri? = null
+    override fun delete(uri: Uri, s: String?, a: Array<String>?): Int = 0
+    override fun update(uri: Uri, v: ContentValues?, s: String?, a: Array<String>?): Int = 0
+
+    private companion object { const val TAG = "RomCoreEden" }
+}

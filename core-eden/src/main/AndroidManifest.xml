@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <application>
+
+        <!-- The whole Eden runtime lives in its own process so libyuzu-android.so, Vulkan and its GL/EGL state never
+             share an address space with other RomCore cores. -->
+        <activity
+            android:name="org.yuzu.yuzu_emu.activities.EmulationActivity"
+            android:process=":eden"
+            android:taskAffinity="com.noryan.romcore.eden"
+            android:enableOnBackInvokedCallback="true"
+            android:exported="false"
+            tools:node="merge"
+            tools:replace="android:exported">
+            <!-- RomCore launches this explicitly; drop the public VIEW/NFC filters of the stock app. -->
+            <intent-filter tools:node="removeAll" />
+        </activity>
+
+        <service
+            android:name="org.yuzu.yuzu_emu.utils.ForegroundService"
+            android:process=":eden"
+            tools:node="merge" />
+
+        <!-- Runs in :eden before Application.onCreate: initialises Eden (the stock YuzuApplication never runs because
+             the RomCore app has its own Application) and installs the RomCore input/menu hooks. -->
+        <provider
+            android:name="com.noryan.romcore.core.eden.EdenInitProvider"
+            android:authorities="${applicationId}.romcore.eden.init"
+            android:process=":eden"
+            android:exported="false"
+            android:initOrder="100" />
+    </application>
+</manifest>
