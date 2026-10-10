@@ -1,0 +1,13 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Standalone engine in its own process: native symbols / GL context / Dolphin globals never touch the
+         other Dolphin-derived core or the shell. Shown over the game only: no Dolphin/PrimeHack menus. -->
+    <application>
+        <activity
+            android:name="com.noryan.romcore.core.primehack.PrimeHackActivity"
+            android:process=":primehack"
+            android:exported="false"
+            android:theme="@style/PHTheme.Dolphin.Main"
+            android:preferMinimalPostProcessing="true"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density" />
+    </application>
+</manifest>

@@ -1,0 +1,444 @@
+From 7153ba804fbe5267e510ea5d936da4cd511dc25b Mon Sep 17 00:00:00 2001
+From: Ry <noryanfound@gmail.com>
+Date: Sat, 10 Oct 2026 12:42:44 -0500
+Subject: [PATCH 1/2] RomCore: virtual RomCore Pad ciface device, minimal
+ library manifest, open EmulationActivity, finish-only shutdown
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ Source/Android/app/build.gradle.kts           |   4 +-
+ .../Android/app/src/main/AndroidManifest.xml  | 171 ++----------------
+ .../core/primehack/jni/NativeLibrary.kt       |  21 +--
+ .../jni/activities/EmulationActivity.kt       |   8 +-
+ .../jni/features/input/model/RomCoreInput.kt  |  28 +++
+ .../ControllerInterface/Android/Android.cpp   |  89 +++++++++
+ 6 files changed, 139 insertions(+), 182 deletions(-)
+ create mode 100644 Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/features/input/model/RomCoreInput.kt
+
+diff --git a/Source/Android/app/build.gradle.kts b/Source/Android/app/build.gradle.kts
+index 4db8f7fad1..f99f5109ec 100644
+--- a/Source/Android/app/build.gradle.kts
++++ b/Source/Android/app/build.gradle.kts
+@@ -13,13 +13,13 @@ plugins {
+ 
+ // RomRunner integration: coordinates so this module can be consumed as a composite-build
+ // dependency substitution from RomRunner's app/build.gradle.kts, mirroring azahar-src/armsx2-src.
+-group = "org.dolphinemu"
++group = "romcore.primehack"
+ version = "embedded"
+ 
+ @Suppress("UnstableApiUsage")
+ android {
+     compileSdkVersion = "android-36"
+-    ndkVersion = "29.0.14206865"
++    ndkVersion = "27.3.13750724"
+ 
+     buildFeatures {
+         viewBinding = true
+diff --git a/Source/Android/app/src/main/AndroidManifest.xml b/Source/Android/app/src/main/AndroidManifest.xml
+index d756f09866..9a9fe8a39e 100644
+--- a/Source/Android/app/src/main/AndroidManifest.xml
++++ b/Source/Android/app/src/main/AndroidManifest.xml
+@@ -1,170 +1,23 @@
+ <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+     xmlns:tools="http://schemas.android.com/tools">
+ 
+-    <uses-feature
+-        android:name="android.hardware.touchscreen"
+-        android:required="false"/>
+-    <uses-feature
+-        android:name="android.hardware.sensor.accelerometer"
+-        android:required="false"/>
+-    <uses-feature
+-        android:name="android.hardware.sensor.gyroscope"
+-        android:required="false"/>
+-    <uses-feature
+-        android:name="android.hardware.gamepad"
+-        android:required="false"/>
+-    <uses-feature
+-        android:name="android.hardware.microphone"
+-        android:required="false"/>
+-    <uses-feature
+-        android:name="android.software.leanback"
+-        android:required="false"/>
+-
++    <!-- RomCore: this library manifest is deliberately minimal. The game Activity
++         (com.noryan.romcore.core.primehack.PrimeHackActivity, android:process=":primehack") is declared by the
++         :core-primehack module. None of Dolphin's launcher/settings/provider components ship: providers use
++         fixed authorities and would collide with the other Dolphin-derived core in the same APK. -->
++
++    <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
++    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false"/>
++    <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false"/>
++    <uses-feature android:name="android.hardware.gamepad" android:required="false"/>
++    <uses-feature android:name="android.hardware.microphone" android:required="false"/>
++    <uses-feature android:name="android.software.leanback" android:required="false"/>
+     <uses-feature android:glEsVersion="0x00030000"/>
+ 
+     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+     <uses-permission android:name="android.permission.INTERNET"/>
+-    <uses-permission android:name="com.android.providers.tv.permission.READ_EPG_DATA"/>
+-    <uses-permission android:name="com.android.providers.tv.permission.WRITE_EPG_DATA"/>
+     <uses-permission android:name="android.permission.VIBRATE"/>
+-    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+-
+-    <application
+-        android:name=".DolphinApplication"
+-        android:label="@string/app_name_suffixed"
+-        android:icon="@mipmap/ic_launcher"
+-        android:requestLegacyExternalStorage="true"
+-        android:preserveLegacyExternalStorage="true"
+-        android:enableOnBackInvokedCallback="false"
+-        android:allowBackup="true"
+-        android:fullBackupContent="@xml/backup_rules_ph"
+-        android:dataExtractionRules="@xml/backup_rules_api_31_ph"
+-        android:supportsRtl="true"
+-        android:isGame="true"
+-        android:banner="@drawable/banner_tv_ph"
+-        android:hasFragileUserData="true">
+-        <meta-data
+-            android:name="android.max_aspect"
+-            android:value="2.1"/>
+-        <profileable
+-            android:shell="true"
+-            tools:targetApi="29" />
+-
+-        <!-- RomRunner integration: LAUNCHER/LEANBACK_LAUNCHER intent-filters removed on both —
+-             PrimeHack is no longer its own launchable app; RomRunner's MainActivity is the only
+-             home-screen entry point. RomRunner launches EmulationActivity directly by explicit
+-             component (see PrimeHackEmbeddedLauncher.kt), so these activities staying around
+-             (just not launcher-visible) is fine — mirrors ARMSX2's/Azahar's own manifests. -->
+-        <activity
+-            android:name=".ui.main.MainActivity"
+-            android:exported="true"
+-            android:theme="@style/PHTheme.Dolphin.Splash.Main">
+-        </activity>
+-
+-        <activity
+-            android:name=".ui.main.TvMainActivity"
+-            android:exported="true"
+-            android:theme="@style/PHTheme.Dolphin.Splash.TV">
+-        </activity>
+-
+-        <activity
+-            android:name=".features.settings.ui.SettingsActivity"
+-            android:exported="false"
+-            android:configChanges="orientation|screenSize"
+-            android:theme="@style/PHTheme.Dolphin.Main"
+-            android:label="@string/settings"/>
+-
+-        <activity
+-            android:name=".features.cheats.ui.CheatsActivity"
+-            android:exported="false"
+-            android:theme="@style/PHTheme.Dolphin.Main"
+-            android:label="@string/cheats"/>
+-
+-        <activity
+-            android:name=".activities.EmulationActivity"
+-            android:exported="false"
+-            android:theme="@style/PHTheme.Dolphin.Main"
+-            android:preferMinimalPostProcessing="true"
+-            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density"/>
+-
+-        <activity
+-            android:name=".activities.CustomFilePickerActivity"
+-            android:exported="false"
+-            android:label="@string/app_name_suffixed"
+-            android:theme="@style/PHTheme.Dolphin.FilePicker">
+-
+-            <intent-filter>
+-                <action android:name="android.intent.action.GET_CONTENT"/>
+-                <category android:name="android.intent.category.DEFAULT"/>
+-            </intent-filter>
+-        </activity>
+-
+-        <activity
+-            android:name=".activities.AppLinkActivity"
+-            android:exported="true">
+-
+-            <intent-filter>
+-                <action android:name="android.intent.action.VIEW"/>
+-                <category android:name="android.intent.category.DEFAULT"/>
+-                <data
+-                    android:host="@string/host"
+-                    android:scheme="@string/scheme"/>
+-            </intent-filter>
+-        </activity>
+-
+-        <activity
+-            android:name=".activities.ConvertActivity"
+-            android:exported="false"
+-            android:theme="@style/PHTheme.Dolphin.Main" />
+-
+-        <activity
+-            android:name=".activities.UserDataActivity"
+-            android:exported="false"
+-            android:label="@string/user_data_submenu"
+-            android:theme="@style/PHTheme.Dolphin.Main" />
+-
+-        <activity
+-            android:name=".features.riivolution.ui.RiivolutionBootActivity"
+-            android:exported="false"
+-            android:theme="@style/PHTheme.Dolphin.Main" />
+-
+-        <service
+-            android:name=".services.SyncChannelJobService"
+-            android:exported="false"
+-            android:permission="android.permission.BIND_JOB_SERVICE"/>
+-
+-        <service
+-            android:name=".services.SyncProgramsJobService"
+-            android:exported="false"
+-            android:permission="android.permission.BIND_JOB_SERVICE"/>
+-
+-        <!-- RomRunner integration: DolphinFileProvider (a bare subclass), not the generic
+-             androidx.core.content.FileProvider directly — avoids a manifest-merge collision with
+-             another embedded emulator's own generic FileProvider declaration. -->
+-        <provider
+-            android:name=".utils.DolphinFileProvider"
+-            android:authorities="${applicationId}.filesprovider"
+-            android:exported="false"
+-            android:grantUriPermissions="true">
+-            <meta-data
+-                android:name="android.support.FILE_PROVIDER_PATHS"
+-                android:resource="@xml/nnf_provider_paths"/>
+-        </provider>
+-
+-        <provider
+-            android:name=".features.DocumentProvider"
+-            android:authorities="${applicationId}.user"
+-            android:grantUriPermissions="true"
+-            android:exported="true"
+-            android:permission="android.permission.MANAGE_DOCUMENTS"
+-            android:enabled="@bool/enableDocumentProvider">
+-            <intent-filter>
+-                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+-            </intent-filter>
+-        </provider>
+ 
+-    </application>
++    <application />
+ 
+ </manifest>
+diff --git a/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/NativeLibrary.kt b/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/NativeLibrary.kt
+index 261662c950..c774ac898e 100644
+--- a/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/NativeLibrary.kt
++++ b/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/NativeLibrary.kt
+@@ -552,24 +552,9 @@ object NativeLibrary {
+             Log.warning("[NativeLibrary] EmulationActivity is null.")
+         } else {
+             Log.verbose("[NativeLibrary] Finishing EmulationActivity.")
+-            emulationActivity.runOnUiThread {
+-                // RomRunner integration: this used to just finish() back to whatever activity sat
+-                // beneath this one in the task. RomRunner embeds this core in-process alongside
+-                // ARMSX2's and Azahar's, and by the time a full emulation session has torn down,
+-                // enough native/global state has been touched that resuming RomRunner's own UI in
+-                // the SAME process isn't reliable — see the identical fix on the ARMSX2
+-                // (MainActivityRuntime.restartApp) and Azahar (EmulationActivity.onShutdown) sides.
+-                // Restarting the whole process instead is simpler than chasing down exactly what
+-                // state needs resetting, and gives a consistent "quit always returns to a clean
+-                // library" experience regardless of which embedded core you were just in.
+-                val restartIntent =
+-                    emulationActivity.packageManager.getLaunchIntentForPackage(emulationActivity.packageName)
+-                if (restartIntent != null) {
+-                    restartIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+-                    emulationActivity.startActivity(restartIntent)
+-                }
+-                Runtime.getRuntime().exit(0)
+-            }
++            // RomCore: the engine runs in its own android:process, so just close the Activity and let
++            // PrimeHackActivity.onDestroy() end the process (fresh native state for the next game).
++            emulationActivity.runOnUiThread(emulationActivity::finish)
+         }
+     }
+ 
+diff --git a/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/activities/EmulationActivity.kt b/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/activities/EmulationActivity.kt
+index d9296b2ca9..fb958e5952 100644
+--- a/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/activities/EmulationActivity.kt
++++ b/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/activities/EmulationActivity.kt
+@@ -70,7 +70,7 @@ import com.noryan.romcore.core.primehack.jni.utils.RateLimiter
+ import com.noryan.romcore.core.primehack.jni.utils.ThemeHelper
+ import kotlin.math.roundToInt
+ 
+-class EmulationActivity : AppCompatActivity(), ThemeProvider {
++open class EmulationActivity : AppCompatActivity(), ThemeProvider {
+     private var emulationFragment: EmulationFragment? = null
+ 
+     private lateinit var settings: Settings
+@@ -202,7 +202,8 @@ class EmulationActivity : AppCompatActivity(), ThemeProvider {
+             launchSystemMenu = intent.getBooleanExtra(EXTRA_SYSTEM_MENU, false)
+             hasUserPausedEmulation =
+                 intent.getBooleanExtra(EXTRA_USER_PAUSED_EMULATION, false)
+-            menuToastShown = false
++            // RomCore: never show Dolphin's "press back for menu" toast.
++            menuToastShown = true
+             isActivityRecreated = false
+         } else {
+             isActivityRecreated = true
+@@ -437,7 +438,8 @@ class EmulationActivity : AppCompatActivity(), ThemeProvider {
+         )
+     }
+ 
+-    private fun toggleMenu() {
++    // RomCore: open so PrimeHackActivity can swap Dolphin's pop-out menu for the shared RomCore menu.
++    protected open fun toggleMenu() {
+         if (closeMenu()) {
+             // RomRunner integration: restore the input overlay's own focusability, undoing the
+             // disable below now that the menu no longer needs focus.
+diff --git a/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/features/input/model/RomCoreInput.kt b/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/features/input/model/RomCoreInput.kt
+new file mode 100644
+index 0000000000..15536edd01
+--- /dev/null
++++ b/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/features/input/model/RomCoreInput.kt
+@@ -0,0 +1,28 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++package com.noryan.romcore.core.primehack.jni.features.input.model
++
++import androidx.annotation.Keep
++
++/**
++ * RomCore integration: sets one input of the virtual ciface device "RomCore/0/RomCore Pad"
++ * (see ROMCORE_INPUT_NAMES in ControllerInterface/Android/Android.cpp for the index table).
++ */
++@Keep
++object RomCoreInput {
++    const val A = 0; const val B = 1; const val X = 2; const val Y = 3
++    const val L1 = 4; const val R1 = 5; const val L2 = 6; const val R2 = 7
++    const val L3 = 8; const val R3 = 9; const val START = 10; const val SELECT = 11
++    const val UP = 12; const val DOWN = 13; const val LEFT = 14; const val RIGHT = 15; const val HOME = 16
++    const val LS_UP = 17; const val LS_DOWN = 18; const val LS_LEFT = 19; const val LS_RIGHT = 20
++    const val RS_UP = 21; const val RS_DOWN = 22; const val RS_LEFT = 23; const val RS_RIGHT = 24
++    const val L_TRIGGER = 25; const val R_TRIGGER = 26
++    const val GYRO_UP = 27; const val GYRO_DOWN = 28; const val GYRO_LEFT = 29; const val GYRO_RIGHT = 30
++    const val COUNT = 31
++
++    @JvmStatic
++    external fun nativeSet(index: Int, value: Double)
++
++    @JvmStatic
++    fun set(index: Int, value: Double) = nativeSet(index, value)
++}
+diff --git a/Source/Core/InputCommon/ControllerInterface/Android/Android.cpp b/Source/Core/InputCommon/ControllerInterface/Android/Android.cpp
+index 4b13119104..000d736197 100644
+--- a/Source/Core/InputCommon/ControllerInterface/Android/Android.cpp
++++ b/Source/Core/InputCommon/ControllerInterface/Android/Android.cpp
+@@ -7,6 +7,7 @@
+ #include <atomic>
+ #include <chrono>
+ #include <memory>
++#include <mutex>
+ #include <string>
+ #include <unordered_map>
+ #include <utility>
+@@ -1020,6 +1021,77 @@ void InputBackend::RemoveDevice(jint device_id)
+   s_device_id_to_device_qualifier.erase(device_id);
+ }
+ 
++
++// ---------------------------------------------------------------------------------------------
++// RomCore integration: virtual "RomCore Pad" device.
++//
++// RomCore's shared input layer (InputRouter) translates the physical controller into canonical
++// Nintendo-labelled buttons/axes and hands them to the core through CoreSession.injectButton/
++// injectAxis. PrimeHack's camera/beam/visor groups can only be driven through ciface expressions
++// (the InputOverrider only covers stock GC/Wii controls), so canonical input is exposed to ciface
++// as this fixed device: the generated GCPadNew.ini / WiimoteNew.ini simply bind to it and stay
++// identical on every handheld. Source "RomCore", id 0 => qualifier `RomCore/0/RomCore Pad`.
++// ---------------------------------------------------------------------------------------------
++constexpr const char* ROMCORE_INPUT_NAMES[] = {
++    // 0..16 buttons
++    "A", "B", "X", "Y", "L1", "R1", "L2", "R2", "L3", "R3", "Start", "Select", "Up", "Down", "Left",
++    "Right", "Home",
++    // 17..30 analog (0..1 each)
++    "LS Up", "LS Down", "LS Left", "LS Right", "RS Up", "RS Down", "RS Left", "RS Right",
++    "L Trigger", "R Trigger", "Gyro Up", "Gyro Down", "Gyro Left", "Gyro Right"};
++constexpr int ROMCORE_INPUT_COUNT = sizeof(ROMCORE_INPUT_NAMES) / sizeof(ROMCORE_INPUT_NAMES[0]);
++
++class RomCoreInput final : public Core::Device::Input
++{
++public:
++  explicit RomCoreInput(const char* name) : m_name(name) {}
++  std::string GetName() const override { return m_name; }
++  ControlState GetState() const override { return m_state.load(std::memory_order_relaxed); }
++  void SetState(ControlState state) { m_state.store(state, std::memory_order_relaxed); }
++
++private:
++  std::string m_name;
++  std::atomic<ControlState> m_state = 0;
++};
++
++class RomCoreDevice final : public Core::Device
++{
++public:
++  RomCoreDevice()
++  {
++    for (int i = 0; i < ROMCORE_INPUT_COUNT; ++i)
++    {
++      auto* input = new RomCoreInput(ROMCORE_INPUT_NAMES[i]);
++      m_inputs[i] = input;
++      AddInput(input);
++    }
++  }
++  std::string GetName() const override { return "RomCore Pad"; }
++  std::string GetSource() const override { return "RomCore"; }
++  int GetSortPriority() const override { return 1; }
++  void Set(int index, ControlState value)
++  {
++    if (index >= 0 && index < ROMCORE_INPUT_COUNT)
++      m_inputs[index]->SetState(value);
++  }
++
++private:
++  RomCoreInput* m_inputs[ROMCORE_INPUT_COUNT]{};
++};
++
++std::mutex s_romcore_mutex;
++std::shared_ptr<RomCoreDevice> s_romcore_device;
++double s_romcore_pending[ROMCORE_INPUT_COUNT]{};
++
++void AddRomCoreDevice()
++{
++  std::lock_guard lock(s_romcore_mutex);
++  s_romcore_device = std::make_shared<RomCoreDevice>();
++  for (int i = 0; i < ROMCORE_INPUT_COUNT; ++i)
++    s_romcore_device->Set(i, s_romcore_pending[i]);
++  g_controller_interface.AddDevice(s_romcore_device);
++}
++
+ void InputBackend::PopulateDevices()
+ {
+   INFO_LOG_FMT(CONTROLLERINTERFACE, "Android populating devices");
+@@ -1036,6 +1108,7 @@ void InputBackend::PopulateDevices()
+   env->DeleteLocalRef(device_ids_array);
+ 
+   AddSensorDevice(env);
++  AddRomCoreDevice();
+ }
+ 
+ }  // namespace ciface::Android
+@@ -1220,3 +1293,19 @@ Java_com_noryan_romcore_core_primehack_jni_features_input_model_ControllerInterf
+   return CoreDeviceToJava(env, g_controller_interface.FindDevice(qualifier));
+ }
+ }
++
++extern "C" {
++
++// RomCore integration: RomCoreInput.set(index, value) — see ROMCORE_INPUT_NAMES for the index table.
++JNIEXPORT void JNICALL
++Java_com_noryan_romcore_core_primehack_jni_features_input_model_RomCoreInput_nativeSet(
++    JNIEnv*, jclass, jint index, jdouble value)
++{
++  if (index < 0 || index >= ciface::Android::ROMCORE_INPUT_COUNT)
++    return;
++  std::lock_guard lock(ciface::Android::s_romcore_mutex);
++  ciface::Android::s_romcore_pending[index] = value;
++  if (ciface::Android::s_romcore_device)
++    ciface::Android::s_romcore_device->Set(index, value);
++}
++}
+-- 
+2.54.0 (Apple Git-157)
+

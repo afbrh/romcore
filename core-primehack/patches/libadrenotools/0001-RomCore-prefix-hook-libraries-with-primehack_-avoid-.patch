@@ -1,0 +1,135 @@
+From c668aefa68546284cf60ef4cacadf7f0d1e4bf3f Mon Sep 17 00:00:00 2001
+From: Ry <noryanfound@gmail.com>
+Date: Sat, 10 Oct 2026 13:07:03 -0500
+Subject: [PATCH] RomCore: prefix hook libraries with primehack_ (avoid .so
+ name collisions in a multi-Dolphin APK)
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ CMakeLists.txt          |  2 +-
+ src/driver.cpp          |  4 ++--
+ src/hook/CMakeLists.txt | 40 ++++++++++++++++++++--------------------
+ src/hook/hook_impl.cpp  |  6 +++---
+ 4 files changed, 26 insertions(+), 26 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 16c6092..91c7e44 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -30,7 +30,7 @@ endif()
+ if (${GEN_INSTALL_TARGET})
+   configure_file(adrenotools.pc.in adrenotools.pc @ONLY)
+   install(FILES ${CMAKE_BINARY_DIR}/adrenotools.pc DESTINATION lib/pkgconfig)
+-  install(TARGETS adrenotools main_hook file_redirect_hook gsl_alloc_hook hook_impl)
++  install(TARGETS adrenotools primehack_main_hook primehack_file_redirect_hook primehack_gsl_alloc_hook primehack_hook_impl)
+   install(DIRECTORY include/
+           DESTINATION include
+           FILES_MATCHING PATTERN "*.h*")
+diff --git a/src/driver.cpp b/src/driver.cpp
+index 4ddee4a..0624433 100644
+--- a/src/driver.cpp
++++ b/src/driver.cpp
+@@ -63,7 +63,7 @@ void *adrenotools_open_libvulkan(int dlopenFlags, int featureFlags, const char *
+         return nullptr;
+ 
+     // Preload the hook implementation, otherwise we get a weird issue where despite being in NEEDED of the hook lib the hook's symbols will overwrite ours and cause an infinite loop
+-    auto hookImpl{linkernsbypass_namespace_dlopen("libhook_impl.so", RTLD_NOW, hookNs)};
++    auto hookImpl{linkernsbypass_namespace_dlopen("libprimehack_hook_impl.so", RTLD_NOW, hookNs)};
+     if (!hookImpl)
+         return nullptr;
+ 
+@@ -87,7 +87,7 @@ void *adrenotools_open_libvulkan(int dlopenFlags, int featureFlags, const char *
+     initHookParam(new HookImplParams(featureFlags, tmpLibDir, hookLibDir, customDriverDir, customDriverName, fileRedirectDir, importMapping));
+ 
+     // Load the libvulkan hook into the isolated namespace
+-    if (!linkernsbypass_namespace_dlopen("libmain_hook.so", RTLD_GLOBAL, hookNs))
++    if (!linkernsbypass_namespace_dlopen("libprimehack_main_hook.so", RTLD_GLOBAL, hookNs))
+         return nullptr;
+ 
+     return linkernsbypass_namespace_dlopen_unique("/system/lib64/libvulkan.so", tmpLibDir, dlopenFlags, hookNs);
+diff --git a/src/hook/CMakeLists.txt b/src/hook/CMakeLists.txt
+index ebff063..069fff2 100644
+--- a/src/hook/CMakeLists.txt
++++ b/src/hook/CMakeLists.txt
+@@ -1,27 +1,27 @@
+-add_library(hook_impl SHARED hook_impl.cpp hook_impl.h hook_impl_params.h)
++add_library(primehack_hook_impl SHARED hook_impl.cpp hook_impl.h hook_impl_params.h)
+ 
+-target_compile_options(hook_impl PRIVATE -Wall -Wextra)
+-target_link_libraries(hook_impl linkernsbypass log)
+-target_include_directories(hook_impl PRIVATE ../../include)
+-set_target_properties(hook_impl PROPERTIES CXX_VISIBILITY_PRESET hidden)
++target_compile_options(primehack_hook_impl PRIVATE -Wall -Wextra)
++target_link_libraries(primehack_hook_impl linkernsbypass log)
++target_include_directories(primehack_hook_impl PRIVATE ../../include)
++set_target_properties(primehack_hook_impl PROPERTIES CXX_VISIBILITY_PRESET hidden)
+ 
+-add_library(main_hook SHARED main_hook.c)
++add_library(primehack_main_hook SHARED main_hook.c)
+ 
+-target_compile_options(main_hook PRIVATE -Wall -Wextra)
+-target_link_options(main_hook PRIVATE -z global)
+-target_link_libraries(main_hook hook_impl)
+-set_target_properties(main_hook PROPERTIES CXX_VISIBILITY_PRESET hidden)
++target_compile_options(primehack_main_hook PRIVATE -Wall -Wextra)
++target_link_options(primehack_main_hook PRIVATE -z global)
++target_link_libraries(primehack_main_hook primehack_hook_impl)
++set_target_properties(primehack_main_hook PROPERTIES CXX_VISIBILITY_PRESET hidden)
+ 
+-add_library(file_redirect_hook SHARED file_redirect_hook.c)
++add_library(primehack_file_redirect_hook SHARED file_redirect_hook.c)
+ 
+-target_compile_options(file_redirect_hook PRIVATE -Wall -Wextra)
+-target_link_options(file_redirect_hook PRIVATE -z global)
+-target_link_libraries(file_redirect_hook hook_impl)
+-set_target_properties(file_redirect_hook PROPERTIES CXX_VISIBILITY_PRESET hidden)
++target_compile_options(primehack_file_redirect_hook PRIVATE -Wall -Wextra)
++target_link_options(primehack_file_redirect_hook PRIVATE -z global)
++target_link_libraries(primehack_file_redirect_hook primehack_hook_impl)
++set_target_properties(primehack_file_redirect_hook PROPERTIES CXX_VISIBILITY_PRESET hidden)
+ 
+-add_library(gsl_alloc_hook SHARED gsl_alloc_hook.c)
++add_library(primehack_gsl_alloc_hook SHARED gsl_alloc_hook.c)
+ 
+-target_compile_options(gsl_alloc_hook PRIVATE -Wall -Wextra)
+-target_link_options(gsl_alloc_hook PRIVATE -z global)
+-target_link_libraries(gsl_alloc_hook hook_impl)
+-set_target_properties(gsl_alloc_hook PROPERTIES CXX_VISIBILITY_PRESET hidden)
++target_compile_options(primehack_gsl_alloc_hook PRIVATE -Wall -Wextra)
++target_link_options(primehack_gsl_alloc_hook PRIVATE -z global)
++target_link_libraries(primehack_gsl_alloc_hook primehack_hook_impl)
++set_target_properties(primehack_gsl_alloc_hook PROPERTIES CXX_VISIBILITY_PRESET hidden)
+diff --git a/src/hook/hook_impl.cpp b/src/hook/hook_impl.cpp
+index 50e79a9..4443f01 100644
+--- a/src/hook/hook_impl.cpp
++++ b/src/hook/hook_impl.cpp
+@@ -66,7 +66,7 @@ __attribute__((visibility("default"))) void *hook_android_dlopen_ext(const char
+ 
+     // Preload ourself, a new instance will be created since we have different linker ancestory
+     // If we don't preload we get a weird issue where despite being in NEEDED of the hook lib the hook's symbols will overwrite ours and cause an infinite loop
+-    auto hookImpl{linkernsbypass_namespace_dlopen("libhook_impl.so", RTLD_NOW, driverNs)};
++    auto hookImpl{linkernsbypass_namespace_dlopen("libprimehack_hook_impl.so", RTLD_NOW, driverNs)};
+     if (!hookImpl)
+         return nullptr;
+ 
+@@ -78,7 +78,7 @@ __attribute__((visibility("default"))) void *hook_android_dlopen_ext(const char
+     initHookParam(hook_params);
+ 
+     if (hook_params->featureFlags & ADRENOTOOLS_DRIVER_FILE_REDIRECT) {
+-        if (!linkernsbypass_namespace_dlopen("libfile_redirect_hook.so", RTLD_GLOBAL, driverNs)) {
++        if (!linkernsbypass_namespace_dlopen("libprimehack_file_redirect_hook.so", RTLD_GLOBAL, driverNs)) {
+             LOGI("hook_android_dlopen_ext: hook failed: failed to apply libfopen_redirect_hook!");
+             return fallback();
+         }
+@@ -91,7 +91,7 @@ __attribute__((visibility("default"))) void *hook_android_dlopen_ext(const char
+     newExtinfo.library_namespace = driverNs;
+ 
+     if (hook_params->featureFlags & ADRENOTOOLS_DRIVER_GPU_MAPPING_IMPORT) {
+-        if (!linkernsbypass_namespace_dlopen("libgsl_alloc_hook.so", RTLD_GLOBAL, driverNs)) {
++        if (!linkernsbypass_namespace_dlopen("libprimehack_gsl_alloc_hook.so", RTLD_GLOBAL, driverNs)) {
+             LOGI("hook_android_dlopen_ext: hook failed: failed to apply libgsl_alloc_hook!");
+             return fallback();
+         }
+-- 
+2.54.0 (Apple Git-157)
+

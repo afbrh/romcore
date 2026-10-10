@@ -1,0 +1,107 @@
+From 097c0993f6162caf3385223dbc561b08b99f9403 Mon Sep 17 00:00:00 2001
+From: Ry <noryanfound@gmail.com>
+Date: Sat, 10 Oct 2026 12:43:25 -0500
+Subject: [PATCH 2/2] RomCore: isolate user/Sys/driver/cache dirs under a
+ primehack subfolder
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ .../jni/fragments/EmulationFragment.kt        |  2 +-
+ .../jni/utils/DirectoryInitialization.java    | 30 +++++++++++++------
+ 2 files changed, 22 insertions(+), 10 deletions(-)
+
+diff --git a/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/fragments/EmulationFragment.kt b/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/fragments/EmulationFragment.kt
+index 157253657a..d31d35eb62 100644
+--- a/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/fragments/EmulationFragment.kt
++++ b/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/fragments/EmulationFragment.kt
+@@ -246,7 +246,7 @@ class EmulationFragment : Fragment(), SurfaceHolder.Callback {
+     fun saveTemporaryState() = NativeLibrary.SaveStateAs(temporaryStateFilePath)
+ 
+     private val temporaryStateFilePath: String
+-        get() = "${requireContext().filesDir}${File.separator}temp.sav"
++        get() = "${requireContext().filesDir}${File.separator}primehack_temp.sav"
+ 
+     companion object {
+         private const val KEY_GAMEPATHS = "gamepaths"
+diff --git a/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/utils/DirectoryInitialization.java b/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/utils/DirectoryInitialization.java
+index b4b45ca14d..33fce6aad4 100644
+--- a/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/utils/DirectoryInitialization.java
++++ b/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/utils/DirectoryInitialization.java
+@@ -106,11 +106,15 @@ public final class DirectoryInitialization
+     if (!Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState()))
+       return null;
+ 
+-    isUsingLegacyUserDirectory =
+-            preferLegacyUserDirectory(context) && PermissionsHandler.hasWriteAccess(context);
+-
+-    return isUsingLegacyUserDirectory ? getLegacyUserDirectoryPath() :
+-            context.getExternalFilesDir(null);
++    // RomCore: always app-private storage, in a "primehack" subfolder so this engine never shares
++    // Config/GC/Wii/StateSaves with the other Dolphin-derived core in the same APK.
++    isUsingLegacyUserDirectory = false;
++    File base = context.getExternalFilesDir(null);
++    if (base == null)
++      return null;
++    File dir = new File(base, "primehack");
++    dir.mkdirs();
++    return dir;
+   }
+ 
+   private static boolean setDolphinUserDirectory(Context context)
+@@ -125,6 +129,11 @@ public final class DirectoryInitialization
+     NativeLibrary.SetUserDirectory(userPath);
+ 
+     File cacheDir = context.getExternalCacheDir();
++    if (cacheDir != null)
++    {
++      cacheDir = new File(cacheDir, "primehack");
++      cacheDir.mkdirs();
++    }
+     if (cacheDir == null)
+     {
+       // In some custom ROMs getExternalCacheDir might return null for some reasons. If that is the case, fallback to getCacheDir which seems to work just fine.
+@@ -141,11 +150,11 @@ public final class DirectoryInitialization
+ 
+   private static void extractSysDirectory(Context context)
+   {
+-    File sysDirectory = new File(context.getFilesDir(), "Sys");
++    File sysDirectory = new File(context.getFilesDir(), "primehack/Sys");
+ 
+     SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+     String revision = NativeLibrary.GetGitRevision();
+-    if (!preferences.getString("sysDirectoryVersion", "").equals(revision))
++    if (!preferences.getString("primehack.sysDirectoryVersion", "").equals(revision))
+     {
+       // There is no extracted Sys directory, or there is a Sys directory from another
+       // version of Dolphin that might contain outdated files. Let's (re-)extract Sys.
+@@ -153,7 +162,7 @@ public final class DirectoryInitialization
+       copyAssetFolder("Sys", sysDirectory, context);
+ 
+       SharedPreferences.Editor editor = preferences.edit();
+-      editor.putString("sysDirectoryVersion", revision);
++      editor.putString("primehack.sysDirectoryVersion", revision);
+       editor.apply();
+     }
+ 
+@@ -161,7 +170,7 @@ public final class DirectoryInitialization
+     sysPath = sysDirectory.getPath();
+     SetSysDirectory(sysPath);
+ 
+-    File driverDirectory = new File(context.getFilesDir(), "GPUDrivers");
++    File driverDirectory = new File(context.getFilesDir(), "primehack/GPUDrivers");
+     driverDirectory.mkdirs();
+     File driverExtractedDir = new File(driverDirectory, "Extracted");
+     driverExtractedDir.mkdirs();
+@@ -366,6 +375,9 @@ public final class DirectoryInitialization
+ 
+   private static boolean preferLegacyUserDirectory(Context context)
+   {
++    // RomCore: legacy /sdcard/dolphin-emu directory is never used.
++    if (true)
++      return false;
+     return PermissionsHandler.isExternalStorageLegacy() &&
+             !PermissionsHandler.isWritePermissionDenied() && isExternalFilesDirEmpty(context) &&
+             legacyUserDirectoryExists();
+-- 
+2.54.0 (Apple Git-157)
+
