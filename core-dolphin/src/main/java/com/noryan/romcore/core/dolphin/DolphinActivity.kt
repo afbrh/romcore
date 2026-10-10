@@ -33,7 +33,7 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
         const val EXTRA_ROM_PATH = "com.noryan.romcore.core.dolphin.ROM_PATH"
         const val EXTRA_SYSTEM = "com.noryan.romcore.core.dolphin.SYSTEM"
         const val EXTRA_RESUME_STATE = "com.noryan.romcore.core.dolphin.RESUME_STATE"
-            }
+    }
 
     private lateinit var session: DolphinSession
     private lateinit var hooks: RomCoreCoreHost.Hooks
@@ -69,7 +69,6 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
         NativeLibrary.setEmulationHost(this)
         DolphinApplication.initialize(this)
         DolphinApplication.setAppActivity(this)
-        application.registerActivityLifecycleCallbacks(ActivityTracker())
 
         // Native bring-up (Sys extraction on first run) off the UI thread.
         Thread({
@@ -78,6 +77,12 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
             } catch (t: Throwable) {
                 runOnUiThread { Toast.makeText(this, "Dolphin failed to start: ${t.message}", Toast.LENGTH_LONG).show(); finish() }
                 return@Thread
+            }
+            runOnUiThread {
+                // Needs the native lib (setBackgroundExecutionAllowedNative / flushUnsavedData), so only after init.
+                val tracker = ActivityTracker()
+                application.registerActivityLifecycleCallbacks(tracker)
+                if (!isFinishing) tracker.onActivityResumed(this)
             }
             synchronized(lock) {
                 runtimeReady = true
