@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- The sideload flavor of ARMSX2 merges an in-app APK updater; RomCore never self-updates. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
+
+    <application
+        tools:remove="android:name,android:label,android:icon,android:roundIcon,android:theme,android:fullBackupContent,android:dataExtractionRules,android:networkSecurityConfig,android:allowBackup,android:largeHeap,android:supportsRtl,android:isGame,android:appCategory,android:allowNativeHeapPointerTagging">
+
+        <!-- The ARMSX2 library's own front-end (boot splash, library, setup wizard entry points, "recent games" provider,
+             Discord helper) is never used: RomCore is the front-end. Drop every exported/launchable component. -->
+        <activity android:name="com.armsx2.BootSplashActivity" tools:node="remove" />
+        <activity android:name="com.armsx2.Main" tools:node="remove" />
+        <activity-alias android:name=".MainActivity" tools:node="remove" />
+        <receiver android:name="com.armsx2.RetroAchievementsHostOverrideReceiver" tools:node="remove" />
+        <provider android:name="com.armsx2.data.library.RecentGamesContentProvider" tools:node="remove" />
+        <activity android:name="com.armsx2.data.library.RecentGamesAccessActivity" tools:node="remove" />
+        <activity android:name="com.discord.socialsdk.AuthenticationActivity" tools:node="remove" />
+        <service android:name="com.armsx2.discord.DiscordService" tools:node="remove" />
+        <activity android:name="com.armsx2.discord.DiscordAuthActivity" tools:node="remove" />
+
+        <!-- The whole PS2 runtime lives in its own process so libemucore_*.so, its Vulkan device (adrenotools custom driver)
+             and SDL state never share an address space with the other RomCore cores. The process is killed when the
+             activity is destroyed (ARMSX2 does this itself), so every launch is a cold start. -->
+        <activity
+            android:name="com.noryan.romcore.core.armsx2.Armsx2Activity"
+            android:process=":armsx2"
+            android:taskAffinity="com.noryan.romcore.armsx2"
+            android:launchMode="singleTask"
+            android:exported="false"
+            android:hardwareAccelerated="true"
+            android:screenOrientation="sensorLandscape"
+            android:resizeableActivity="true"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density"
+            android:theme="@style/Theme.ARMSX2.Boot" />
+
+        <!-- Shown (in the main process) instead of the game when no PS2 BIOS is installed yet. -->
+        <activity
+            android:name="com.noryan.romcore.core.armsx2.Armsx2NoticeActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+    </application>
+</manifest>
