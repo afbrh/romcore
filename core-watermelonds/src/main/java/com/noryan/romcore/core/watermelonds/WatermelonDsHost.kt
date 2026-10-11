@@ -70,6 +70,11 @@ internal object WatermelonDsHost {
             }
             override fun onMotion(event: MotionEvent): Boolean = hooks.dispatchMotion(event)
             override fun onMenuRequested() = hooks.menu.open()
+            // RomCore owns all UI: the emulator's toasts/dialogs/loading text are forwarded to the shared overlay.
+            override fun notice(text: String, durationMs: Long) { hooks.notice(text, durationMs) }
+            override fun error(title: String, message: String, fatal: Boolean) { hooks.error(title, message, fatal) }
+            override fun ready() { hooks.onGameReady() }
+            override fun loading(fraction: Float, text: String?) { hooks.setLoadingProgress(fraction, text) }
         }
 
         if (activity.intent.getBooleanExtra(WatermelonDsCore.EXTRA_RESUME, false)) resumeNewestState(session)

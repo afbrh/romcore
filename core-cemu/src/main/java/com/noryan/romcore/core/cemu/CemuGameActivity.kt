@@ -10,18 +10,14 @@ import android.view.SurfaceView
 import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -34,7 +30,6 @@ import info.cemu.cemu.CemuApplication
 import info.cemu.cemu.common.ui.localization.TranslatableContent
 import info.cemu.cemu.common.ui.theme.CemuTheme
 import info.cemu.cemu.emulation.CanvasOnTouchListener
-import info.cemu.cemu.emulation.EmulationTextInputDialog
 import info.cemu.cemu.emulation.EmulationViewModel
 import info.cemu.cemu.emulation.NativeError
 
@@ -84,7 +79,7 @@ class CemuGameActivity : AppCompatActivity() {
         setContent {
             TranslatableContent {
                 CemuTheme {
-                    GameScreen(launchPath, onFatal = ::closeGame)
+                    GameScreen(launchPath, hooksProvider = { hooks }, onFatal = ::closeGame)
                 }
             }
         }
@@ -129,13 +124,29 @@ class CemuGameActivity : AppCompatActivity() {
 }
 
 @Composable
-private fun GameScreen(launchPath: String, onFatal: () -> Unit) {
+private fun GameScreen(launchPath: String, hooksProvider: () -> RomCoreCoreHost.Hooks?, onFatal: () -> Unit) {
     val vm: EmulationViewModel = viewModel(
         factory = EmulationViewModel.Factory,
         extras = MutableCreationExtras().apply { set(EmulationViewModel.LAUNCH_PATH_KEY, launchPath) },
     )
     val error by vm.emulationError.collectAsState()
     val initialized by vm.isEmulationInitialized.collectAsState()
+
+    // Loading screen + errors are RomCore's (RomCoreCoreHost.install shows the shared overlay).
+    LaunchedEffect(Unit) { hooksProvider()?.setLoadingText("Starting Wii U emulation") }
+    LaunchedEffect(initialized, error) {
+        val h = hooksProvider() ?: return@LaunchedEffect
+        val e = error
+        if (e != null) {
+            h.error("Wii U", describe(e), true)
+        } else if (initialized) {
+            // launchTitle() returned: emulation threads run and the main surface is set. Cemu has no "frame presented"
+            // callback; give the renderer a moment to present the first frame before the overlay fades.
+            h.setLoadingText("Booting title")
+            delay(READY_DELAY_MS)
+            hooksProvider()?.onGameReady()
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         AndroidView(
@@ -156,21 +167,11 @@ private fun GameScreen(launchPath: String, onFatal: () -> Unit) {
                 }
             },
         )
-        if (!initialized && error == null) {
-            // Same window as the SurfaceView on purpose (a Dialog window here left the surface un-composited).
-            Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-                Text("Loading Wii U title…", color = Color.White)
-            }
-        }
-        error?.let { e ->
-            Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-                Text(describe(e) + "\n\n(Press Back for the menu, then Close Game)", color = Color.White, modifier = Modifier.padding(24.dp))
-            }
-            androidx.activity.compose.BackHandler(onBack = onFatal)
-        }
-        EmulationTextInputDialog()
+        RomCoreTextInput()
     }
 }
+
+private const val READY_DELAY_MS = 2500L
 
 private fun describe(e: NativeError): String = when (e) {
     is NativeError.SystemInitializationError -> "Failed to initialize: ${e.message}"

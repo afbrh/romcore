@@ -20,20 +20,35 @@ internal object CemuDefaults {
         // launch: cheap, and guarantees EmulatedControllerManager has a Pro controller to inject into.
         NativeInput.setControllerType(0, NativeInput.EmulatedControllerType.PRO)
 
+        disableNativeOsd()
+
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.getBoolean(KEY, false)) return
 
-        // No stats overlays: the shared RomCore menu is the only UI.
-        NativeSettings.setOverlayPosition(NativeSettings.OverlayScreenPosition.DISABLED)
-        NativeSettings.setOverlayFPSEnabled(false)
-        NativeSettings.setOverlayCPUUsageEnabled(false)
-        NativeSettings.setOverlayDrawCallsPerFrameEnabled(false)
         // Performance over rare flicker (same trade-off as the RomRunner build).
         NativeSettings.setAccurateBarriers(false)
         runCatching { installTurnip(context) }
         NativeSettings.saveSettings()
         NativeInput.saveInputs()
         prefs.edit().putBoolean(KEY, true).apply()
+    }
+
+    /**
+     * Cemu draws stats (FPS/CPU/RAM/debug) and notifications (account/controller-profile/friend-list chips, "Compiled N new
+     * pipelines") straight onto the GL/Vulkan surface. RomCore owns all UI, so switch every one off on EVERY launch (also
+     * overrides settings saved by earlier builds). In-memory only: not persisted.
+     */
+    private fun disableNativeOsd() {
+        NativeSettings.setOverlayPosition(NativeSettings.OverlayScreenPosition.DISABLED)
+        NativeSettings.setOverlayFPSEnabled(false)
+        NativeSettings.setOverlayCPUUsageEnabled(false)
+        NativeSettings.setOverlayDrawCallsPerFrameEnabled(false)
+        NativeSettings.setOverlayRAMUsageEnabled(false)
+        NativeSettings.setOverlayDebugEnabled(false)
+        NativeSettings.setNotificationsPosition(NativeSettings.OverlayScreenPosition.DISABLED)
+        NativeSettings.setNotificationControllerProfilesEnabled(false)
+        NativeSettings.setNotificationShaderCompilerEnabled(false)
+        NativeSettings.setNotificationFriendListEnabled(false)
     }
 
     /** Bundled Turnip (Mesa freedreno, MIT) Adreno Vulkan driver; far lower per-draw overhead than stock. */
