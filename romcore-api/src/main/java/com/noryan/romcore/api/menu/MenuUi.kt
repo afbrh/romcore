@@ -67,8 +67,8 @@ private fun MenuPanelContent(model: MenuModel) {
                 @Suppress("UNUSED_EXPRESSION") model.revision
                 RowItem(model, row, i == model.cursor, Modifier.clickable { model.select(i) })
             }
-            if (model.status.isNotEmpty()) item {
-                BasicText(model.status, Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            if (model.status.isNotEmpty() || model.stateUnavailableReason != null) item {
+                BasicText(model.status.ifEmpty { model.stateUnavailableReason.orEmpty() }, Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
                     style = TextStyle(color = Dim, fontFamily = Silkscreen, fontSize = 11.sp))
             }
         }
@@ -85,7 +85,7 @@ private fun RowItem(model: MenuModel, row: MenuRowModel, focused: Boolean, click
                 horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 BasicText(if (row.action == MenuAction.CHANGE_CONTROLLER_MAPPING) "Controller Mapping" else MenuModel.title(row.action),
                     Modifier.weight(1f), style = style(if (model.isDisabled(row.action)) Dim else if (row.action == MenuAction.CLOSE_GAME) MenuStyle.Danger else Color.White), maxLines = 2)
-                if (model.isDisabled(row.action)) BasicText(model.stateUnavailableReason.orEmpty(), style = style(Dim), maxLines = 2)
+                if (model.isDisabled(row.action)) BasicText("N/A", style = style(Dim))
                 else if (row.action != MenuAction.CLOSE_GAME || open) BasicText(if (open) "v" else ">", style = style(Dim))
             }
         }
