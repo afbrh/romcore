@@ -11,7 +11,8 @@
             android:enableOnBackInvokedCallback="true"
             android:exported="false"
             tools:node="merge"
-            tools:replace="android:exported">
+            android:theme="@style/Theme.RomCoreEden"
+            tools:replace="android:exported,android:theme">
             <!-- RomCore launches this explicitly; drop the public VIEW/NFC filters of the stock app. -->
             <intent-filter tools:node="removeAll" />
         </activity>

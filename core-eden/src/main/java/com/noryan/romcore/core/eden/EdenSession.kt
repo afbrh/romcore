@@ -37,15 +37,18 @@ class EdenSession(private val context: android.content.Context) : CoreSession, S
         main.post { Toast.makeText(context, EdenCore.STATE_UNAVAILABLE_REASON, Toast.LENGTH_LONG).show() }
     }
 
+    /**
+     * Close Game: native shutdown (NativeLibrary.stopEmulation -> joins nvservices etc.) crashed with SIGSEGV in
+     * Tegra::Decoders::VP9::GetVp9PictureInfo while the video decoder was still reading guest memory being torn down.
+     * So: freeze the guest (pause), finish the Activity, and end the :eden process right away like the other cores.
+     */
     override fun close() {
-        NativeLibrary.stopEmulation()
-        // Before emulation started (loader/key errors) there is no stop callback to finish the Activity: do it ourselves.
-        (context as? android.app.Activity)?.let { a -> main.postDelayed({
-            if (!a.isFinishing) a.finish()
-            // A fatal loader error leaves the native thread parked: end the :eden process so the next launch is clean.
-            if (org.yuzu.yuzu_emu.utils.RomCoreBridge.fatalShown) main.postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, 300)
-        }, 1500) }
-    } // EmulationActivity.onEmulationStopped(0) finishes the activity
+        runCatching { if (NativeLibrary.isRunning() && !NativeLibrary.isPaused()) NativeLibrary.pauseEmulation() }
+        // ForegroundService is START_STICKY: without stopping it, the system would respawn an empty :eden process after the kill.
+        runCatching { context.stopService(android.content.Intent(context, org.yuzu.yuzu_emu.utils.ForegroundService::class.java)) }
+        (context as? android.app.Activity)?.let { a -> main.post { if (!a.isFinishing) a.finish() } }
+        main.postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, 350)
+    }
 
     override fun injectButton(pad: Pad, pressed: Boolean) {
         val state = if (pressed) NativeInput.ButtonState.PRESSED else NativeInput.ButtonState.RELEASED

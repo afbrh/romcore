@@ -1,0 +1,6 @@
+<resources>
+    <!-- Black window background so the first frames of the game process are black, not the engine theme's dark grey. -->
+    <style name="Theme.RomCorePH" parent="PHTheme.Dolphin.Main">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

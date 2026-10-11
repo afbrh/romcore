@@ -1,11 +1,9 @@
 package com.noryan.romcore.core.cemu
 
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
-import android.widget.Toast
 import com.noryan.romcore.api.Pad
 import com.noryan.romcore.api.menu.CoreSessionBase
+import com.noryan.romcore.api.menu.StateSupport
 import info.cemu.cemu.nativeinterface.NativeEmulation
 import info.cemu.cemu.nativeinterface.NativeInput
 import info.cemu.cemu.nativeinterface.NativeInput.ProButton
@@ -29,17 +27,17 @@ class CemuSession(
     context: Context,
     romPath: String,
     private val onClose: () -> Unit,
-) : CoreSessionBase(context, "cemu", romPath) {
+) : CoreSessionBase(context, "cemu", romPath), StateSupport {
 
     companion object {
         const val STATE_UNAVAILABLE_REASON =
-            "Not available for Wii U: Cemu cannot snapshot the emulated console. Use the game's own save."
+            "Save states are not available for Wii U. Use the game's own save."
         private const val CONTROLLER = 0
         private const val TRIGGER_THRESHOLD = 0.5f
     }
 
     /** Non-null = Save/Load State must be shown as unavailable with this reason. */
-    val stateUnavailableReason: String? get() = STATE_UNAVAILABLE_REASON
+    override val stateUnavailableReason: String? get() = STATE_UNAVAILABLE_REASON
     val statesSupported: Boolean get() = false
 
     @Volatile private var paused = false
@@ -47,16 +45,9 @@ class CemuSession(
     override fun pause() { if (!paused) { paused = true; runCatching { NativeEmulation.pauseTitle() } } }
     override fun resume() { if (paused) { paused = false; runCatching { NativeEmulation.resumeTitle() } } }
 
-    // The shared menu only reports "Save failed"; until romcore-api grows a StateSupport hook, say why on screen.
-    override fun saveState(slot: Int): Boolean = explainUnsupported()
-    override fun loadState(slot: Int): Boolean = explainUnsupported()
-
-    private fun explainUnsupported(): Boolean {
-        Handler(Looper.getMainLooper()).post {
-            Toast.makeText(context, STATE_UNAVAILABLE_REASON, Toast.LENGTH_LONG).show()
-        }
-        return false
-    }
+    // The menu greys both rows (StateSupport) so these are never reached from it; they never pretend to succeed.
+    override fun saveState(slot: Int): Boolean = false
+    override fun loadState(slot: Int): Boolean = false
 
     override fun close() { onClose() }
 

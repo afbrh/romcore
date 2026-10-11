@@ -26,8 +26,7 @@ object EdenCore : CoreDescriptor {
     override val extensions = setOf("nsp", "xci", "nca", "nro", "nso", "kip")
 
     const val STATE_UNAVAILABLE_REASON =
-        "Save states are not available for Nintendo Switch: Eden (Yuzu) has no save-state support. " +
-            "Use the game's own save data."
+        "Save states are not available for Switch. Use the game's own save."
 
     override fun launchIntent(ctx: Context, request: LaunchRequest): Intent {
         // Eden resolves content:// URIs natively (its own FileUtil/openContentUri) and also accepts plain paths.

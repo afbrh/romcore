@@ -11,6 +11,23 @@ import kotlin.coroutines.coroutineContext
 
 data class ScanResult(val games: List<GameEntity>, val trustworthy: Boolean)
 
+/**
+ * Directory names the scanner never descends into (compared lower-cased, exact match): emulator data / system folders that
+ * hold saves, states, firmware, caches, not games. Besides this list, any directory whose name starts with '.' or '_'
+ * (e.g. `_BIOS`, `_Artwork`, `.thumbnails`) is skipped. The scan root itself is never tested, so a root named `_ROMs` is fine.
+ * To keep a game folder that starts with '_' or has one of these names, rename it.
+ */
+val IGNORED_DIR_NAMES: Set<String> = setOf(
+    "sdmc", "nintendo 3ds", "nand", "user", "users", "saves", "save", "savedata", "savestates", "save states", "states", "state",
+    "cache", "shaders", "shader", "shader_cache", "bios", "firmware", "keys", "mlc01", "sys", "system volume information",
+    "lost+found", "\$recycle.bin", "android", "logs", "log", "screenshots", "dump", "dumps", "temp", "tmp", "backup", "backups",
+    "memcards", "memory cards", "memorycards", "sstates", "textures", "texture_cache", "azahar", "citra",
+    "yuzu", "eden", "dolphin-emu", "retroarch", "system_data", "sysdata", "cheats", "gpu_drivers", "mods", "patches"
+)
+
+fun isIgnoredDir(name: String): Boolean =
+    name.startsWith(".") || name.startsWith("_") || name.lowercase() in IGNORED_DIR_NAMES
+
 /** Recursive SAF walk (raw DocumentsContract queries — far faster than DocumentFile) on the IO dispatcher. */
 object RomScanner {
     private class Raw(val uri: Uri, val name: String, val size: Long, val folders: List<String>, val isDir: Boolean = false)
@@ -36,7 +53,7 @@ object RomScanner {
                             val id = c.getString(0); val name = c.getString(1) ?: continue
                             names += name
                             if (c.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR) {
-                                if (!name.startsWith(".")) dirs += id to name
+                                if (!isIgnoredDir(name)) dirs += id to name
                             } else {
                                 val ext = name.substringAfterLast('.', "").lowercase()
                                 if (ext in wanted) here += Raw(DocumentsContract.buildDocumentUriUsingTree(tree, id), name, c.getLong(3), folders)

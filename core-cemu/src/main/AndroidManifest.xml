@@ -17,7 +17,7 @@
             android:process=":cemu"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|navigation|uiMode|smallestScreenSize"
             android:screenOrientation="userLandscape"
-            android:theme="@style/Theme.Cemu" />
+            android:theme="@style/Theme.RomCoreCemu" />
 
         <activity android:name="info.cemu.cemu.MainActivity" tools:node="remove" />
         <activity android:name="info.cemu.cemu.emulation.EmulationActivity" tools:node="remove" />
