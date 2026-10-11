@@ -1,0 +1,175 @@
+From 64ffac5fbf06e9f6f4979b375f2f6eab4b0bfc48 Mon Sep 17 00:00:00 2001
+From: Ry <ry@Rys-MacBook-Pro.local>
+Date: Sun, 11 Oct 2026 08:27:05 -0500
+Subject: [PATCH] RomCore: host owns all UI (ROMCORE): no OSD
+ overlay/FPS/touch/loading spinner/crash UI; RomCore_Event ready/error command
+ channel; OSD errors -> toast command
+
+---
+ Common/System/OSD.cpp       |  8 ++++++++
+ Core/Config.cpp             | 11 +++++++++++
+ UI/EmuScreen.cpp            | 24 ++++++++++++++++++++++++
+ UI/EmuScreen.h              |  2 ++
+ UI/OnScreenDisplay.cpp      |  6 ++++++
+ android/jni/app-android.cpp |  7 +++++++
+ 6 files changed, 58 insertions(+)
+
+diff --git a/Common/System/OSD.cpp b/Common/System/OSD.cpp
+index cb82a27..100b4e5 100644
+--- a/Common/System/OSD.cpp
++++ b/Common/System/OSD.cpp
+@@ -3,6 +3,7 @@
+ // for std::min
+ 
+ #include "Common/System/OSD.h"
++#include "Common/System/System.h"
+ #include "Common/TimeUtil.h"
+ #include "Common/Log.h"
+ #include "Common/Math/math_util.h"
+@@ -60,6 +61,13 @@ void OnScreenDisplay::Show(OSDType type, std::string_view text, std::string_view
+ 	}
+ 
+ 	INFO_LOG(Log::UI, "OSD: %.*s (%.*s)", STR_VIEW(text), STR_VIEW(text2));
++#ifdef ROMCORE
++	// Never drawn by PPSSPP. Only real errors are forwarded to the host's notice banner.
++	if (type == OSDType::MESSAGE_ERROR && !text.empty()) {
++		System_Toast(text2.empty() ? std::string(text) : std::string(text) + ": " + std::string(text2));
++	}
++	return;
++#endif
+ 
+ 	// Automatic duration based on type.
+ 	if (duration_s <= 0.0f) {
+diff --git a/Core/Config.cpp b/Core/Config.cpp
+index e753351..8b41003 100644
+--- a/Core/Config.cpp
++++ b/Core/Config.cpp
+@@ -1563,6 +1563,17 @@ bool Config::Save(const char *saveReason) {
+ 
+ // A lot more cleanup tasks should be moved into here, and some of these are severely outdated.
+ void Config::PostLoadCleanup() {
++#ifdef ROMCORE
++	// RomCore owns every pixel that is not the game: no PPSSPP touch controls, FPS/status counters, debug overlays,
++	// chat, developer menu or achievement popups, whatever an old ppsspp.ini / per-game ini says.
++	bShowTouchControls = false;
++	iShowStatusFlags = 0;
++	iDebugOverlay = 0;
++	bShowGPOLEDs = false;
++	bEnableNetworkChat = false;
++	bShowDeveloperMenu = false;
++	bAchievementsEnable = false;
++#endif
+ 	// Override ppsspp.ini JIT value to prevent crashing
+ 	jitForcedOff = DefaultCpuCore() != (int)CPUCore::JIT && (g_Config.iCpuCore == (int)CPUCore::JIT || g_Config.iCpuCore == (int)CPUCore::JIT_IR);
+ 	if (jitForcedOff) {
+diff --git a/UI/EmuScreen.cpp b/UI/EmuScreen.cpp
+index d3f8138..fae8726 100644
+--- a/UI/EmuScreen.cpp
++++ b/UI/EmuScreen.cpp
+@@ -85,6 +85,8 @@ using namespace std::placeholders;
+ // RomCore embedding: PPSSPP's own pause menu and game browser are suppressed; the host app's shared
+ // in-game menu replaces them, and leaving a game ends the process's activity instead of showing MainScreen.
+ #ifdef ROMCORE
++// Implemented in android/jni/app-android.cpp: posts a "romcore_<evt>" command to RomCorePpssppActivity (main thread).
++extern void RomCore_Event(const char *evt, const std::string &param);
+ #define ROMCORE_PUSH_PAUSE() do { } while (0)
+ #define ROMCORE_GO_MAIN() System_ExitApp()
+ #else
+@@ -1445,6 +1447,13 @@ void EmuScreen::update() {
+ 		errLoadingFile.append("\n");
+ 		errLoadingFile.append(errorMessage_);
+ 
++#ifdef ROMCORE
++		// RomCore's blocking error panel (CLOSE GAME) replaces PPSSPP's prompt.
++		RomCore_Event("error", errLoadingFile);
++		errorMessage_.clear();
++		quit_ = true;
++		return;
++#endif
+ 		// Can't really use the MessagePopupScreen here because we don't have a good looking background.
+ 		screenManager()->push(new PromptScreen(gamePath_, errLoadingFile, di->T("OK"), ""));
+ 		errorMessage_.clear();
+@@ -1554,6 +1563,12 @@ void EmuScreen::darken() {
+ 
+ void EmuScreen::HandleFlip() {
+ 	Achievements::FrameUpdate();
++#ifdef ROMCORE
++	if (!romcoreReadySent_ && !bootPending_) {
++		romcoreReadySent_ = true;
++		RomCore_Event("ready", "");  // first presented PSP frame after boot completed
++	}
++#endif
+ 
+ 	// This video dumping stuff is bad. Or at least completely broken with frameskip..
+ #ifndef MOBILE_DEVICE
+@@ -1866,6 +1881,15 @@ void EmuScreen::renderUI() {
+ 	// This sets up some important states but not the viewport.
+ 	ctx->Begin();
+ 
++#ifdef ROMCORE
++	// RomCore draws every non-game pixel: no PPSSPP loading spinner/background, touch pad, buttons, FPS, LEDs, crash dump.
++	if (coreState == CORE_RUNTIME_ERROR && !romcoreCrashReported_) {
++		romcoreCrashReported_ = true;
++		RomCore_Event("error", "The emulated game crashed (CPU exception).");
++	}
++	ctx->Flush();
++	return;
++#endif
+ 	if (root_) {
+ 		UI::LayoutViewHierarchy(*ctx, RootMargins(), root_, LayoutMode(), UseImmersiveMode());
+ 		root_->Draw(*ctx);
+diff --git a/UI/EmuScreen.h b/UI/EmuScreen.h
+index 08a7dda..1ec5e5b 100644
+--- a/UI/EmuScreen.h
++++ b/UI/EmuScreen.h
+@@ -98,6 +98,8 @@ class EmuScreen : public UIScreen, protected ControlListener {
+ 
+ 	UI::Event OnDevMenu;
+ 	bool bootPending_ = true;
++	bool romcoreReadySent_ = false;  // ROMCORE: first-frame signal sent to the host
++	bool romcoreCrashReported_ = false;
+ 	bool bootIsReset_ = false;
+ 	Path gamePath_;
+ 
+diff --git a/UI/OnScreenDisplay.cpp b/UI/OnScreenDisplay.cpp
+index 79ec0d3..ae8d082 100644
+--- a/UI/OnScreenDisplay.cpp
++++ b/UI/OnScreenDisplay.cpp
+@@ -402,10 +402,16 @@ bool OSDOverlayScreen::touch(const TouchInput &touch) {
+ void OSDOverlayScreen::CreateViews() {
+ 	root_ = new UI::AnchorLayout();
+ 	root_->SetTag("OSDOverlayScreen");
++#ifdef ROMCORE
++	return;  // RomCore draws all text/messages itself; PPSSPP's OSD (messages, notifications, achievements) is never shown.
++#endif
+ 	osmView_ = root_->Add(new OnScreenMessagesView(new UI::AnchorLayoutParams(0.0f, 0.0f, 0.0f, 0.0f)));
+ }
+ 
+ void OSDOverlayScreen::DrawForeground(UIContext &ui) {
++#ifdef ROMCORE
++	return;
++#endif
+ 	DebugOverlay debugOverlay = (DebugOverlay)g_Config.iDebugOverlay;
+ 
+ 	// Special case control for now, since it uses the control mapper that's owned by EmuScreen.
+diff --git a/android/jni/app-android.cpp b/android/jni/app-android.cpp
+index 7f7c37f..503bf21 100644
+--- a/android/jni/app-android.cpp
++++ b/android/jni/app-android.cpp
+@@ -269,6 +269,13 @@ static void PushCommand(std::string_view cmd, std::string_view param) {
+ 	g_frameCommands.emplace_back(std::string(cmd), std::string(param));
+ }
+ 
++#ifdef ROMCORE
++// RomCore embedding: events for RomCorePpssppActivity.processCommand ("romcore_ready", "romcore_error", ...).
++void RomCore_Event(const char *evt, const std::string &param) {
++	PushCommand(std::string("romcore_") + evt, param);
++}
++#endif
++
+ // Android implementation of callbacks to the Java part of the app
+ void System_Toast(std::string_view text) {
+ 	PushCommand("toast", text);
+-- 
+2.54.0 (Apple Git-157)
+

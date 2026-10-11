@@ -8,6 +8,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import com.noryan.romcore.api.RomCoreCoreHost
 import com.noryan.romcore.api.System
+import org.ppsspp.ppsspp.NativeApp
 import org.ppsspp.ppsspp.PpssppActivity
 import java.util.concurrent.Executors
 
@@ -25,7 +26,7 @@ class RomCorePpssppActivity : PpssppActivity() {
         super.onCreate(savedInstanceState)
         val rom = intent.getStringExtra(PpssppCore.EXTRA_ROM_PATH) ?: intent.data?.toString() ?: ""
         val session = PpssppSession(this, rom)
-        hooks = RomCoreCoreHost.install(this, session, System.PSP)
+        hooks = RomCoreCoreHost.install(this, session, System.PSP).also { it.setLoadingText("Loading game") }
         if (intent.getBooleanExtra(PpssppCore.EXTRA_RESUME, false)) tryResume(session, 0)
     }
 
@@ -38,6 +39,23 @@ class RomCorePpssppActivity : PpssppActivity() {
                 if (!ok) ui.post { tryResume(s, attempt + 1) }
             }
         }, 3000L)
+    }
+
+    /**
+     * PPSSPP -> host events. The native side (ROMCORE define, ppsspp-src branch romcore) posts "romcore_ready" on the
+     * first presented PSP frame after boot, "romcore_error" for load failures / CPU crashes, and the stock "toast"
+     * command for OSD errors; the stock input dialog is answered with "cancelled". PPSSPP itself draws none of it.
+     */
+    override fun processCommand(command: String, params: String): Boolean = when (command) {
+        "romcore_ready" -> { hooks?.onGameReady(); true }
+        "romcore_error" -> { hooks?.error("Cannot run game", params, true); true }
+        "toast" -> { hooks?.notice(params); true }
+        "inputbox" -> {
+            // The native side waits for an answer; RomCore has no text-entry UI, so cancel deterministically.
+            runCatching { NativeApp.sendRequestResult(params.split(":@:", limit = 2)[0].toInt(), false, "", 0) }
+            true
+        }
+        else -> super.processCommand(command, params)
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
