@@ -29,7 +29,9 @@ import com.noryan.romcore.CoreBootstrap
 import com.noryan.romcore.MainViewModel
 import com.noryan.romcore.R
 import com.noryan.romcore.api.System
+import com.noryan.romcore.Setup
 import com.noryan.romcore.data.CoreRouter
+import com.noryan.romcore.data.FolderSearch
 import com.noryan.romcore.data.CoreSetup
 import com.noryan.romcore.data.GameEntity
 import com.noryan.romcore.ui.components.FocusLine
@@ -64,51 +66,43 @@ private fun sysOf(g: GameEntity) = runCatching { System.valueOf(g.system) }.getO
 
 @Composable
 fun RomCoreRoot(vm: MainViewModel) {
-    val tree by vm.treeUri.collectAsStateWithLifecycle()
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { it?.let(vm::setFolder) }
+    val granted by vm.accessGranted.collectAsStateWithLifecycle()
+    val setup by vm.setup.collectAsStateWithLifecycle()
+    val romPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { it?.let(vm::pickRom) }
+    val biosPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { it?.let(vm::pickBios) }
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val ob = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) vm.refreshAccess() }
+        owner.lifecycle.addObserver(ob); onDispose { owner.lifecycle.removeObserver(ob) }
+    }
     androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) {
         Box(Modifier.fillMaxSize().safeDrawingPadding()) {
-            if (tree == null) FirstRun { picker.launch(null) } else MainScreen(vm) { picker.launch(null) }
+            val s = setup
+            when {
+                !granted -> AccessScreen()
+                s is Setup.Searching -> SearchingScreen(s.kind)
+                s is Setup.Choose -> {
+                    val roms = s.kind == FolderSearch.Kind.ROMS
+                    ChooseScreen(s.kind, s.candidates, s.cancellable,
+                        onChoose = { if (roms) vm.chooseRom(it) else vm.chooseBios(it) },
+                        onSearchAgain = { if (roms) vm.startRomSearch() else vm.searchBios(first = !s.cancellable) },
+                        onPick = { if (roms) romPicker.launch(null) else biosPicker.launch(null) },
+                        onSkipOrCancel = { if (roms) vm.cancelSetup() else vm.skipBios() })
+                }
+                s is Setup.NotFound -> NotFoundScreen(s.cancellable, onPick = { romPicker.launch(null) }, onSearchAgain = { vm.startRomSearch() }, onCancel = vm::cancelSetup)
+                else -> MainScreen(vm, pickRom = { romPicker.launch(null) }, pickBios = { biosPicker.launch(null) })
+            }
         }
     }
 }
 
 @Composable
-private fun LogoMark(size: Int) {
+internal fun LogoMark(size: Int) {
     Image(painterResource(R.drawable.ic_launcher_foreground), null, Modifier.size(size.dp))
 }
 
 @Composable
-private fun FirstRun(onPick: () -> Unit) {
-    val fr = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { fr.requestFocus() } }
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        LogoMark(96)
-        Text("ROMCORE", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(8.dp))
-        Text("One app. Every core. One menu.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(28.dp))
-        Text("Choose the folder that holds your ROMs.", style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(12.dp))
-        FocusLine("PICK ROM FOLDER", Modifier.focusRequester(fr).width(420.dp), center = true, style = MaterialTheme.typography.headlineSmall, onClick = onPick)
-        val ctx = LocalContext.current
-        var granted by remember { mutableStateOf(Environment.isExternalStorageManager()) }
-        val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-        DisposableEffect(owner) {
-            val ob = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) granted = Environment.isExternalStorageManager() }
-            owner.lifecycle.addObserver(ob); onDispose { owner.lifecycle.removeObserver(ob) }
-        }
-        if (!granted) {
-            Spacer(Modifier.height(8.dp))
-            FocusLine("GRANT ALL FILES ACCESS", Modifier.width(420.dp), center = true, style = MaterialTheme.typography.titleMedium) { openAllFilesAccess(ctx) }
-            Text("Lets every core open ROMs by real path (PS2, 3DS need it).", style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-        }
-    }
-}
-
-@Composable
-private fun MainScreen(vm: MainViewModel, pickFolder: () -> Unit) {
+private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
@@ -137,7 +131,7 @@ private fun MainScreen(vm: MainViewModel, pickFolder: () -> Unit) {
             when (tab) {
                 0 -> GamesTab(vm)
                 1 -> SystemsTab(vm)
-                else -> SettingsTab(vm, pickFolder)
+                else -> SettingsTab(vm, pickRom, pickBios)
             }
         }
         Text("L1/R1 TABS    A SELECT    X OPTIONS", Modifier.fillMaxWidth().padding(8.dp), style = MaterialTheme.typography.labelSmall,
@@ -160,10 +154,24 @@ private fun GamesTab(vm: MainViewModel) {
         }
         return
     }
-    val allFiles by rememberAllFilesGranted()
+    val azPending by vm.azaharPending.collectAsStateWithLifecycle()
+    val romDir by vm.romDir.collectAsStateWithLifecycle()
+    val azPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { vm.setAzaharTree(ctx, it) }
+    val azFocus = remember { FocusRequester() }
+    LaunchedEffect(azPending) { if (azPending != null) runCatching { azFocus.requestFocus() } }
     LazyColumn(Modifier.fillMaxSize()) {
-        if (!allFiles) item {
-            FocusLine("ALL FILES ACCESS IS OFF - PRESS A TO GRANT", dim = false, style = MaterialTheme.typography.titleSmall) { openAllFilesAccess(ctx) }
+        if (azPending != null) {
+            item {
+                Column {
+                    FocusLine("3DS NEEDS A DATA FOLDER - PRESS A TO CHOOSE", Modifier.focusRequester(azFocus), dim = false, style = MaterialTheme.typography.titleSmall) {
+                        azPicker.launch(romDir?.let(com.noryan.romcore.data.SafPathUtils::treeUriForPath))
+                    }
+                    Text("Azahar keeps its saves, NAND and shader cache in a folder you grant once. Tap USE THIS FOLDER on the next screen " +
+                        "(it opens on your ROM folder). ${azPending!!.title} starts right after.", Modifier.padding(start = 28.dp, end = 16.dp, bottom = 4.dp),
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    FocusLine("NOT NOW", indent = 12.dp, style = MaterialTheme.typography.titleSmall) { vm.cancelAzahar() }
+                }
+            }
         }
         if (launching) item { Text("PREPARING ROM...", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium) }
         items(games, key = { it.id }) { g ->
@@ -229,9 +237,12 @@ private fun SystemsTab(vm: MainViewModel) {
 }
 
 @Composable
-private fun SettingsTab(vm: MainViewModel, pickFolder: () -> Unit) {
+private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> Unit) {
     val ctx = LocalContext.current
-    val tree by vm.treeUri.collectAsStateWithLifecycle()
+    val romDir by vm.romDir.collectAsStateWithLifecycle()
+    val biosDir by vm.biosDir.collectAsStateWithLifecycle()
+    val biosLines by vm.biosLines.collectAsStateWithLifecycle()
+    val biosNote by vm.biosNote.collectAsStateWithLifecycle()
     val status by vm.status.collectAsStateWithLifecycle()
     val games by vm.games.collectAsStateWithLifecycle()
     var open by remember { mutableStateOf<String?>(null) }
@@ -249,19 +260,27 @@ private fun SettingsTab(vm: MainViewModel, pickFolder: () -> Unit) {
             setupTick++
         }
     }
-    val folderName = remember(tree) { tree?.let { Uri.parse(it).lastPathSegment?.substringAfter(':') } ?: "-" }
     LazyColumn(Modifier.fillMaxSize()) {
         item { Section("ROM FOLDER") }
-        item { FocusLine(folderName, right = "${games.size} GAMES", onClick = { toggle("folder") }, onAlt = { toggle("folder") }) }
+        item { FocusLine(romDir?.substringAfterLast('/') ?: "-", right = "${games.size} GAMES", onClick = { toggle("folder") }, onAlt = { toggle("folder") }) }
         if (open == "folder") {
-            item { FocusLine("CHANGE FOLDER", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { pickFolder() } }
+            item { Note(romDir ?: "No folder chosen") }
+            item { FocusLine("SEARCH AGAIN", right = "AUTO-FIND", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.startRomSearch() } }
+            item { FocusLine("PICK FOLDER...", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { pickRom() } }
             item { FocusLine("RESCAN NOW", right = status.ifEmpty { null }, indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.rescan() } }
-            item {
-                FocusLine("ALL FILES ACCESS", right = if (allFiles) "GRANTED" else "OFF (TAP)", indent = 28.dp, style = MaterialTheme.typography.titleSmall) {
-                    openAllFilesAccess(ctx)
-                }
-            }
-            item { Note("All files access lets cores in their own processes open ROMs by real path. Without it ROMs are copied to cache on launch.") }
+            item { Note("RomCore opens games by real path (All files access is ${if (allFiles) "on" else "OFF - press A on ALL FILES ACCESS below"}). Folders starting with . or _ and emulator data folders are not scanned.") }
+            if (!allFiles) item { FocusLine("ALL FILES ACCESS", right = "OFF (TAP)", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { openAllFilesAccess(ctx) } }
+        }
+        item { Section("BIOS FOLDER") }
+        item { FocusLine(biosDir?.substringAfterLast('/') ?: "NONE", right = if (biosDir == null) "OPTIONAL" else null, onClick = { toggle("bios") }, onAlt = { toggle("bios") }) }
+        if (open == "bios") {
+            item { Note(biosDir ?: "No BIOS folder chosen. Games that need one will say so.") }
+            item { FocusLine("SEARCH AGAIN", right = "AUTO-FIND", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.searchBios(first = false) } }
+            item { FocusLine("PICK FOLDER...", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { pickBios() } }
+            if (biosDir != null) item { FocusLine("IMPORT NOW", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.runBiosImport() } }
+            if (biosNote.isNotEmpty()) item { Note(biosNote) }
+            biosLines.forEach { l -> item { Note(l) } }
+            item { Note("Copies PS2 BIOS, Switch prod.keys + firmware and PS1 / RetroArch BIOS into the cores. Your files are only read; newer copies are never overwritten.") }
         }
         item { Section("INSTALLED CORES (${cores.size})") }
         if (cores.isEmpty()) item { Note("No cores are installed in this build.") }

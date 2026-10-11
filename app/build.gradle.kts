@@ -74,6 +74,7 @@ dependencies {
     implementation("com.google.dagger:hilt-android:2.60.1")
     ksp("com.google.dagger:hilt-android-compiler:2.60.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    testImplementation("junit:junit:4.13.2")
 }
 
 // Eden is compiled against Material 1.12.0 (newer drops R.attr.colorPrimary -> NoSuchFieldError); other cores ask for

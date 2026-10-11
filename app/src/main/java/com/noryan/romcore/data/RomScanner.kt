@@ -1,8 +1,6 @@
 package com.noryan.romcore.data
 
-import android.content.Context
-import android.net.Uri
-import android.provider.DocumentsContract
+import java.io.File
 import com.noryan.romcore.api.System
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -28,69 +26,55 @@ val IGNORED_DIR_NAMES: Set<String> = setOf(
 fun isIgnoredDir(name: String): Boolean =
     name.startsWith(".") || name.startsWith("_") || name.lowercase() in IGNORED_DIR_NAMES
 
-/** Recursive SAF walk (raw DocumentsContract queries — far faster than DocumentFile) on the IO dispatcher. */
+/**
+ * Recursive walk of the chosen ROM folder by real path (RomCore holds All files access), on the IO dispatcher.
+ * A game's [GameEntity.uri] is its absolute path (the unique key); [GameEntity.realPath] is the same path.
+ */
 object RomScanner {
-    private class Raw(val uri: Uri, val name: String, val size: Long, val folders: List<String>, val isDir: Boolean = false)
+    private class Raw(val file: File, val folders: List<String>, val isDir: Boolean = false)
 
-    suspend fun scan(ctx: Context, tree: Uri, previous: Map<String, GameEntity>, reuseSystems: Boolean, onProgress: (Int) -> Unit): ScanResult =
+    suspend fun scan(root: File, previous: Map<String, GameEntity>, reuseSystems: Boolean, onProgress: (Int) -> Unit): ScanResult =
         withContext(Dispatchers.IO) {
             val wanted = SystemDetector.scanExtensions()
-            val rootDoc = DocumentsContract.getTreeDocumentId(tree)
             val raws = ArrayList<Raw>()
             var readOk = false
-            suspend fun walk(docId: String, folders: List<String>) {
+            suspend fun walk(dir: File, folders: List<String>) {
                 coroutineContext.ensureActive()
-                val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, docId)
-                val cols = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                    DocumentsContract.Document.COLUMN_MIME_TYPE, DocumentsContract.Document.COLUMN_SIZE)
-                val dirs = ArrayList<Pair<String, String>>()
-                val here = ArrayList<Raw>()
-                val names = ArrayList<String>()
-                try {
-                    ctx.contentResolver.query(children, cols, null, null, null)?.use { c ->
-                        readOk = true
-                        while (c.moveToNext()) {
-                            val id = c.getString(0); val name = c.getString(1) ?: continue
-                            names += name
-                            if (c.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR) {
-                                if (!isIgnoredDir(name)) dirs += id to name
-                            } else {
-                                val ext = name.substringAfterLast('.', "").lowercase()
-                                if (ext in wanted) here += Raw(DocumentsContract.buildDocumentUriUsingTree(tree, id), name, c.getLong(3), folders)
-                            }
-                        }
-                    }
-                } catch (_: Exception) { }
+                val kids = dir.listFiles()
+                if (kids != null) readOk = true
+                kids ?: return
+                val dirs = ArrayList<File>(); val here = ArrayList<Raw>()
+                for (k in kids) {
+                    if (k.isDirectory) { if (!isIgnoredDir(k.name)) dirs += k }
+                    else if (k.extension.lowercase() in wanted) here += Raw(k, folders)
+                }
                 // An unpacked Wii U title (code + content + meta) is ONE game; its code/*.rpx is not listed on its own.
-                if (names.isNotEmpty() && CoreSetup.cemuPresent() && CoreSetup.isWiiUTitleFolder(names)) {
-                    val authority = tree.authority
-                    val folderUri = if (authority != null) DocumentsContract.buildTreeDocumentUri(authority, docId) else null
-                    if (folderUri != null) {
-                        raws += Raw(folderUri, folders.lastOrNull() ?: docId.substringAfterLast('/').substringAfterLast(':'), 0, folders.dropLast(1), isDir = true)
-                        return
-                    }
+                if (kids.isNotEmpty() && CoreSetup.cemuPresent() && CoreSetup.isWiiUTitleFolder(kids.map { it.name })) {
+                    raws += Raw(dir, folders.dropLast(1), isDir = true)
+                    return
                 }
                 raws += here
-                for ((id, name) in dirs) walk(id, folders + name)
+                for (d in dirs.sortedBy { it.name.lowercase() }) walk(d, folders + d.name)
             }
-            walk(rootDoc, emptyList())
+            walk(root, emptyList())
 
             val out = ArrayList<GameEntity>()
             var n = 0
             for (r in raws) {
                 coroutineContext.ensureActive()
-                val uriStr = r.uri.toString()
-                val ext = r.name.substringAfterLast('.', "").lowercase()
-                val prev = previous[uriStr]
-                val realPath = SafPathUtils.realPathFromDocumentUri(r.uri)
+                val path = r.file.path
+                val name = r.file.name
+                val ext = name.substringAfterLast('.', "").lowercase()
+                val prev = previous[path]
                 val system = if (r.isDir) System.WIIU else if (reuseSystems && prev != null && prev.system != "OTHER") {
                     runCatching { System.valueOf(prev.system) }.getOrNull()
                 } else null
-                val detected = system ?: SystemDetector.detect(realPath ?: r.name, ext, r.folders, r.size) { readHeader(ctx, r.uri) }
+                val size = if (r.isDir) 0L else r.file.length()
+                val detected = system ?: SystemDetector.detect(path, ext, r.folders, size) { readHeader(r.file) }
                 if (detected == null) continue
                 out += GameEntity(
-                    id = prev?.id ?: 0, uri = uriStr, realPath = realPath, fileName = r.name, title = cleanTitle(r.name),
-                    system = detected.name, sizeBytes = r.size, coreOverride = prev?.coreOverride, favorite = prev?.favorite ?: false,
+                    id = prev?.id ?: 0, uri = path, realPath = path, fileName = name, title = cleanTitle(name),
+                    system = detected.name, sizeBytes = size, coreOverride = prev?.coreOverride, favorite = prev?.favorite ?: false,
                     lastPlayedAt = prev?.lastPlayedAt, playCount = prev?.playCount ?: 0, isDir = r.isDir
                 )
                 if (++n % 25 == 0) onProgress(n)
@@ -100,8 +84,8 @@ object RomScanner {
             ScanResult(out, trustworthy = readOk && raws.isNotEmpty())
         }
 
-    private fun readHeader(ctx: Context, uri: Uri): ByteArray? = try {
-        ctx.contentResolver.openInputStream(uri)?.use { s ->
+    private fun readHeader(f: File): ByteArray? = try {
+        f.inputStream().use { s ->
             val buf = ByteArray(64 * 1024); var off = 0
             while (off < buf.size) { val r = s.read(buf, off, buf.size - off); if (r <= 0) break; off += r }
             buf.copyOf(off)

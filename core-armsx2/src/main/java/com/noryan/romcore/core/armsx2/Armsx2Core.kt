@@ -81,6 +81,18 @@ object Armsx2Core : CoreDescriptor {
 
     /** Looks for a folder whose name contains "bios" (bios, BIOS, _BIOS...) next to the ROM or one level up, and copies a PS2-sized BIOS. */
     private fun autoImportBios(ctx: Context, romPath: String) {
+        // The shell's chosen BIOS folder ("romcore" prefs, key bios_dir) wins over the guess below.
+        val chosen = ctx.getSharedPreferences("romcore", Context.MODE_PRIVATE).getString("bios_dir", null)?.let(::File)
+        if (chosen != null && chosen.isDirectory) {
+            val pick = (chosen.listFiles().orEmpty().toList() + chosen.listFiles { f -> f.isDirectory }.orEmpty().flatMap { it.listFiles().orEmpty().toList() })
+                .filter { looksLikeBios(it) && (it.name.contains("scph", true) || it.name.startsWith("ps2", true)) }
+                .minByOrNull { it.name }
+            if (pick != null) {
+                val dest = File(biosDir(ctx), pick.name)
+                if (!dest.isFile || dest.lastModified() < pick.lastModified()) runCatching { pick.copyTo(dest, overwrite = true); dest.setLastModified(pick.lastModified()) }
+                if (hasBios(ctx)) return
+            }
+        }
         val romDir = File(romPath).parentFile ?: return
         for (root in listOfNotNull(romDir, romDir.parentFile)) {
             val dirs = root.listFiles { f -> f.isDirectory && f.name.contains("bios", ignoreCase = true) }.orEmpty()
@@ -105,5 +117,5 @@ object Armsx2Core : CoreDescriptor {
     internal fun missingBiosMessage(ctx: Context) =
         "A PlayStation 2 BIOS is required (RomCore does not include one).\n\n" +
             "Copy a BIOS dump you own (for example scph39001.bin) to:\n${biosDir(ctx).absolutePath}\n\n" +
-            "or put it in a \"bios\" folder next to your PS2 games."
+            "or choose your BIOS folder in RomCore SETTINGS (BIOS FOLDER)."
 }

@@ -1,6 +1,7 @@
 package com.noryan.romcore
 
 import android.os.Bundle
+import java.io.File
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,7 +24,16 @@ class MainActivity : ComponentActivity() {
         hideStatusBar()
         // Controllers don't touch the screen; keep the display awake so input focus isn't lost.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        applyDebugRoots(intent)
         setContent { RomCoreTheme { RomCoreRoot(vm) } }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) { super.onNewIntent(intent); applyDebugRoots(intent) }
+
+    /** Debug builds only: `--es romcore.debug.roots /a:/b` restricts the folder search to those roots (test hook). */
+    private fun applyDebugRoots(i: android.content.Intent?) {
+        if (!BuildConfig.DEBUG) return
+        i?.getStringExtra("romcore.debug.roots")?.let { r -> vm.debugRoots = r.split(':').filter { it.isNotBlank() }.map(::File) }
     }
 
     private fun hideStatusBar() {
