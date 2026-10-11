@@ -35,9 +35,11 @@ class InputLogicTest {
         val x = PadMapper(DeviceProfiles.forDevice(xbox))
         assertEquals(Pad.A, x.onKey(KeyEvent.KEYCODE_BUTTON_A, true).single().pad)
         val n = PadMapper(DeviceProfiles.forDevice(thor))
-        assertEquals(Pad.B, n.onKey(KeyEvent.KEYCODE_BUTTON_A, true).single().pad)   // bottom = B
-        assertEquals(Pad.A, n.onKey(KeyEvent.KEYCODE_BUTTON_B, true).single().pad)   // right = A
-        assertEquals(Pad.X, n.onKey(KeyEvent.KEYCODE_BUTTON_Y, true).single().pad)   // top = X
+        // Thor sends label-named codes (verified with getevent): right=BUTTON_A, bottom=BUTTON_B, top=BUTTON_X, left=BUTTON_Y
+        assertEquals(Pad.A, n.onKey(KeyEvent.KEYCODE_BUTTON_A, true).single().pad)
+        assertEquals(Pad.B, n.onKey(KeyEvent.KEYCODE_BUTTON_B, true).single().pad)
+        assertEquals(Pad.X, n.onKey(KeyEvent.KEYCODE_BUTTON_X, true).single().pad)
+        assertEquals(Pad.Y, n.onKey(KeyEvent.KEYCODE_BUTTON_Y, true).single().pad)
         val p = PadMapper(DeviceProfiles.forDevice(ds4))
         assertEquals(Pad.B, p.onKey(KeyEvent.KEYCODE_BUTTON_A, true).single().pad)   // Cross = B (PsFace.CROSS)
         assertEquals(Pad.A, p.onKey(KeyEvent.KEYCODE_BUTTON_B, true).single().pad)   // Circle = A

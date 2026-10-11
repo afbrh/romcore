@@ -17,6 +17,9 @@ enum class FaceLayout {
     XBOX,
     /** Nintendo-labelled hardware (Android codes are positional): bottom is "B", right is "A", left "Y", top "X". */
     NINTENDO,
+    /** Hardware whose Android key codes already match the printed labels (keycode BUTTON_A is the button labelled A,
+     *  wherever it sits). Verified on the AYN Thor: right=BUTTON_A, bottom=BUTTON_B, top=BUTTON_X, left=BUTTON_Y. */
+    LABELED,
     /** DualShock/DualSense: Cross(A code)=bottom, Circle(B code)=right, Square(X)=left, Triangle(Y)=top.
      *  Canonical pads follow the PsFace rule: Circle=A, Cross=B, Triangle=X, Square=Y. */
     PLAYSTATION,
@@ -63,6 +66,7 @@ data class InputProfile(
             val (bottom, right, left, top) = when (layout) {
                 FaceLayout.XBOX -> listOf(Pad.A, Pad.B, Pad.X, Pad.Y)
                 FaceLayout.NINTENDO -> listOf(Pad.B, Pad.A, Pad.Y, Pad.X)
+                FaceLayout.LABELED -> listOf(Pad.A, Pad.B, Pad.X, Pad.Y)
                 FaceLayout.PLAYSTATION -> listOf(Pad.B, Pad.A, Pad.Y, Pad.X)
             }
             k(KeyEvent.KEYCODE_BUTTON_A, bottom); k(KeyEvent.KEYCODE_BUTTON_B, right)
@@ -116,9 +120,9 @@ object DeviceProfiles {
             d.vendorId == VENDOR_NINTENDO || "pro controller" in n || "joy-con" in n ->
                 InputProfile.standard("nintendo", "Nintendo controller", FaceLayout.NINTENDO)
             "ayn" in n || "thor" in n || "ayn" in host || "thor" in host ->
-                InputProfile.standard("ayn-thor", "AYN Thor", FaceLayout.NINTENDO)
+                InputProfile.standard("ayn-thor", "AYN Thor", FaceLayout.LABELED)
             "odin" in n || "odin" in host ->
-                InputProfile.standard("ayn-odin", "AYN Odin", FaceLayout.NINTENDO)
+                InputProfile.standard("ayn-odin", "AYN Odin", FaceLayout.LABELED)
             "retroid" in n || "retroid" in host ->
                 InputProfile.standard("retroid", "Retroid Pocket", FaceLayout.NINTENDO)
             "anbernic" in n || "anbernic" in host || Regex("\\brg ?\\d{2,3}").containsMatchIn(n + " " + host) ->
