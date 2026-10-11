@@ -82,3 +82,52 @@ Back, still return true. Window.Callback-wrapper cores (Eden, Azahar) call it fr
 `RouterMappingBackend` / `RouterHotkeyBackend` and canonical navigation; with no gate it falls back to the
 SharedPreferences backends and raw keycodes (previews). `InputRouter(ctx, session, listener)` implements `MenuInputGate`;
 `router.gameInputEnabled` is toggled by `setMenuOpen`.
+
+## UI ownership (RomCore owns every pixel that is not the game)
+
+Rule: a core contributes ONLY emulation (video/audio/input). All UI is RomCore's: the loading screen, on-screen
+overlays, touch controllers, FPS / status / paused chips, toasts, pop-up text and dialogs. Every game in every core
+shows the same loading screen (black, orange chip, game title in Silkscreen, LOADING + bar) instead of the emulator's.
+Shared code lives in `com.noryan.romcore.api.ui` and is wired into `RomCoreCoreHost.install`:
+
+```
+RomCoreCoreHost.install(activity, session, system[, UiOptions(title, loadingScreen, loadingTimeoutMs, minLoadingMs)])
+  hooks.onGameReady()                      core drew its first real frame / finished boot -> loading screen fades out
+  hooks.setLoadingProgress(0..1, text?)    optional determinate bar + status line (NaN = indeterminate); extends the fail-safe
+  hooks.setLoadingText(text)               optional status line only (e.g. "Compiling shaders")
+  hooks.notice(text[, ms])                 transient RomCore banner (replaces Toast)
+  hooks.error(title, message[, fatal])     blocking RomCore panel (replaces emulator dialogs: missing keys/firmware/BIOS...)
+  RomCoreToast.makeText(ctx, msg, len)     drop-in Toast replacement (Kotlin: `import com.noryan.romcore.api.ui.RomCoreToast as Toast`)
+  RomCoreUi.forActivity(a) / forContext(c) the Activity's UI from code that has no `hooks` (JNI callbacks, static helpers)
+```
+
+Behaviour:
+- `install` puts the loading overlay up immediately (before the core has drawn anything). It is a plain View above the
+  core's SurfaceView / own views and below the shared menu, not clickable or focusable, so touch and key input still
+  reach the game and Back still opens the menu (Close Game works while loading). A 300 ms tick re-orders it above any
+  view the core adds later.
+- It fades out (350 ms) on `hooks.onGameReady()`, never sooner than `minLoadingMs` (700). Fail-safe: it fades out by
+  itself after `loadingTimeoutMs` (default 90 s) without `onGameReady`; `setLoadingProgress`/`setLoadingText` calls
+  extend that deadline, capped at 4x. Pass the title explicitly with `UiOptions(title = ...)` or the Intent extra
+  `"romcore.title"`; otherwise it is guessed from the Intent's ROM path/URI extras (extension and "(USA) [!]" tags stripped).
+- `hooks.error` takes input from the game while shown: D-pad / left stick moves focus, A activates (OK or CLOSE GAME), B or
+  Back closes the game (`session.close()`); `fatal = true` shows only CLOSE GAME. Gamepad keys go through the router so
+  the user's own face-button mapping applies. Works over the loading screen.
+- All of it is safe from any thread. Everything is Silkscreen on black with the RomCore orange accent (#FF6B4A) and
+  danger red (#FF6B6B), matching the menu.
+- Android has no way to intercept framework Toasts globally: Toast calls inside code you can edit must be replaced.
+  Native OSD text (emulator-drawn on the GL surface) must be switched off / routed through a `notice` in the core.
+
+### Per-core checklist (a core is done only when ALL are true)
+1. Activity calls `RomCoreCoreHost.install` right after `setContentView`/surface creation (Window.Callback wrapper or hand-wired
+   `RomCoreMenu.attach` cores must migrate to `install`; no second menu/overlay).
+2. The emulator's own loading screen/spinner/splash/progress view is hidden or never inflated (set it `GONE` in the layout or patch the
+   fragment); its progress (shader cache, "Loading...") is forwarded to `hooks.setLoadingProgress/Text`.
+3. `hooks.onGameReady()` is called from the earliest reliable "first frame / emulation started" signal (below), and
+   nothing else dismisses the screen. Verify: screenshot loading -> game on the Thor; also kill the signal once to see the 90 s fail-safe path is not needed.
+4. Every `Toast`, `AlertDialog`/`MaterialAlertDialogBuilder`, `DialogFragment`, Snackbar and native alert callback
+   (`displayAlertMsg`, `CoreErrorDialogFragment`, ...) is replaced by `hooks.notice` / `hooks.error` (or `RomCoreToast`).
+   Yes/no questions get a deterministic default answer and the text is logged.
+5. No emulator overlay is drawn: FPS/stat counters, OSD messages (e.g. PCSX2 `AddKeyedOSDMessage`, RetroArch notifications), pause/
+   "paused" indicators, on-screen touch controls, input-overlay views, drawer/menu buttons. Disable in settings/defaults or patch out.
+6. `adb shell dumpsys window | grep -i toast` / a game session shows no Toast and no foreign dialog; Back opens only the shared menu.

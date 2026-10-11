@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- RomCore mark (the processor chip), cropped tight. Same path as the launcher icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="56dp" android:height="56dp" android:viewportWidth="56" android:viewportHeight="56">
+    <group android:translateX="-26" android:translateY="-26">
+        <path android:fillColor="#FF6B4A" android:fillType="evenOdd" android:pathData="M34,34H74V74H34ZM41,41H67V67H41ZM49,49H59V59H49ZM40,26h4v8h-4zM40,74h4v8h-4zM26,40h8v4h-8zM74,40h8v4h-8zM52,26h4v8h-4zM52,74h4v8h-4zM26,52h8v4h-8zM74,52h8v4h-8zM64,26h4v8h-4zM64,74h4v8h-4zM26,64h8v4h-8zM74,64h8v4h-8z" />
+    </group>
+</vector>

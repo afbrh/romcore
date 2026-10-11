@@ -77,6 +77,9 @@ class RomCoreMenuHost internal constructor(
         val cb = android.window.OnBackInvokedCallback {
             if (android.os.SystemClock.uptimeMillis() - lastBackKeyMs < BACK_DEDUPE_MS) return@OnBackInvokedCallback
             lastBackKeyMs = android.os.SystemClock.uptimeMillis()
+            com.noryan.romcore.api.ui.RomCoreUi.forActivity(activity)?.takeIf { it.isErrorShowing }?.let {
+                it.onErrorPad(com.noryan.romcore.api.Pad.BACK, true); return@OnBackInvokedCallback
+            }
             if (model.isOpen) model.nav(MenuNav.BACK) else open()
         }
         backCallback = cb

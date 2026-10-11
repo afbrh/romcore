@@ -21,4 +21,17 @@ internal object RaBridge {
 
     fun request(op: Int, path: String? = null, timeoutMs: Int = 2500): Boolean =
         try { nativeRequest(op, 0, path, timeoutMs) == 1 } catch (_: UnsatisfiedLinkError) { false }
+
+    /**
+     * True when the RetroArch main loop answered a no-op request promptly, i.e. content is loaded and frames are being
+     * run (romcore_bridge_poll runs once per frame from android_input_poll, before the core's retro_run). Unknown ops
+     * are executed as no-ops natively, so this needs no native change.
+     */
+    fun mainLoopAlive(timeoutMs: Int = 250): Boolean {
+        val t0 = android.os.SystemClock.uptimeMillis()
+        return try {
+            nativeRequest(99, 0, null, timeoutMs)
+            android.os.SystemClock.uptimeMillis() - t0 < timeoutMs - 20
+        } catch (_: UnsatisfiedLinkError) { false }
+    }
 }

@@ -46,11 +46,27 @@ class RomCoreRetroActivity : RetroActivityFuture() {
         sv.holder.addCallback(this)
         setContentView(sv, android.view.ViewGroup.LayoutParams(-1, -1))
 
-        hooks = RomCoreCoreHost.install(this, session, system)
+        hooks = RomCoreCoreHost.install(this, session, system) // loading screen goes up here, before RetroArch draws
+        watchFirstFrame()
 
         // Autosave-on-close only once the core has certainly started (otherwise we could overwrite slot 0 with nothing).
         main.postDelayed({ session.ready = true }, 6000)
         if (intent.getBooleanExtra(EXTRA_RESUME, false)) resumeWhenReady()
+    }
+
+    /**
+     * Ready signal: RetroArch's main loop services our bridge once per frame. Two prompt answers in a row means content
+     * is loaded and the core is running frames; give the first frame a moment to reach the SurfaceView, then reveal.
+     */
+    private fun watchFirstFrame() {
+        Thread {
+            var hits = 0
+            val t0 = android.os.SystemClock.uptimeMillis()
+            while (!closing && hits < 2 && android.os.SystemClock.uptimeMillis() - t0 < 120_000) {
+                if (RaBridge.mainLoopAlive()) hits++ else { hits = 0; Thread.sleep(150) }
+            }
+            if (hits >= 2) { Thread.sleep(300); hooks.onGameReady() }
+        }.apply { isDaemon = true; name = "romcore-ra-ready" }.start()
     }
 
     /** Native startup (core load, content load) is async; retry the resume state until the core accepts it. */
