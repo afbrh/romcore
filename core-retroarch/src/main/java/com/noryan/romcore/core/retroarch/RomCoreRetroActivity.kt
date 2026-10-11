@@ -46,7 +46,9 @@ class RomCoreRetroActivity : RetroActivityFuture() {
         sv.holder.addCallback(this)
         setContentView(sv, android.view.ViewGroup.LayoutParams(-1, -1))
 
+        session.surfaceSource = { sv }
         hooks = RomCoreCoreHost.install(this, session, system) // loading screen goes up here, before RetroArch draws
+        session.notifier = { msg -> runOnUiThread { hooks.notice(msg) } }
         watchFirstFrame()
 
         // Autosave-on-close only once the core has certainly started (otherwise we could overwrite slot 0 with nothing).
@@ -75,7 +77,7 @@ class RomCoreRetroActivity : RetroActivityFuture() {
             var tries = 0
             while (!closing && tries++ < 40) {
                 Thread.sleep(500)
-                if (session.statePath(0).exists() && session.loadState(0)) break
+                if (session.statePath(0).exists() && session.loadState(0, false)) break
             }
         }.start()
     }
@@ -101,12 +103,16 @@ class RomCoreRetroActivity : RetroActivityFuture() {
         if (closing) return
         closing = true
         finishAndRemoveTask()
+        // RetroArch's native thread can be slow or stuck while unloading a core (and NativeActivity.onDestroy waits for
+        // it on the main thread): never let that keep the process alive or the UI thread blocked.
+        main.postDelayed({ Process.killProcess(Process.myPid()) }, 1200)
     }
 
     override fun onDestroy() {
         if (::hooks.isInitialized) hooks.onDestroy()
-        super.onDestroy()
-        // RetroArch keeps process-global native state; a fresh process per game is the only reliable reset.
+        // RetroArch keeps process-global native state; a fresh process per game is the only reliable reset. Kill BEFORE
+        // super.onDestroy(): NativeActivity.onDestroy blocks the main thread until the native thread has exited.
         Process.killProcess(Process.myPid())
+        super.onDestroy()
     }
 }

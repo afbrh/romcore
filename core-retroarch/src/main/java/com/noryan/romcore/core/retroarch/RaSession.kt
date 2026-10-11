@@ -26,30 +26,98 @@ internal class RaSession(
 
     @Volatile private var paused = false
     @Volatile var ready = false
+    private val closeStarted = java.util.concurrent.atomic.AtomicBoolean(false)
 
-    override fun pause() { paused = true; RaBridge.request(RaBridge.OP_PAUSE) }
-    override fun resume() { paused = false; RaBridge.request(RaBridge.OP_RESUME) }
+    /** Set by the Activity: user-visible failure/info text (RomCore notice banner). Called from any thread. */
+    @Volatile var notifier: ((String) -> Unit)? = null
+    /** Set by the Activity: the SurfaceView RetroArch renders into, for slot thumbnails. */
+    @Volatile var surfaceSource: (() -> android.view.SurfaceView?)? = null
+
+    /** Read by [slotInfo] inside composition: bumping it after a save/load makes the menu's slot rows recompose. */
+    private val slotRevision = androidx.compose.runtime.mutableIntStateOf(0)
+    override fun slotInfo(slot: Int): com.noryan.romcore.api.menu.SlotInfo {
+        slotRevision.intValue // snapshot read: subscribes the calling composable
+        return super.slotInfo(slot)
+    }
+
+    // Called on the UI thread: never block it on the RetroArch thread (it may be busy or wedged). Ordered, bounded.
+    private val pauser = java.util.concurrent.Executors.newSingleThreadExecutor { Thread(it, "romcore-ra-pause").apply { isDaemon = true } }
+    override fun pause() { paused = true; pauser.execute { RaBridge.request(RaBridge.OP_PAUSE, null, 1500) } }
+    override fun resume() { paused = false; pauser.execute { RaBridge.request(RaBridge.OP_RESUME, null, 1500) } }
 
     override fun saveState(slot: Int): Boolean {
         val f = statePath(slot)
         f.parentFile?.mkdirs()
-        return RaBridge.request(RaBridge.OP_SAVE, f.absolutePath, 5000)
+        val t0 = android.os.SystemClock.uptimeMillis()
+        val ok = RaBridge.request(RaBridge.OP_SAVE, f.absolutePath, 6000)
+        android.util.Log.i(TAG, "saveState slot=$slot ok=$ok in ${android.os.SystemClock.uptimeMillis() - t0}ms size=${f.length()}")
+        if (ok) {
+            if (slot != 0) writeThumbnail(slot) else thumbnailPath(0).delete()
+        } else {
+            notifier?.invoke("Save failed: ${system.name} core could not write a state")
+        }
+        slotRevision.intValue++
+        return ok
     }
 
-    override fun loadState(slot: Int): Boolean {
+    override fun loadState(slot: Int): Boolean = loadState(slot, true)
+
+    fun loadState(slot: Int, notify: Boolean): Boolean {
         val f = statePath(slot)
-        return f.exists() && RaBridge.request(RaBridge.OP_LOAD, f.absolutePath, 5000)
+        if (!f.exists()) { if (notify) notifier?.invoke("Slot $slot is empty"); return false }
+        val t0 = android.os.SystemClock.uptimeMillis()
+        val ok = RaBridge.request(RaBridge.OP_LOAD, f.absolutePath, 6000)
+        android.util.Log.i(TAG, "loadState slot=$slot ok=$ok in ${android.os.SystemClock.uptimeMillis() - t0}ms")
+        if (!ok && notify) notifier?.invoke("Load failed: state could not be restored")
+        return ok
+    }
+
+    /** Best effort slotN.png from the frame currently on screen (the menu is a separate view, so it is not captured). */
+    private fun writeThumbnail(slot: Int) {
+        runCatching {
+            val sv = surfaceSource?.invoke() ?: return
+            if (!sv.holder.surface.isValid || sv.width <= 0 || sv.height <= 0) return
+            val w = 320; val h = (320f * sv.height / sv.width).toInt().coerceIn(1, 640)
+            val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+            val latch = java.util.concurrent.CountDownLatch(1)
+            var result = -1
+            android.view.PixelCopy.request(sv, bmp, { r -> result = r; latch.countDown() }, android.os.Handler(android.os.Looper.getMainLooper()))
+            if (!latch.await(1500, java.util.concurrent.TimeUnit.MILLISECONDS) || result != android.view.PixelCopy.SUCCESS) {
+                android.util.Log.w(TAG, "thumbnail PixelCopy result=$result"); return
+            }
+            val out = thumbnailPath(slot)
+            java.io.FileOutputStream(out).use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, it) }
+        }.onFailure { android.util.Log.w(TAG, "thumbnail failed", it) }
     }
 
     override fun writeState(slot: Int, file: File) = false // saveState overridden; kept for the base contract
     override fun readState(slot: Int, file: File) = false
 
+    /**
+     * Called by the menu / hotkey on the MAIN thread, so it must return at once. Everything slow (resume autosave,
+     * SRAM flush, quit request) runs on a worker with hard timeouts, then the Activity finishes and the :retroarch
+     * process is killed by a watchdog regardless of what the native side is doing.
+     */
     override fun close() {
-        // Autosave to the resume slot, then quit RetroArch and tear the process down.
-        if (ready) runCatching { saveState(0) }
-        RaBridge.request(RaBridge.OP_QUIT, null, 1500)
-        RaBridge.nativeReleaseAll()
-        onClose()
+        if (!closeStarted.compareAndSet(false, true)) return
+        Thread {
+            val t0 = android.os.SystemClock.uptimeMillis()
+            fun step(name: String, op: () -> Boolean) {
+                val ok = runCatching(op).getOrDefault(false)
+                android.util.Log.i(TAG, "close: $name ok=$ok at +${android.os.SystemClock.uptimeMillis() - t0}ms")
+            }
+            if (ready) step("autosave") { RaBridge.request(RaBridge.OP_SAVE, statePath(0).also { it.parentFile?.mkdirs() }.absolutePath, 2500) }
+            step("flush") { RaBridge.request(RaBridge.OP_FLUSH, null, 1000) }
+            step("quit") { RaBridge.request(RaBridge.OP_QUIT, null, 500) }
+            runCatching { RaBridge.nativeReleaseAll() }
+            onClose()
+            android.util.Log.i(TAG, "close: onClose done at +${android.os.SystemClock.uptimeMillis() - t0}ms")
+        }.apply { name = "romcore-ra-close"; isDaemon = true }.start()
+        // Absolute backstop even if the worker or the main thread is wedged.
+        Thread {
+            runCatching { Thread.sleep(6000) }
+            android.os.Process.killProcess(android.os.Process.myPid())
+        }.apply { name = "romcore-ra-reaper"; isDaemon = true }.start()
     }
 
     override fun injectButton(pad: Pad, pressed: Boolean) {
@@ -83,6 +151,7 @@ internal class RaSession(
     }
 
     companion object {
+        private const val TAG = "RomCoreRa"
         /** Canonical (Nintendo-label) pad -> RETRO_DEVICE_ID_JOYPAD_*. Face buttons are 1:1 for every family. */
         fun retroId(p: Pad): Int? = when (p) {
             Pad.B -> 0; Pad.Y -> 1; Pad.SELECT -> 2; Pad.START -> 3

@@ -11,6 +11,8 @@ internal object RaBridge {
     const val OP_PAUSE = 3
     const val OP_RESUME = 4
     const val OP_QUIT = 5
+    /** Flush battery saves (SRAM/RTC) to disk now. */
+    const val OP_FLUSH = 6
 
     @JvmStatic external fun nativeButton(retroId: Int, pressed: Boolean)
     /** stick 0=left 1=right, axis 0=x 1=y, value -32767..32767 (libretro convention: -y is up). */
