@@ -12,20 +12,9 @@ import android.view.Window
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.view.WindowCallbackWrapper
 import androidx.drawerlayout.widget.DrawerLayout
-import com.noryan.romcore.api.MenuAction
+import com.noryan.romcore.api.RomCoreCoreHost
 import com.noryan.romcore.api.System
-import com.noryan.romcore.api.input.DeviceInfo
-import com.noryan.romcore.api.input.HotkeyAction
-import com.noryan.romcore.api.input.HotkeyEvent
-import com.noryan.romcore.api.input.HotkeyListener
-import com.noryan.romcore.api.input.InputRouter
-import com.noryan.romcore.api.input.PhysicalControl
-import com.noryan.romcore.api.menu.HotkeyBackend
-import com.noryan.romcore.api.menu.MappingBackend
-import com.noryan.romcore.api.menu.MenuInputGate
-import com.noryan.romcore.api.menu.RomCoreMenu
-import com.noryan.romcore.api.menu.RomCoreMenuHost
-import com.noryan.romcore.api.Pad
+import org.citra.citra_emu.utils.RomCoreBridge
 import org.citra.citra_emu.NativeLibrary
 import org.citra.citra_emu.activities.EmulationActivity
 import org.citra.citra_emu.features.settings.model.BooleanSetting
@@ -40,10 +29,8 @@ object AzaharHost {
     private val SYSTEM = System.N3DS
     @Volatile var closing = false
     private var session: AzaharSession? = null
-    private var router: InputRouter? = null
-    private var menu: RomCoreMenuHost? = null
+    private var hooks: RomCoreCoreHost.Hooks? = null
     private var backGuard: OnBackPressedCallback? = null
-    private var lastDevice: DeviceInfo? = null
 
     // ---- before Activity.onCreate: directory + layout configuration --------------------------------------------
     fun prepare(a: EmulationActivity) {
@@ -108,38 +95,27 @@ object AzaharHost {
         }
     }
 
-    // ---- after Activity.onCreate: menu + input ---------------------------------------------------------------------
+    // ---- after Activity.onCreate: RomCore UI + menu + input ----------------------------------------------------------
     fun attach(a: EmulationActivity) {
         if (a.isFinishing) return
         closing = false
         val s = AzaharSession(a).also { session = it }
-        lateinit var host: RomCoreMenuHost
-        val r = InputRouter(a, s, HotkeyListener { e ->
-            a.runOnUiThread {
-                when (e) {
-                    HotkeyEvent.ToggleMenu -> host.toggle()
-                    is HotkeyEvent.Run -> when (e.action) { // quick actions: slot 1
-                        MenuAction.SAVE_STATE -> Thread { s.saveState(1) }.start()
-                        MenuAction.LOAD_STATE -> Thread { s.loadState(1) }.start()
-                        MenuAction.CLOSE_GAME -> s.close()
-                        else -> host.toggle()
-                    }
-                }
-            }
-        })
-        router = r
-        InputRouter.keepScreenOn(a)
-        // Gate = the InputRouter itself: canonical (label-based) menu navigation + router-backed mapping/hotkey stores.
-        host = RomCoreMenu.attach(a, s, SYSTEM, r)
-        menu = host
+        // One call wires the router, the shared menu, hotkeys AND RomCore's loading screen / notices / error panel.
+        val h = RomCoreCoreHost.install(a, s, SYSTEM).also { hooks = it }
+        // RomCore owns all non-game UI: Azahar's loading layout/toasts/dialogs are patched out (azahar-src, local only)
+        // and report through RomCoreBridge instead.
+        RomCoreBridge.notice = { h.notice(it) }
+        RomCoreBridge.error = { t, m, fatal -> h.error(t, m, fatal) }
+        RomCoreBridge.progress = { f, t -> h.setLoadingProgress(f, t) }
+        RomCoreBridge.loadingText = { h.setLoadingText(it) }
+        RomCoreBridge.ready = { h.onGameReady() }
+        RomCoreBridge.flushPending()
 
         // Everything the stock activity would do with keys/sticks goes through RomCore first (contract rule).
         val orig = a.window.callback
         a.window.callback = object : WindowCallbackWrapper(orig) {
             override fun dispatchKeyEvent(e: KeyEvent): Boolean {
-                if (host.dispatchKeyEvent(e)) return true
-                e.device?.let { if (e.source and 0x401 != 0) lastDevice = DeviceInfo.from(it) }
-                if (r.onKeyEvent(e, SYSTEM)) return true
+                if (h.dispatchKey(e)) return true
                 if (e.keyCode == KeyEvent.KEYCODE_BACK) return true // never let the stock drawer open (host handles Back)
                 // Stock activity would map raw gamepad keys itself; those must not double-fire.
                 if (e.source and (android.view.InputDevice.SOURCE_GAMEPAD or android.view.InputDevice.SOURCE_DPAD) != 0) return true
@@ -147,9 +123,7 @@ object AzaharHost {
             }
 
             override fun dispatchGenericMotionEvent(e: MotionEvent): Boolean {
-                if (host.dispatchGenericMotionEvent(e)) return true
-                e.device?.let { if (e.source and android.view.InputDevice.SOURCE_JOYSTICK != 0) lastDevice = DeviceInfo.from(it) }
-                if (r.onMotionEvent(e, SYSTEM)) return true
+                if (h.dispatchMotion(e)) return true
                 if (e.source and android.view.InputDevice.SOURCE_JOYSTICK != 0) return true
                 return super.dispatchGenericMotionEvent(e)
             }
@@ -159,14 +133,16 @@ object AzaharHost {
     /** Called after every resume: (a) gesture-back toggles the RomCore menu, (b) keep the pause if the menu is open. */
     fun resumed(a: EmulationActivity) {
         if (backGuard == null) {
-            backGuard = object : OnBackPressedCallback(true) { override fun handleOnBackPressed() { menu?.let { if (it.isOpen) it.model.nav(com.noryan.romcore.api.menu.MenuNav.BACK) else it.open() } } }
+            backGuard = object : OnBackPressedCallback(true) { override fun handleOnBackPressed() { hooks?.menu?.let { if (it.isOpen) it.model.nav(com.noryan.romcore.api.menu.MenuNav.BACK) else it.open() } } }
                 .also { a.onBackPressedDispatcher.addCallback(a, it) } // added last => highest priority, beats the drawer
         }
-        if (menu?.isOpen == true) NativeLibrary.pauseEmulation()
+        if (hooks?.menu?.isOpen == true) NativeLibrary.pauseEmulation()
     }
 
     fun detach(a: EmulationActivity) {
-        menu?.detach(); menu = null; router = null; session = null; backGuard = null
+        hooks?.onDestroy(); hooks = null; session = null; backGuard = null
+        RomCoreBridge.notice = null; RomCoreBridge.error = null; RomCoreBridge.progress = null
+        RomCoreBridge.loadingText = null; RomCoreBridge.ready = null
         if (a.isFinishing) {
             // Native/GL state of a finished Azahar session is not reusable; end the game process (as the prior art did).
             Thread {

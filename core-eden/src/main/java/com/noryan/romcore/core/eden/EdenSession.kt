@@ -2,7 +2,7 @@ package com.noryan.romcore.core.eden
 
 import android.os.Handler
 import android.os.Looper
-import android.widget.Toast
+import com.noryan.romcore.api.ui.RomCoreToast as Toast
 import com.noryan.romcore.api.CoreSession
 import com.noryan.romcore.api.Pad
 import com.noryan.romcore.api.menu.SlotInfo
@@ -37,7 +37,15 @@ class EdenSession(private val context: android.content.Context) : CoreSession, S
         main.post { Toast.makeText(context, EdenCore.STATE_UNAVAILABLE_REASON, Toast.LENGTH_LONG).show() }
     }
 
-    override fun close() { NativeLibrary.stopEmulation() } // EmulationActivity.onEmulationStopped(0) finishes the activity
+    override fun close() {
+        NativeLibrary.stopEmulation()
+        // Before emulation started (loader/key errors) there is no stop callback to finish the Activity: do it ourselves.
+        (context as? android.app.Activity)?.let { a -> main.postDelayed({
+            if (!a.isFinishing) a.finish()
+            // A fatal loader error leaves the native thread parked: end the :eden process so the next launch is clean.
+            if (org.yuzu.yuzu_emu.utils.RomCoreBridge.fatalShown) main.postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, 300)
+        }, 1500) }
+    } // EmulationActivity.onEmulationStopped(0) finishes the activity
 
     override fun injectButton(pad: Pad, pressed: Boolean) {
         val state = if (pressed) NativeInput.ButtonState.PRESSED else NativeInput.ButtonState.RELEASED

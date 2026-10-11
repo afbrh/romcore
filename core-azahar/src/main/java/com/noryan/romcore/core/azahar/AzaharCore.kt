@@ -68,6 +68,7 @@ object AzaharCore : CoreDescriptor {
         )
         return Intent().setClassName(ctx.packageName, EMU_ACTIVITY).apply {
             putExtra("game", game)
+            putExtra("romcore.title", game.title)
             putExtra(EXTRA_MARK, true)
             putExtra(EXTRA_MODE, screenMode(ctx).name)
             userTree(ctx, request.romUri)?.let { putExtra(EXTRA_TREE, it) }

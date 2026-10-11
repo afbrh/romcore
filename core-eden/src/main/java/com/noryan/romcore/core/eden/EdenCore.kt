@@ -37,6 +37,7 @@ object EdenCore : CoreDescriptor {
         // EmulationActivity.EXTRA_SELECTED_GAME. Do not set intent.data: that routes through Eden's own library-scan metadata.
         return Intent(ctx, EmulationActivity::class.java).apply {
             putExtra("game", Game(title = title, path = path))
+            putExtra("romcore.title", title)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
     }

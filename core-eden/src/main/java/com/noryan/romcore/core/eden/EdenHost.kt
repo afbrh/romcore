@@ -7,6 +7,7 @@ import androidx.appcompat.view.WindowCallbackWrapper
 import com.noryan.romcore.api.RomCoreCoreHost
 import com.noryan.romcore.api.System
 import org.yuzu.yuzu_emu.activities.EmulationActivity
+import org.yuzu.yuzu_emu.utils.RomCoreBridge
 
 /**
  * Integrates the shared RomCore input router + in-game menu with Eden's game Activity WITHOUT patching Eden
@@ -21,6 +22,14 @@ object EdenHost {
     fun attach(activity: EmulationActivity) {
         val s = EdenSession(activity).also { session = it }
         val h = RomCoreCoreHost.install(activity, s, System.SWITCH).also { hooks = it }
+        // RomCore owns all non-game UI: Eden's loading card/toasts/dialogs are patched out (eden-src, local only) and
+        // report through RomCoreBridge instead.
+        RomCoreBridge.notice = { h.notice(it) }
+        RomCoreBridge.error = { t, m, fatal -> h.error(t, m, fatal) }
+        RomCoreBridge.progress = { f, t -> h.setLoadingProgress(f, t) }
+        RomCoreBridge.loadingText = { h.setLoadingText(it) }
+        RomCoreBridge.ready = { h.onGameReady() }
+        RomCoreBridge.flushPending()
         val window = activity.window
         val original: Window.Callback = window.callback
         window.callback = object : WindowCallbackWrapper(original) {
@@ -38,5 +47,7 @@ object EdenHost {
 
     fun detach(@Suppress("UNUSED_PARAMETER") activity: EmulationActivity) {
         hooks?.onDestroy(); hooks = null; session = null
+        RomCoreBridge.notice = null; RomCoreBridge.error = null; RomCoreBridge.progress = null
+        RomCoreBridge.loadingText = null; RomCoreBridge.ready = null
     }
 }
