@@ -13,7 +13,6 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.FrameLayout
-import android.widget.Toast
 import com.noryan.romcore.api.RomCoreCoreHost
 import com.noryan.romcore.api.System
 import com.noryan.romcore.core.dolphin.jni.DolphinApplication
@@ -45,6 +44,10 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
     private val booted = AtomicBoolean(false)
     private var emuThread: Thread? = null
     private var closing = false
+    private var readySignalled = false
+    private var titleValid = false
+    private var shadersDone = false
+    private var shadersWaiting = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,7 +78,7 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
             try {
                 DolphinRuntime.ensureInitialized(this)
             } catch (t: Throwable) {
-                runOnUiThread { Toast.makeText(this, "Dolphin failed to start: ${t.message}", Toast.LENGTH_LONG).show(); finish() }
+                hooks.error("Dolphin failed to start", t.message ?: t.toString(), true)
                 return@Thread
             }
             runOnUiThread {
@@ -128,11 +131,41 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
     override fun finishEmulation() = runOnUiThread { closeGame() }
 
     override fun onTitleChanged() {
-        runOnUiThread { if (NativeLibrary.IsGameMetadataValid()) session.onGameReady() }
+        runOnUiThread {
+            if (NativeLibrary.IsGameMetadataValid()) {
+                session.onGameReady()
+                titleValid = true
+                android.util.Log.i("RomCoreUi", "title valid")
+                // Fallback if the shader-wait callback never arrives (WaitForShadersBeforeStarting off).
+                maybeReady(if (shadersDone) 500 else 30_000)
+            }
+        }
+    }
+
+    /** Shader pre-compile progress goes to the shared RomCore loading screen (Dolphin's own ImGui bar is not drawn). */
+    override fun onShaderCompile(completed: Int, total: Int, finished: Boolean) {
+        android.util.Log.i("RomCoreUi", "shader $completed/$total finished=$finished")
+        runOnUiThread {
+            if (!::hooks.isInitialized) return@runOnUiThread
+            if (finished) { shadersWaiting = false; hooks.setLoadingText(null); shadersDone = true; maybeReady(500) }
+            else {
+                shadersWaiting = true
+                hooks.setLoadingProgress(completed.toFloat() / maxOf(total, 1), "Compiling shaders $completed/$total")
+            }
+        }
+    }
+
+    /** Ready = shader pre-compile wait finished (native signal; the CPU only starts ~5 s after the title is valid) or a 30 s fallback; the delay lets the first frames reach the surface. */
+    private fun maybeReady(delayMs: Long) {
+        if (readySignalled || !titleValid) return
+        val fallback = delayMs >= 30_000
+        window.decorView.postDelayed({
+            if (!readySignalled && !shadersWaiting && (shadersDone || fallback) && ::hooks.isInitialized) { readySignalled = true; android.util.Log.i("RomCoreUi", "onGameReady"); hooks.onGameReady() }
+        }, delayMs)
     }
 
     override fun displayScale(): Float = resources.displayMetrics.scaledDensity
-    override fun toast(text: String) { runOnUiThread { Toast.makeText(this, text, Toast.LENGTH_SHORT).show() } }
+    override fun toast(text: String) { if (::hooks.isInitialized) hooks.notice(text) }
 
     // ---- shutdown ----------------------------------------------------------------------------------------------
     private fun closeGame() {
@@ -140,7 +173,7 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
         closing = true
         session.onGameStopped()
         Thread({
-            if (NativeLibrary.IsRunning()) runCatching { NativeLibrary.StopEmulation() }
+            if (runCatching { NativeLibrary.IsRunning() }.getOrDefault(false)) runCatching { NativeLibrary.StopEmulation() }
             emuThread?.let { runCatching { it.join(5000) } }
             runOnUiThread { finishAndRemoveTask() }
         }, "dolphin-stop").start()

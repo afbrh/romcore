@@ -7,7 +7,7 @@ package com.noryan.romcore.core.dolphin.jni
 
 import android.content.res.Resources
 import android.view.Surface
-import android.widget.Toast
+import com.noryan.romcore.api.ui.RomCoreToast as Toast
 import androidx.annotation.Keep
 import androidx.core.content.ContextCompat
 import androidx.core.util.Pair
@@ -210,6 +210,8 @@ object NativeLibrary {
         fun onTitleChanged()
         fun displayScale(): Float
         fun toast(text: String)
+        /** RomCore: shader pre-compile progress (WaitForShadersBeforeStarting); finished=true when the wait is over. */
+        fun onShaderCompile(completed: Int, total: Int, finished: Boolean) {}
     }
 
     @Volatile
@@ -475,6 +477,12 @@ object NativeLibrary {
     fun GetCurrentTitleDescription(): String {
         checkGameMetadataValid()
         return GetCurrentTitleDescriptionUnchecked()
+    }
+
+    @JvmStatic
+    @Keep
+    fun onShaderCompileProgress(completed: Int, total: Int, finished: Boolean) {
+        host?.onShaderCompile(completed, total, finished)
     }
 
     @JvmStatic

@@ -30,6 +30,14 @@ object PrimeHackConfig {
 
         // Game surface only: no touch overlay.
         PrimeHackProfiles.setValue(dolphin, "Android", "ShowInputOverlay", "False")
+        // RomCore owns all UI: no emulator-drawn OSD messages, FPS/speed/stat overlays, or confirmation prompts.
+        PrimeHackProfiles.mergeSection(dolphin, "Interface", mapOf(
+            "OnScreenDisplayMessages" to "False", "ConfirmStop" to "False", "UsePanicHandlers" to "False"))
+        PrimeHackProfiles.mergeSection(gfx, "Settings", mapOf(
+            "ShowFPS" to "False", "ShowVPS" to "False", "ShowSpeed" to "False", "ShowSpeedColors" to "False",
+            "ShowGraphs" to "False", "ShowNetPlayPing" to "False", "ShowNetPlayMessages" to "False",
+            "OverlayStats" to "False", "OverlayProjStats" to "False", "OverlayScissorStats" to "False",
+            "ShowFrameTimes" to "False"))
         // Compile shaders before start, and fall back to an uber shader instead of a synchronous cold compile
         // (a Prime Trilogy morph-ball transition otherwise spiked memory enough to get the process OOM-killed).
         PrimeHackProfiles.setValue(gfx, "Settings", "WaitForShadersBeforeStarting", "True")

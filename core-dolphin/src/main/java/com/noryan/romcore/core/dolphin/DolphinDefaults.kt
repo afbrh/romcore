@@ -31,8 +31,25 @@ internal object DolphinDefaults {
         ),
     )
 
+    /** UI-ownership: emulator-drawn text/overlays are forced off on EVERY launch (RomCore draws all UI). */
+    private val ENFORCED: Map<String, Map<String, Map<String, String>>> = mapOf(
+        "Dolphin.ini" to mapOf(
+            "Interface" to mapOf("OnScreenDisplayMessages" to "False", "ConfirmStop" to "False", "UsePanicHandlers" to "False"),
+            "Android" to mapOf("ShowInputOverlay" to "False"),
+        ),
+        "GFX.ini" to mapOf(
+            "Settings" to mapOf(
+                "ShowFPS" to "False", "ShowVPS" to "False", "ShowSpeed" to "False", "ShowSpeedColors" to "False",
+                "ShowGraphs" to "False", "ShowNetPlayPing" to "False", "ShowNetPlayMessages" to "False",
+                "OverlayStats" to "False", "OverlayProjStats" to "False", "OverlayScissorStats" to "False",
+                "ShowFrameTimes" to "False", "WaitForShadersBeforeStarting" to "True",
+            ),
+        ),
+    )
+
     fun apply(userDir: File) {
         val cfg = File(userDir, "Config").apply { mkdirs() }
+        for ((file, sections) in ENFORCED) mergeIni(File(cfg, file), sections)
         if (File(cfg, MARKER).exists()) return
         for ((file, sections) in DEFAULTS) mergeIni(File(cfg, file), sections)
         cfg.listFiles { f -> f.name.startsWith(".romcore_defaults_v") }?.forEach { it.delete() }

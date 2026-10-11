@@ -89,6 +89,11 @@ class PrimeHackActivity : EmulationActivity() {
         session = PrimeHackSession(this, path ?: uri!!, this)
         hooks = RomCoreCoreHost.install(this, session, system)   // InputRouter + shared menu + hotkeys + keep-screen-on
 
+        com.noryan.romcore.core.primehack.jni.UiBridge.noticeSink = { t -> hooks?.notice(t) }
+        com.noryan.romcore.core.primehack.jni.UiBridge.shaderSink = { c, t, fin -> runOnUiThread { onShaderCompile(c, t, fin) } }
+
+        if (NativeLibrary.IsGameMetadataValid()) { titleValid = true; maybeReady(if (shadersDone) 500 else 30_000) }
+
         registerDebugReceiver()
         gyro = PrimeHackGyro(this).also { if (PrimeHackPrefs.gyroAim(this)) it.start() }
 
@@ -125,6 +130,35 @@ class PrimeHackActivity : EmulationActivity() {
             androidx.core.content.ContextCompat.RECEIVER_EXPORTED)
     }
 
+    private var readySignalled = false
+    private var titleValid = false
+    private var shadersDone = false
+    private var shadersWaiting = false
+
+    /** Shader pre-compile progress goes to the shared RomCore loading screen (Dolphin's own ImGui bar is not drawn). */
+    private fun onShaderCompile(completed: Int, total: Int, finished: Boolean) {
+        val h = hooks ?: return
+        if (finished) { shadersWaiting = false; shadersDone = true; h.setLoadingText(null); maybeReady(500) }
+        else {
+            shadersWaiting = true
+            h.setLoadingProgress(completed.toFloat() / maxOf(total, 1), "Compiling shaders $completed/$total")
+        }
+    }
+
+    /** Ready = game metadata valid and no shader wait in progress; the delay lets the first frames reach the surface. */
+    private fun maybeReady(delayMs: Long) {
+        if (readySignalled || !titleValid) return
+        val fallback = delayMs >= 30_000
+        window.decorView.postDelayed({
+            if (!readySignalled && !shadersWaiting && (shadersDone || fallback)) { readySignalled = true; hooks?.onGameReady() }
+        }, delayMs)
+    }
+
+    override fun onTitleChanged() {
+        super.onTitleChanged()
+        if (hooks != null && NativeLibrary.IsGameMetadataValid()) { titleValid = true; maybeReady(if (shadersDone) 500 else 30_000) }
+    }
+
     /** Dolphin's Back handler lands here: show/hide the shared menu instead of the Dolphin pop-out. */
     override fun toggleMenu() { hooks?.menu?.toggle() }
 
@@ -158,6 +192,8 @@ class PrimeHackActivity : EmulationActivity() {
 
     override fun onDestroy() {
         debugReceiver?.let { runCatching { unregisterReceiver(it) } }
+        com.noryan.romcore.core.primehack.jni.UiBridge.noticeSink = null
+        com.noryan.romcore.core.primehack.jni.UiBridge.shaderSink = null
         hooks?.onDestroy()
         super.onDestroy()
         // Dolphin's native core cannot be re-initialised in-process: take the whole :primehack process down with the game.

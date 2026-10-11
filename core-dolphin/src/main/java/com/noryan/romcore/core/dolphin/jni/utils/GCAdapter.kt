@@ -14,7 +14,7 @@ import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
-import android.widget.Toast
+import com.noryan.romcore.api.ui.RomCoreToast as Toast
 import androidx.annotation.Keep
 import androidx.core.content.ContextCompat
 import com.noryan.romcore.core.dolphin.jni.BuildConfig
