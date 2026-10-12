@@ -117,8 +117,8 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             TABS.forEachIndexed { i, name ->
                 val mod = if (i == 0) Modifier.focusRequester(first) else Modifier
-                TabButton(name, selected = i == tab, modifier = mod.widthIn(min = 170.dp)) { tab = i }
-                Spacer(Modifier.width(10.dp))
+                TabButton(name, selected = i == tab, modifier = mod.widthIn(min = 130.dp)) { tab = i }
+                Spacer(Modifier.width(8.dp))
             }
             Spacer(Modifier.weight(1f))
             val scanning by vm.scanning.collectAsStateWithLifecycle()

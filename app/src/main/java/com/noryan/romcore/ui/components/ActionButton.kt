@@ -82,10 +82,10 @@ fun TabButton(text: String, selected: Boolean, modifier: Modifier = Modifier, on
             .background(plate)
             .border(BorderStroke(if (focused) 3.dp else 2.dp, border), RoundedCornerShape(8.dp))
             .combinedClickable(interactionSource = src, indication = null, onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, style = MaterialTheme.typography.titleLarge, color = label, textAlign = TextAlign.Center, maxLines = 1, softWrap = false)
+        Text(text, style = MaterialTheme.typography.titleMedium, color = label, textAlign = TextAlign.Center, maxLines = 1, softWrap = false)
     }
 }
