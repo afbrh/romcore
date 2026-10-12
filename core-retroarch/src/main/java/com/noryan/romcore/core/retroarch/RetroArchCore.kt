@@ -5,21 +5,25 @@ import android.content.Intent
 import com.noryan.romcore.api.CoreDescriptor
 import com.noryan.romcore.api.CoreRegistry
 import com.noryan.romcore.api.LaunchRequest
+import com.noryan.romcore.api.SubCore
 import com.noryan.romcore.api.System
 import java.io.File
 import java.io.RandomAccessFile
 
 /**
- * RetroArch as the libretro host for 8/16-bit, N64, GB/GBA and PS1. Bundled cores: see [CoreTable].
- * The game runs in [RomCoreRetroActivity] (own process); RetroArch's menu/UI is never shown.
+ * Internal libretro host (built from the GPL libretro frontend, see LICENSES-cores.md) for 8/16-bit, N64, GB/GBA and
+ * PS1. Bundled cores: see [CoreTable]; each is exposed individually through [subCores] and the UI only ever shows
+ * the cores' own names. The game runs in [RomCoreRetroActivity] (own process); the frontend's own menu is never shown.
  */
 object RetroArchCore : CoreDescriptor {
     override val id = "retroarch"
-    override val displayName = "RetroArch (libretro)"
+    /** Group label only; the UI lists [subCores] instead of this descriptor. */
+    override val displayName = "Libretro cores"
+    override val subCores: List<SubCore> = CoreTable.ALL.map { it.toSubCore() }
     override val systems: Set<System> = CoreTable.SYSTEM_CORE.keys
     override val extensions: Set<String> = CoreTable.EXTENSION_SYSTEM.keys
 
-    /** extension (lowercase, no dot) -> system, or null if RetroArch doesn't handle it. */
+    /** extension (lowercase, no dot) -> system, or null if no bundled core handles it. */
     fun systemForExtension(ext: String): System? = CoreTable.EXTENSION_SYSTEM[ext.lowercase().removePrefix(".")]
 
     /** Human-readable libretro core file bundled for [system], or null. */
@@ -47,11 +51,19 @@ object RetroArchCore : CoreDescriptor {
         return null
     }
 
+    /**
+     * Core to run: the explicitly requested [subCoreId] if it can run [system] (an unknown or incompatible id falls back
+     * to automatic), else the extension override (.unf/.unif -> FCEUmm), else the system default.
+     */
+    internal fun specFor(system: System, ext: String, subCoreId: String?): CoreSpec? =
+        CoreTable.byId(subCoreId)?.takeIf { system in it.systems }
+            ?: CoreTable.EXTENSION_CORE[ext]?.takeIf { system in it.systems }
+            ?: CoreTable.SYSTEM_CORE[system]
+
     override fun launchIntent(ctx: Context, request: LaunchRequest): Intent {
         val ext = request.romPath.substringAfterLast('.', "").lowercase()
-        val spec = CoreTable.EXTENSION_CORE[ext]?.takeIf { request.system in CoreTable.SYSTEM_CORE.keys }
-            ?: CoreTable.SYSTEM_CORE[request.system]
-            ?: throw IllegalArgumentException("RetroArch core has no libretro core for ${request.system}")
+        val spec = specFor(request.system, ext, request.subCoreId)
+            ?: throw IllegalArgumentException("No bundled core runs ${request.system}")
         val corePath = RaFiles.ensureCore(ctx, spec)
         val cfg = RaFiles.writeConfig(ctx, spec)
         val rom = request.romPath.ifBlank { request.romUri.orEmpty() }

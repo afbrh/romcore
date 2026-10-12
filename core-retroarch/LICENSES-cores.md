@@ -15,17 +15,26 @@ separate shared objects by RetroArch (GPL-3.0). No ROMs or BIOS are shipped.
 | stella_libretro_android.so | 6564072 | 48bdc5d98ddfcb2b50bc04bc31dea82aa8db264c918b18e2fd4f81e45b40ffeb |
 | swanstation_libretro_android.so | 5718664 | b52f803929909a8256b889bf451c10e4fb1ef3064af19a28121e1e0694f0d9b2 |
 
-| Core | System | License |
-|---|---|---|
-| nestopia | NES | GPL-2.0-or-later |
-| fceumm | NES (.unf/.unif) | GPL-2.0-or-later |
-| bsnes2014_performance | SNES | GPL-3.0 |
-| mgba | GB/GBC/GBA | MPL-2.0 |
-| mupen64plus_next (gles3) | N64 | GPL-2.0-or-later |
-| swanstation | PS1 | GPL-3.0 (fork of pre-2023 DuckStation; current upstream is CC-BY-NC-ND) |
-| mednafen_pce_fast | PC Engine | GPL-2.0-or-later |
-| stella | Atari 2600 | GPL-2.0 |
-| **genesis_plus_gx** | Genesis / Master System / Game Gear | **Genesis Plus GX license: NON-COMMERCIAL, NOT GPL-compatible. Distributing it inside a GPLv3 app is at best "separate program" aggregation; remove it (delete the .so and its CoreSpec) if that is not acceptable.** |
+| Core | System | License | Version (retro_get_system_info of the shipped .so) |
+|---|---|---|---|
+| nestopia | NES | GPL-2.0-or-later | 2.0.0 92578fd |
+| fceumm | NES (.unf/.unif) | GPL-2.0-or-later | (SVN) 7a542da |
+| bsnes2014_performance | SNES | GPL-3.0 | v094 (Performance) 3c1394e |
+| mgba | GB/GBC/GBA | MPL-2.0 | 0.11-212-7a12d6d |
+| mupen64plus_next (gles3) | N64 | GPL-2.0-or-later | 2.8-Vulkan 6752836 |
+| swanstation | PS1 | GPL-3.0 (fork of pre-2023 DuckStation; current upstream is CC-BY-NC-ND) | 1.0.0 b6c30a7 |
+| mednafen_pce_fast | PC Engine | GPL-2.0-or-later | v1.31.0.0 3f946f2 |
+| stella | Atari 2600 | GPL-2.0 | 8.0_pre 1a37a6e |
+| **genesis_plus_gx** | Genesis / Master System / Game Gear | **Genesis Plus GX license: NON-COMMERCIAL, NOT GPL-compatible. Distributing it inside a GPLv3 app is at best "separate program" aggregation; remove it (delete the .so and its CoreSpec) if that is not acceptable.** | v1.7.4 393f70c |
 
 Replaced: snes9x (non-commercial) was removed in favour of bsnes2014_performance. Atari 7800 (.a78) is not mapped:
 Stella emulates the 2600 only (7800 needs a ProSystem core, not bundled).
+
+Versions: captured on 2026-10-12 by dlopen-ing each shipped .so on the AYN Thor and calling `retro_get_system_info`
+(`library_version`); they are a static table in `CoreSpec.kt` (`CoreSpec.version`) and MUST be refreshed with the .so.
+
+UI policy: the app presents each core above individually under its own name (Settings > INSTALLED CORES, SYSTEMS tab,
+per-game options). The word "RetroArch" is not shown to users. The libretro frontend inside this module is still
+GPL-3.0 software (c) the RetroArch team and the cores keep their own licenses/copyrights; those notices are preserved
+here, in the source headers and in the shipped license files. Internal names (module, package, process `:retroarch`,
+`retroarch/` data directory) are unchanged implementation details.

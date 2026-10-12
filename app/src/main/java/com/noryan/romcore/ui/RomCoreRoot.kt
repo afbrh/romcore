@@ -31,6 +31,7 @@ import com.noryan.romcore.R
 import com.noryan.romcore.api.System
 import com.noryan.romcore.Setup
 import com.noryan.romcore.data.CoreRouter
+import com.noryan.romcore.data.CoreRows
 import com.noryan.romcore.data.FolderSearch
 import com.noryan.romcore.data.CoreSetup
 import com.noryan.romcore.data.GameEntity
@@ -170,9 +171,11 @@ private fun GamesTab(vm: MainViewModel) {
                     FocusLine("PLAY", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.launch(ctx, g) }
                     FocusLine("FAVORITE", right = if (g.favorite) "ON" else "OFF", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.toggleFavorite(g) }
                     val auto = sys?.let { CoreRouter.autoChoice(it, g.title) }
-                    FocusLine("CORE: AUTO", right = auto?.displayName ?: "-", marked = g.coreOverride == null, indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.setGameCore(g, null) }
+                    val gChosen0 = CoreRouter.resolveOverride(g.coreOverride, cands)
+                    FocusLine("CORE: AUTO", right = auto?.displayName ?: "-", marked = gChosen0 == null, indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.setGameCore(g, null) }
+                    val gChosen = CoreRouter.resolveOverride(g.coreOverride, cands)
                     cands.forEach { c ->
-                        FocusLine("CORE: ${c.displayName}", marked = g.coreOverride == c.id, right = if (g.coreOverride == c.id) "SELECTED" else null,
+                        FocusLine("CORE: ${c.displayName}", marked = gChosen?.id == c.id, right = if (gChosen?.id == c.id) "SELECTED" else null,
                             indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.setGameCore(g, c.id) }
                     }
                     Text(g.fileName, Modifier.padding(start = 44.dp, bottom = 6.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
@@ -193,7 +196,7 @@ private fun SystemsTab(vm: MainViewModel) {
     LazyColumn(Modifier.fillMaxSize()) {
         items(systems, key = { it.name }) { s ->
             val cands = CoreRouter.candidates(s)
-            val chosen = remember(tick, cands.size) { vm.prefs.systemCore(s)?.let { id -> cands.firstOrNull { it.id == id } } }
+            val chosen = remember(tick, cands.size) { CoreRouter.resolveOverride(vm.prefs.systemCore(s), cands) }
             val auto = CoreRouter.autoChoice(s, "")
             val label = (chosen ?: auto)?.displayName ?: "NO CORE"
             Column {
@@ -227,7 +230,7 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
     val games by vm.games.collectAsStateWithLifecycle()
     var open by remember { mutableStateOf<String?>(null) }
     fun toggle(k: String) { open = if (open == k) null else k }
-    val cores = vm.cores
+    val rows = remember(vm.cores) { CoreRows.of(vm.cores, CoreBootstrap::versionOf) }
     val allFiles by rememberAllFilesGranted()
     var importFor by remember { mutableStateOf<CoreSetup.Item?>(null) }
     var importMsg by remember { mutableStateOf<String?>(null) }
@@ -260,30 +263,31 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
             if (biosDir != null) item { FocusLine("IMPORT NOW", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.runBiosImport() } }
             if (biosNote.isNotEmpty()) item { Note(biosNote) }
             biosLines.forEach { l -> item { Note(l) } }
-            item { Note("Copies PS2 BIOS, Switch prod.keys + firmware and PS1 / RetroArch BIOS into the cores. Your files are only read; newer copies are never overwritten.") }
+            item { Note("Copies PS2 BIOS, Switch prod.keys + firmware and PS1 and other console BIOS into the cores. Your files are only read; newer copies are never overwritten.") }
         }
-        item { Section("INSTALLED CORES (${cores.size})") }
-        if (cores.isEmpty()) item { Note("No cores are installed in this build.") }
-        items(cores, key = { it.id }) { c ->
+        item { Section("INSTALLED CORES (${rows.size})") }
+        if (rows.isEmpty()) item { Note("No cores are installed in this build.") }
+        items(rows, key = { it.key }) { c ->
             Column {
-                FocusLine(c.displayName, right = CoreBootstrap.versionOf(c), onClick = { toggle("core:${c.id}") }, onAlt = { toggle("core:${c.id}") })
-                if (open == "core:${c.id}") {
-                    Note("id: ${c.id}")
+                FocusLine(c.name, right = c.version, onClick = { toggle("core:${c.key}") }, onAlt = { toggle("core:${c.key}") })
+                if (open == "core:${c.key}") {
+                    Note("id: ${c.key}")
                     Note("systems: " + c.systems.sortedBy { it.ordinal }.joinToString(", ") { systemLabel(it) })
                     Note("extensions: " + c.extensions.sorted().joinToString(" "))
-                    CoreSetup.itemsFor(c.id).forEach { item ->
+                    c.license?.let { Note("license: $it") }
+                    CoreSetup.itemsFor(c.coreId).forEach { item ->
                         val st = remember(setupTick, open) { CoreSetup.status(ctx, item) }
                         FocusLine(item.label, right = st, indent = 28.dp, style = MaterialTheme.typography.titleSmall) {
                             importFor = item; importMsg = null; importPicker.launch(item.accept)
                         }
                     }
-                    if (importMsg != null && CoreSetup.itemsFor(c.id).isNotEmpty()) Note(importMsg!!)
+                    if (importMsg != null && CoreSetup.itemsFor(c.coreId).isNotEmpty()) Note(importMsg!!)
                 }
             }
         }
         if (CoreBootstrap.missing.isNotEmpty()) {
             item { FocusLine("NOT INSTALLED (${CoreBootstrap.missing.size})", dim = true, onClick = { toggle("missing") }, onAlt = { toggle("missing") }) }
-            if (open == "missing") item { Note(CoreBootstrap.missing.joinToString(", ")) }
+            if (open == "missing") item { Note(CoreBootstrap.missing.joinToString(", ") { CoreBootstrap.friendlyName(it) }) }
         }
         item { Section("ABOUT") }
         item { Note("RomCore 0.1.0 - GPLv3. Embedded emulator cores keep their own licenses.") }

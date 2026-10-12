@@ -19,6 +19,9 @@ object CoreBootstrap {
         "ppsspp" to listOf("PPSSPP", "Ppsspp")
     )
 
+    /** Name for an engine id when it has no registered descriptor (Settings "NOT INSTALLED" list). */
+    fun friendlyName(id: String): String = if (id == "retroarch") "Libretro cores" else DISPLAY_CASE[id]?.first() ?: id.replaceFirstChar { it.uppercase() }
+
     /** ids that were found and registered / ids that failed or are missing, for the Settings screen. */
     val registered = mutableListOf<String>()
     val missing = mutableListOf<String>()
@@ -76,7 +79,7 @@ object CoreBootstrap {
 
     /** Engine revisions of the local source trees the cores are built from (for cores that don't report one). */
     private val FALLBACK_VERSION = mapOf(
-        "retroarch" to "RetroArch fde5cf3 + libretro cores",
+        "retroarch" to "Libretro cores",
         "primehack" to "PrimeHack 1.0.9-22 (romcore patches)",
         "cemu" to "Cemu 0.5-4 (SSimco android port)",
         "azahar" to "Azahar 95db543",

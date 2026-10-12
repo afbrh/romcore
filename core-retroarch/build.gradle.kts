@@ -20,4 +20,5 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation(platform("androidx.compose:compose-bom:2024.09.02"))
     implementation("androidx.compose.runtime:runtime")
+    testImplementation("junit:junit:4.13.2")
 }

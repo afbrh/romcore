@@ -42,13 +42,31 @@ interface CoreDescriptor {
     /** Engine version string for Settings; override per core. */
     val version: String get() = "unknown"
     val extensions: Set<String>          // lowercase, no dot: "iso", "gcm", "wux"...
+    /**
+     * Engines that host several independent emulation cores (e.g. libretro) list each one here so the shell can show,
+     * and let the user pick, them by their own names. The FIRST entry serving a system is that system's default.
+     * Empty = the descriptor is a single emulator.
+     */
+    val subCores: List<SubCore> get() = emptyList()
     /** Optional content sniffing for ambiguous extensions (e.g. .iso, .bin, .chd). Return null = don't know. */
     fun sniff(path: String, header: ByteArray): System? = null
     /** Build the Intent that starts the core's game Activity. Core Activities MUST show the shared pause menu. */
     fun launchIntent(ctx: Context, request: LaunchRequest): Intent
 }
 
-data class LaunchRequest(val romPath: String, val romUri: String?, val system: System, val resumeState: Boolean = false)
+/** One emulation core inside a multi-core [CoreDescriptor]. [id] is unique within its parent descriptor. */
+data class SubCore(
+    val id: String,
+    val displayName: String,
+    val systems: Set<System>,
+    val extensions: Set<String>,
+    val version: String,
+    val license: String,
+)
+
+/** [subCoreId]: a [SubCore.id] of the descriptor to run, or null = the descriptor's own choice for this ROM. */
+data class LaunchRequest(val romPath: String, val romUri: String?, val system: System, val resumeState: Boolean = false,
+                         val subCoreId: String? = null)
 
 /** Implemented by each core module; discovered by the app through ServiceLoader-style registration in CoreRegistry. */
 object CoreRegistry {

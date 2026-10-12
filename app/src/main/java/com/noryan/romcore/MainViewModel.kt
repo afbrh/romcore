@@ -187,11 +187,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleFavorite(g: GameEntity) { viewModelScope.launch(Dispatchers.IO) { dao.setFavorite(g.id, !g.favorite) } }
     fun setSystemCore(s: System, id: String?) { prefs.setSystemCore(s, id); prefsTick.value++ }
 
-    fun coreFor(g: GameEntity): CoreDescriptor? = CoreRouter.choose(g, prefs)
+    fun coreFor(g: GameEntity): CoreChoice? = CoreRouter.choose(g, prefs)
 
     fun launch(ctx: Context, g: GameEntity) {
         if (launching.value) return
-        val core = coreFor(g)
+        val choice = coreFor(g)
+        val core = choice?.core
         val sys = runCatching { System.valueOf(g.system) }.getOrNull()
         if (core == null || sys == null) { toast(ctx, "No core installed for ${g.system}"); return }
         viewModelScope.launch {
@@ -203,7 +204,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (r == null) { toast(ctx, "Can't open ROM file"); return@launch }
                 if (r.kind == "fd") { toast(ctx, "Turn on ALL FILES ACCESS in SETTINGS so this core can open the ROM"); return@launch }
                 // Real path: cores get the path alone (a null uri makes them use it). Only a cache copy keeps a uri fallback.
-                val req = LaunchRequest(romPath = r.path, romUri = if (r.kind == "real") null else g.uri, system = sys)
+                val req = LaunchRequest(romPath = r.path, romUri = if (r.kind == "real") null else g.uri, system = sys,
+                    subCoreId = choice.sub?.id)
                 val intent = core.launchIntent(ctx, req)
                 withContext(Dispatchers.IO) { dao.markPlayed(g.id, java.lang.System.currentTimeMillis()) }
                 ctx.startActivity(intent)

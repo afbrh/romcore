@@ -97,7 +97,7 @@ object BiosImporter {
         if (ra.isNotEmpty()) {
             var n = 0
             for (f in ra) if (copy(f, File(sysDir, f.name))) { n++; changed = true }
-            lines += "RETROARCH BIOS: " + if (n > 0) "IMPORTED $n OF ${ra.size}" else "${ra.size} OK"
+            lines += "CONSOLE BIOS: " + if (n > 0) "IMPORTED $n OF ${ra.size}" else "${ra.size} OK"
         }
         return Result(lines, changed)
     }
