@@ -115,16 +115,16 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
             } else false
         }
     ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            TABS.forEachIndexed { i, name ->
-                val mod = if (i == 0) Modifier.focusRequester(first) else Modifier
-                TabButton(name, selected = i == tab, modifier = mod.widthIn(min = 130.dp)) { tab = i }
-                Spacer(Modifier.width(8.dp))
+        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+            Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TABS.forEachIndexed { i, name ->
+                    val mod = if (i == 0) Modifier.focusRequester(first) else Modifier
+                    TabButton(name, selected = i == tab, modifier = mod.widthIn(min = 130.dp)) { tab = i }
+                }
             }
-            Spacer(Modifier.weight(1f))
             val scanning by vm.scanning.collectAsStateWithLifecycle()
             val n by vm.scanProgress.collectAsStateWithLifecycle()
-            if (scanning) Text("SCANNING $n", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            if (scanning) Text("SCANNING $n", Modifier.align(Alignment.CenterEnd), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
