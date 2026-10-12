@@ -154,25 +154,7 @@ private fun GamesTab(vm: MainViewModel) {
         }
         return
     }
-    val azPending by vm.azaharPending.collectAsStateWithLifecycle()
-    val romDir by vm.romDir.collectAsStateWithLifecycle()
-    val azPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { vm.setAzaharTree(ctx, it) }
-    val azFocus = remember { FocusRequester() }
-    LaunchedEffect(azPending) { if (azPending != null) runCatching { azFocus.requestFocus() } }
     LazyColumn(Modifier.fillMaxSize()) {
-        if (azPending != null) {
-            item {
-                Column {
-                    FocusLine("3DS NEEDS A DATA FOLDER - PRESS A TO CHOOSE", Modifier.focusRequester(azFocus), dim = false, style = MaterialTheme.typography.titleSmall) {
-                        azPicker.launch(romDir?.let(com.noryan.romcore.data.SafPathUtils::treeUriForPath))
-                    }
-                    Text("Azahar keeps its saves, NAND and shader cache in a folder you grant once. Tap USE THIS FOLDER on the next screen " +
-                        "(it opens on your ROM folder). ${azPending!!.title} starts right after.", Modifier.padding(start = 28.dp, end = 16.dp, bottom = 4.dp),
-                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    FocusLine("NOT NOW", indent = 12.dp, style = MaterialTheme.typography.titleSmall) { vm.cancelAzahar() }
-                }
-            }
-        }
         if (launching) item { Text("PREPARING ROM...", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium) }
         items(games, key = { it.id }) { g ->
             val sys = sysOf(g)

@@ -3,6 +3,7 @@ package com.noryan.romcore.core.azahar
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.hardware.display.DisplayManager
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
@@ -23,6 +24,8 @@ import org.citra.citra_emu.features.settings.utils.SettingsFile
 import org.citra.citra_emu.utils.DirectoryInitialization
 import org.citra.citra_emu.utils.EmulationMenuSettings
 import org.citra.citra_emu.utils.PermissionsHandler
+import org.citra.citra_emu.utils.CitraDirectoryUtils
+import java.io.File
 
 /** Per-process (`:azahar`) glue between the stock Azahar EmulationActivity and the shared RomCore menu/input. */
 object AzaharHost {
@@ -35,12 +38,16 @@ object AzaharHost {
     // ---- before Activity.onCreate: directory + layout configuration --------------------------------------------
     fun prepare(a: EmulationActivity) {
         val i = a.intent
-        i.getStringExtra(AzaharCore.EXTRA_TREE)?.let { tree ->
-            if (PermissionsHandler.citraDirectory.toString() != tree) {
-                PermissionsHandler.setCitraDirectory(tree)
-                DirectoryInitialization.resetCitraDirectoryState()
-            }
+        // User directory = RomCore's own real folder (no SAF). Always overrides whatever a legacy install left in the
+        // CITRA_DIRECTORY pref (an old SAF tree is simply ignored; its files are not migrated).
+        val dir = i.getStringExtra(AzaharCore.EXTRA_USERDIR)?.let(::File) ?: AzaharCore.ensureUserDir(a)
+        val want = Uri.fromFile(dir).toString()
+        if (PermissionsHandler.citraDirectory.toString() != want) {
+            PermissionsHandler.setCitraDirectory(want)
+            DirectoryInitialization.resetCitraDirectoryState()
         }
+        // A stale Lime3DS pref would make the stock activity think a manual directory update is needed.
+        CitraDirectoryUtils.removeLimeDirectoryPreference()
         if (!DirectoryInitialization.areCitraDirectoriesReady()) DirectoryInitialization.start()
         if (!DirectoryInitialization.areCitraDirectoriesReady()) return // stock activity then bounces to its setup screen
 

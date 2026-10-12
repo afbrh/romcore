@@ -3,8 +3,7 @@ package com.noryan.romcore.core.azahar
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
-import android.provider.DocumentsContract
+import java.io.File
 import com.noryan.romcore.api.CoreDescriptor
 import com.noryan.romcore.api.CoreRegistry
 import com.noryan.romcore.api.LaunchRequest
@@ -24,7 +23,7 @@ object AzaharCore : CoreDescriptor {
     /** How the two 3DS screens are laid out. AUTO = DUAL_DISPLAY when a second display exists (AYN Thor), else LARGE_SCREEN. */
     enum class ScreenMode { AUTO, DUAL_DISPLAY, LARGE_SCREEN, SIDE_BY_SIDE, STACKED }
 
-    internal const val EXTRA_TREE = "romcore.azahar.tree"
+    internal const val EXTRA_USERDIR = "romcore.azahar.userdir"
     internal const val EXTRA_MODE = "romcore.azahar.mode"
     internal const val EXTRA_MARK = "romcore.azahar.session"
     private const val PREFS = "romcore_azahar_cfg"
@@ -39,22 +38,20 @@ object AzaharCore : CoreDescriptor {
     }
 
     /**
-     * Azahar keeps nand/sdmc/config/shader caches in a SAF tree. Optional explicit override (the shell normally lets
-     * this default to the user's ROM-folder tree, which it already holds a persisted grant for).
+     * Azahar's whole "user directory" (sdmc = 3DS SD card & saves, nand, sysdata, states, shaders, log, config, ...)
+     * lives in a plain real folder owned by RomCore: `<externalFilesDir>/azahar`
+     * (/sdcard/Android/data/com.noryan.romcore/files/azahar), next to retroarch/, dolphin/, bios/ ... It needs no SAF
+     * grant. Falls back to `<filesDir>/azahar` only if external app storage is unavailable.
      */
-    fun setUserDirectoryTree(ctx: Context, treeUri: String?) {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply {
-            if (treeUri == null) remove("tree") else putString("tree", treeUri)
-        }.apply()
-    }
+    fun userDir(ctx: Context): File =
+        File(ctx.getExternalFilesDir(null)?.takeIf { it.exists() || it.mkdirs() } ?: ctx.filesDir, "azahar")
 
-    private fun userTree(ctx: Context, romUri: String?): String? {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("tree", null)?.let { return it }
-        ctx.getSharedPreferences("romcore", Context.MODE_PRIVATE).getString("tree_uri", null)?.let { return it } // shell's ROM tree
-        val u = romUri?.let { runCatching { Uri.parse(it) }.getOrNull() } ?: return null
-        return runCatching {
-            DocumentsContract.buildTreeDocumentUri(u.authority, DocumentsContract.getTreeDocumentId(u)).toString()
-        }.getOrNull()
+    private val SUBDIRS = listOf("sdmc", "nand", "sysdata", "states", "shaders", "log", "config", "cheats", "dump", "load")
+
+    /** Creates the folder and the sub-folders Azahar expects (it would create them lazily; this makes them visible up front). */
+    fun ensureUserDir(ctx: Context): File = userDir(ctx).also { d ->
+        d.mkdirs()
+        SUBDIRS.forEach { File(d, it).mkdirs() }
     }
 
     override fun launchIntent(ctx: Context, request: LaunchRequest): Intent {
@@ -71,7 +68,7 @@ object AzaharCore : CoreDescriptor {
             putExtra("romcore.title", game.title)
             putExtra(EXTRA_MARK, true)
             putExtra(EXTRA_MODE, screenMode(ctx).name)
-            userTree(ctx, request.romUri)?.let { putExtra(EXTRA_TREE, it) }
+            putExtra(EXTRA_USERDIR, ensureUserDir(ctx).absolutePath)
             if (ctx !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
     }

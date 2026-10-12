@@ -47,8 +47,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Quiet inline BIOS import results ("PS2 BIOS: IMPORTED ...") and a one-line note for the BIOS search. */
     val biosLines = MutableStateFlow<List<String>>(emptyList())
     val biosNote = MutableStateFlow("")
-    /** A 3DS game waiting for the user to pick Azahar's data folder (SAF), see [launch]. */
-    val azaharPending = MutableStateFlow<GameEntity?>(null)
     /** Bumped when per-system overrides change so the UI re-reads prefs. */
     val prefsTick = MutableStateFlow(0)
 
@@ -196,8 +194,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val core = coreFor(g)
         val sys = runCatching { System.valueOf(g.system) }.getOrNull()
         if (core == null || sys == null) { toast(ctx, "No core installed for ${g.system}"); return }
-        // Azahar keeps its data in a SAF tree and the engine needs a persisted grant: ask once, inline, on the first 3DS launch.
-        if (core.id == "azahar" && !CoreSetup.azaharTreeValid(ctx)) { azaharPending.value = g; return }
         viewModelScope.launch {
             launching.value = true
             try {
@@ -216,20 +212,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } finally { launching.value = false }
         }
     }
-
-    /** The user picked Azahar's data folder (a SAF tree): keep the grant, hand it to the core, then start the waiting game. */
-    fun setAzaharTree(ctx: Context, uri: Uri?) {
-        val g = azaharPending.value
-        azaharPending.value = null
-        if (uri == null || g == null) return
-        runCatching {
-            ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-        }
-        CoreSetup.azaharSetTree(ctx, uri.toString())
-        if (CoreSetup.azaharTreeValid(ctx)) launch(ctx, g) else toast(ctx, "Couldn't keep access to that folder")
-    }
-
-    fun cancelAzahar() { azaharPending.value = null }
 
     private fun toast(ctx: Context, m: String) = Toast.makeText(ctx, m, Toast.LENGTH_LONG).show()
 }

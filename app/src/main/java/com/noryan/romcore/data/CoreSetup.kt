@@ -56,18 +56,6 @@ object CoreSetup {
     fun edenFirmwareInstalled(ctx: Context): Boolean? = call(eden, "isFirmwareImported", ctx) as? Boolean
     fun edenImportFirmware(ctx: Context, zip: Uri): Boolean = call(eden, "importFirmware", ctx, zip) as? Boolean ?: false
 
-    // ---- Azahar user dir (a SAF tree; the engine's DocumentFile storage needs a persisted grant) ----
-    private const val AZ_PREFS = "romcore_azahar_cfg"
-    fun azaharPresent() = obj("com.noryan.romcore.core.azahar.AzaharCore") != null
-    fun azaharTree(ctx: Context): String? = ctx.getSharedPreferences(AZ_PREFS, Context.MODE_PRIVATE).getString("tree", null)
-    /** True when a tree is stored AND we still hold its persisted read+write grant. */
-    fun azaharTreeValid(ctx: Context): Boolean {
-        val t = azaharTree(ctx) ?: return false
-        val u = runCatching { Uri.parse(t) }.getOrNull() ?: return false
-        return ctx.contentResolver.persistedUriPermissions.any { it.uri == u && it.isReadPermission && it.isWritePermission }
-    }
-    fun azaharSetTree(ctx: Context, tree: String?) { call(obj("com.noryan.romcore.core.azahar.AzaharCore"), "setUserDirectoryTree", ctx, tree) }
-
     /** Wii U unpacked-title-folder test (code + content + meta); falls back to the same rule if :core-cemu is absent. */
     fun isWiiUTitleFolder(childNames: Collection<String>): Boolean {
         val r = call(obj("com.noryan.romcore.core.cemu.CemuCore"), "isTitleFolder", childNames) as? Boolean

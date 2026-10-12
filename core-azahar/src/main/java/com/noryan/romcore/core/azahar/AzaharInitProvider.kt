@@ -20,6 +20,11 @@ class AzaharInitProvider : ContentProvider() {
     override fun onCreate(): Boolean {
         val app = context?.applicationContext as? Application ?: return false
         try {
+            // Point Azahar at RomCore's own real-path user directory BEFORE it initialises, so it never touches a
+            // legacy SAF tree from an older install (that pref is overwritten; the old files are not migrated).
+            val dir = AzaharCore.ensureUserDir(app)
+            app.getSharedPreferences(app.packageName + "_preferences", android.content.Context.MODE_PRIVATE).edit()
+                .putString("CITRA_DIRECTORY", Uri.fromFile(dir).toString()).remove("LIME3DS_DIRECTORY").commit()
             CitraApplication.initializeForEmbedding(app)
         } catch (t: Throwable) {
             Log.e(TAG, "Azahar embedding init failed", t)
