@@ -18,6 +18,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.noryan.romcore.data.FolderSearch
 import com.noryan.romcore.ui.components.FocusLine
+import com.noryan.romcore.ui.components.ActionButton
 
 /*
  * First-run screens, in order: ACCESS (All files access) -> SEARCHING -> [CHOOSE one of several | NOT FOUND] for the ROM
@@ -57,8 +58,8 @@ fun AccessScreen() {
         Header("ONE THING FIRST: ALL FILES ACCESS",
             "RomCore finds your ROM and BIOS folders by itself and every emulator core opens games by their real path. " +
                 "That needs All files access. RomCore only reads those folders; it never deletes or moves your files.")
-        FocusLine(if (declined) "TRY AGAIN" else "GRANT ALL FILES ACCESS", Modifier.focusRequester(fr).width(460.dp), center = true,
-            style = MaterialTheme.typography.headlineSmall) { tried = true; openAllFilesAccess(ctx) }
+        Spacer(Modifier.height(12.dp))
+        ActionButton(if (declined) "TRY AGAIN" else "GRANT ALL FILES ACCESS", Modifier.focusRequester(fr).width(520.dp)) { tried = true; openAllFilesAccess(ctx) }
         if (declined) {
             Spacer(Modifier.height(8.dp))
             Text("ALL FILES ACCESS IS STILL OFF", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
