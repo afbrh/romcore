@@ -114,8 +114,6 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
         }
     ) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            LogoMark(36)
-            Spacer(Modifier.width(8.dp))
             TABS.forEachIndexed { i, name ->
                 val mod = if (i == 0) Modifier.focusRequester(first) else Modifier
                 Box(mod.width(IntrinsicSize.Max).then(Modifier.padding(end = 4.dp))) {
