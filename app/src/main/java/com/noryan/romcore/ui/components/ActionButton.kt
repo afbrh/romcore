@@ -58,3 +58,34 @@ fun ActionButton(text: String, modifier: Modifier = Modifier, hint: String? = "P
         }
     }
 }
+
+/**
+ * Top-bar tab as a button: the selected tab is a solid orange plate, the others are mostly-black plates with a
+ * faint border. Controller focus shows as a brighter border (white on the selected tab, orange on the others).
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun TabButton(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val src = remember { MutableInteractionSource() }
+    val focused by src.collectIsFocusedAsState()
+    val plate = if (selected) Color(0xFFFF6B4A) else Color(0xFF0B0B0E)
+    val border = when {
+        focused && selected -> Color.White
+        focused -> Color(0xFFFF6B4A)
+        selected -> Color(0xFF8A3A28)
+        else -> Color(0xFF2A2A31)
+    }
+    val label = if (selected) Color(0xFF14080A) else Color(0xFFE6E6EA)
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(plate)
+            .border(BorderStroke(if (focused) 3.dp else 2.dp, border), RoundedCornerShape(8.dp))
+            .combinedClickable(interactionSource = src, indication = null, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, style = MaterialTheme.typography.titleLarge, color = label, textAlign = TextAlign.Center, maxLines = 1, softWrap = false)
+    }
+}

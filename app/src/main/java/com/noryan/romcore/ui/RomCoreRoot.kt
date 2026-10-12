@@ -35,6 +35,7 @@ import com.noryan.romcore.data.FolderSearch
 import com.noryan.romcore.data.CoreSetup
 import com.noryan.romcore.data.GameEntity
 import com.noryan.romcore.ui.components.FocusLine
+import com.noryan.romcore.ui.components.TabButton
 
 private val TABS = listOf("GAMES", "SYSTEMS", "SETTINGS")
 
@@ -116,9 +117,8 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             TABS.forEachIndexed { i, name ->
                 val mod = if (i == 0) Modifier.focusRequester(first) else Modifier
-                Box(mod.width(IntrinsicSize.Max).then(Modifier.padding(end = 4.dp))) {
-                    FocusLine(name, Modifier.width(150.dp), marked = i == tab, dim = false, style = MaterialTheme.typography.headlineSmall) { tab = i }
-                }
+                TabButton(name, selected = i == tab, modifier = mod.widthIn(min = 170.dp)) { tab = i }
+                Spacer(Modifier.width(10.dp))
             }
             Spacer(Modifier.weight(1f))
             val scanning by vm.scanning.collectAsStateWithLifecycle()
