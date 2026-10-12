@@ -94,6 +94,12 @@ internal object RaFiles {
             "fastforward_ratio" to "1.0",
         )
         cfg.putAll(spec.cfg)
+        // RomCore owns all UI and the device has physical controls: no on-screen overlay/gamepad, whatever a core spec says.
+        cfg["input_overlay_enable"] = "false"
+        cfg["input_overlay"] = ""
+        cfg["input_overlay_show_inputs"] = "0"
+        cfg["input_overlay_show_mouse_cursor"] = "false"
+        cfg["input_overlay_hide_in_menu"] = "true"
         val f = File(cfgDir, spec.id + ".cfg")
         f.writeText(cfg.entries.joinToString("\n") { "${it.key} = \"${it.value}\"" } + "\n")
         return f
