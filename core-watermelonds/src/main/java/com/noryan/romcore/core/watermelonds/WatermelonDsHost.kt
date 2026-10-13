@@ -86,6 +86,8 @@ internal object WatermelonDsHost {
         current = null
         RomCoreBridge.host = null
         runCatching { c.hooks.onDestroy() }
+        // Close Game / activity gone: the :melonds process has nothing left to do; end it so its memory is released.
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ if (current == null) android.os.Process.killProcess(android.os.Process.myPid()) }, 400)
     }
 
     /** LaunchRequest.resumeState: once melonDS is actually running, load the most recently written slot (if any). */

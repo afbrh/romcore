@@ -49,7 +49,16 @@ class WatermelonDsSession(
         return ok
     }
 
-    override fun close() { activity.romCoreClose() }
+    /**
+     * Close Game: freeze the guest, finish the Activity, then end the whole :melonds process (the engine and its
+     * ~400 MB otherwise linger after the activity is gone). Kill happens shortly after the activity is destroyed
+     * (see WatermelonDsHost.detach) with this watchdog as the backstop.
+     */
+    override fun close() {
+        runCatching { MelonEmulator.pauseEmulation() }
+        activity.romCoreClose()
+        main.postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, 1500)
+    }
 
     override fun injectButton(pad: Pad, pressed: Boolean) {
         val input = when (pad) {

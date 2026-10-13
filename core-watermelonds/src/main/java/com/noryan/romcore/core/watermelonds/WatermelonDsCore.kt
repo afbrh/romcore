@@ -49,20 +49,37 @@ object WatermelonDsCore : CoreDescriptor {
     fun register() = CoreRegistry.register(this)
 }
 
-/** One-time first-run settings for WatermelonDS's own SharedPreferences (written from the main process, read in :melonds). */
+/**
+ * WatermelonDS's own SharedPreferences (written from the main process in [WatermelonDsCore.launchIntent], i.e. BEFORE the
+ * :melonds process exists, so the engine reads the final values at its first init; values applied later would only take
+ * effect one launch late).
+ *
+ * v1: hide the touch overlay (a controller is expected). v2: renderer moved Vulkan -> compute (5x). On the AYN Thor the
+ * Vulkan backend costs 24-30 ms CPU per frame on the emulator thread (17-40 fps); compute 5x holds ~59.9 fps and renders
+ * like Vulkan. Plain OpenGL is just as fast but drops the blob shadows under characters (checked on Phantom Hourglass).
+ * The renderer/resolution are ENFORCED on every launch (RomCore has no WatermelonDS settings UI), so installs that
+ * still carry the old Vulkan value are moved off it too. Test/diagnostic escape hatch: set string
+ * `renderer_override` (vulkan|opengl|compute|software) in the `romcore_watermelonds` prefs file.
+ */
 internal object WatermelonDsDefaults {
-    // v1 values proven on the AYN Thor by RomRunner: hide the touch overlay (a controller is expected) and use the
-    // Vulkan renderer (resolution scaling is ignored by the software renderer) at 5x.
-    private const val MARK = "romcore_defaults_v1"
+    private const val MARK = "romcore_defaults_v2"
+    private const val RENDERER = "compute"
+    private const val RESOLUTION = "5"
 
     fun applyIfNeeded(ctx: Context) {
         val mark = ctx.getSharedPreferences("romcore_watermelonds", Context.MODE_PRIVATE)
-        if (mark.getBoolean(MARK, false)) return
-        ctx.getSharedPreferences("${ctx.packageName}_preferences", Context.MODE_PRIVATE).edit()
+        val renderer = mark.getString("renderer_override", null)?.takeIf { it.isNotBlank() } ?: RENDERER
+        val prefs = ctx.getSharedPreferences("${ctx.packageName}_preferences", Context.MODE_PRIVATE)
+        val firstRun = !mark.getBoolean(MARK, false)
+        val needs = firstRun ||
+            prefs.getString("video_renderer", null) != renderer ||
+            prefs.getString("video_internal_resolution", null) != RESOLUTION
+        if (!needs) return
+        prefs.edit()
             .putString("soft_input_behaviour", "always_invisible")
-            .putString("video_renderer", "vulkan")
-            .putString("video_internal_resolution", "5")
+            .putString("video_renderer", renderer)
+            .putString("video_internal_resolution", RESOLUTION)
             .commit() // commit(): the :melonds process reads this file right after launch
-        mark.edit().putBoolean(MARK, true).commit()
+        if (firstRun) mark.edit().putBoolean(MARK, true).commit()
     }
 }
