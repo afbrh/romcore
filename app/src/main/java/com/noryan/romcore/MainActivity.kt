@@ -8,6 +8,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -26,6 +29,29 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         applyDebugRoots(intent)
         setContent { RomCoreTheme { RomCoreRoot(vm) } }
+        watchForAccessGrant()
+    }
+
+    /**
+     * The All files switch is flipped in a system screen outside the app. Poll while it is open and, the moment it
+     * turns on, move on immediately: advance the setup and pull RomCore back in front of the system screen, so the
+     * user doesn't have to press Back first.
+     */
+    private fun watchForAccessGrant() {
+        if (android.os.Environment.isExternalStorageManager()) return
+        lifecycleScope.launch {
+            while (!android.os.Environment.isExternalStorageManager()) delay(250)
+            vm.refreshAccess()
+            runCatching {
+                startActivity(android.content.Intent(this@MainActivity, MainActivity::class.java).addFlags(
+                    android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                        android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            }
+            // Fallback where the OS refuses a background start: ask the task to come forward directly.
+            runCatching {
+                (getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager).moveTaskToFront(taskId, 0)
+            }
+        }
     }
 
     override fun onNewIntent(intent: android.content.Intent) { super.onNewIntent(intent); applyDebugRoots(intent) }
