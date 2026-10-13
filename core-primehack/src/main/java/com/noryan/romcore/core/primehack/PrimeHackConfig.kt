@@ -38,10 +38,7 @@ object PrimeHackConfig {
             "ShowGraphs" to "False", "ShowNetPlayPing" to "False", "ShowNetPlayMessages" to "False",
             "OverlayStats" to "False", "OverlayProjStats" to "False", "OverlayScissorStats" to "False",
             "ShowFrameTimes" to "False"))
-        // Compile shaders before start, and fall back to an uber shader instead of a synchronous cold compile
-        // (a Prime Trilogy morph-ball transition otherwise spiked memory enough to get the process OOM-killed).
-        PrimeHackProfiles.setValue(gfx, "Settings", "WaitForShadersBeforeStarting", "True")
-        PrimeHackProfiles.setValue(gfx, "Settings", "ShaderCompilationMode", "2")
+        enforceVideoSafety(gfx)
 
         val prime = gameId != null && PrimeHackCore.isPrimeGameId(gameId)
         val gyro = PrimeHackPrefs.gyroAim(ctx) && prime
@@ -62,6 +59,32 @@ object PrimeHackConfig {
             PrimeHackProfiles.setValue(ini, "Video_Settings", "AspectRatio", "1")
             PrimeHackProfiles.setValue(ini, "Video_Settings", "wideScreenHack", "True")
         }
+    }
+
+    /**
+     * Memory-critical video keys, written on EVERY launch.
+     *
+     * Shader mode: SPECIALIZED shaders only (0 = synchronous compile). Do NOT use the ubershader modes (1 and 2): on
+     * Adreno (AYN Thor, Adreno 740) every ubershader pipeline allocates ~24 MB of private GPU scratch memory (kgsl
+     * "VK/others" allocations, outside the app's PSS), and hybrid mode 2 keeps creating them for every new state
+     * combination. Measured on Prime Trilogy / Prime 1: ~100 pipelines (2.4 GB) by the title movies, 166 (4.0 GB) in the
+     * first room, +36 (+0.9 GB) at the first morph-ball press -> lmkd thrashing, the process starved and was killed.
+     * Mode 0 keeps the whole process at ~0.4 GB GPU / ~0.95 GB PSS at 60 fps.
+     * WaitForShadersBeforeStarting only precompiles the specialized pipelines recorded in the on-disk cache.
+     */
+    private fun enforceVideoSafety(gfx: File) {
+        PrimeHackProfiles.setValue(gfx, "Settings", "ShaderCompilationMode", "0")
+        PrimeHackProfiles.setValue(gfx, "Settings", "WaitForShadersBeforeStarting", "True")
+    }
+
+    /**
+     * Must run BEFORE the native engine starts (UICommon::Init reads GFX.ini once into memory): a value written
+     * afterwards only takes effect on the NEXT process, i.e. a stale "ShaderCompilationMode = 2" from an older build
+     * would still be live for the first launch after the fix. Needs no native code (plain path to the user dir).
+     */
+    fun applyEarly(ctx: Context) {
+        val dir = DirectoryInitialization.getUserDirectoryPath(ctx) ?: return
+        enforceVideoSafety(File(File(dir, "Config").also { it.mkdirs() }, "GFX.ini"))
     }
 
     private fun enableGeckoCodes(file: File, names: List<String>) {

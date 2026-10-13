@@ -23,8 +23,9 @@ internal object DolphinDefaults {
             "Android" to mapOf("ShowInputOverlay" to "False"),
         ),
         "GFX.ini" to mapOf(
-            // Async ubershaders: avoids the cold-compile freezes RomRunner saw with PrimeHack.
-            "Settings" to mapOf("ShaderCompilationMode" to "2", "WaitForShadersBeforeStarting" to "True"),
+            // Specialized shaders only (mode 0). Ubershader modes (1/2) make Adreno allocate ~24 MB of private GPU memory
+            // per pipeline (hundreds of them -> several GB, outside the app's PSS): see ENFORCED below.
+            "Settings" to mapOf("ShaderCompilationMode" to "0", "WaitForShadersBeforeStarting" to "True"),
         ),
         "WiimoteNew.ini" to mapOf(
             "Wiimote1" to mapOf("Source" to "1", "Extension" to "Nunchuk"),
@@ -43,6 +44,10 @@ internal object DolphinDefaults {
                 "ShowGraphs" to "False", "ShowNetPlayPing" to "False", "ShowNetPlayMessages" to "False",
                 "OverlayStats" to "False", "OverlayProjStats" to "False", "OverlayScissorStats" to "False",
                 "ShowFrameTimes" to "False", "WaitForShadersBeforeStarting" to "True",
+                // Every launch (not first-run only) so installs that already got "2" from an older build are corrected.
+                // Hybrid/exclusive ubershaders (2/1) allocate ~24 MB of Adreno scratch memory per pipeline and exhausted
+                // the Thor's RAM in Prime Trilogy (see core-primehack PrimeHackConfig). Mode 0 = specialized, ~0.4 GB total.
+                "ShaderCompilationMode" to "0",
             ),
         ),
     )

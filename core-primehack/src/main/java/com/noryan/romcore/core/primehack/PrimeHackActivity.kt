@@ -70,6 +70,7 @@ class PrimeHackActivity : EmulationActivity() {
         val path = intent.getStringExtra(EXTRA_ROM_PATH)
         val uri = intent.getStringExtra(EXTRA_ROM_URI)
         if (path == null && uri == null) { super.onCreate(savedInstanceState); finish(); return }
+        PrimeHackConfig.applyEarly(this)   // before the native engine reads GFX.ini (stale values would be live this launch)
         ensureEngine(application)
         awaitDirectories()
 
@@ -79,6 +80,7 @@ class PrimeHackActivity : EmulationActivity() {
             ?: intent.getStringExtra(EXTRA_SYSTEM)?.let { runCatching { System.valueOf(it) }.getOrNull() }
             ?: System.GAMECUBE
         PrimeHackConfig.apply(this, disc?.first, system)
+        runCatching { NativeLibrary.ReloadConfig() }   // re-read the INI layers just written (belt and braces)
 
         // Prefer a plain file path (Dolphin reads it directly); otherwise the SAF content:// Uri (Dolphin's file layer
         // opens content URIs itself).
@@ -95,6 +97,7 @@ class PrimeHackActivity : EmulationActivity() {
         if (NativeLibrary.IsGameMetadataValid()) { titleValid = true; maybeReady(if (shadersDone) 500 else 30_000) }
 
         registerDebugReceiver()
+        MemWatch.start { t -> runOnUiThread { hooks?.notice(t) } }
         gyro = PrimeHackGyro(this).also { if (PrimeHackPrefs.gyroAim(this)) it.start() }
 
         if (intent.getBooleanExtra(EXTRA_RESUME_STATE, false)) {
@@ -121,6 +124,7 @@ class PrimeHackActivity : EmulationActivity() {
                     "save" -> Thread { android.util.Log.i("PrimeHackDbg", "save($slot)=" + session.saveState(slot)) }.start()
                     "load" -> Thread { android.util.Log.i("PrimeHackDbg", "load($slot)=" + session.loadState(slot)) }.start()
                     "menu" -> runOnUiThread { hooks?.menu?.toggle() }
+                    "mem" -> android.util.Log.i("PrimeHackDbg", "mem " + MemWatch.snapshot())
                     "close" -> session.close()
                 }
             }
@@ -190,7 +194,14 @@ class PrimeHackActivity : EmulationActivity() {
         super.onPause()
     }
 
+    /** Safety net: log memory state (incl. Adreno kgsl GPU memory) and warn the player when the system is about to kill us. */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        MemWatch.onTrim(level) { t -> runOnUiThread { hooks?.notice(t) } }
+    }
+
     override fun onDestroy() {
+        MemWatch.stop()
         debugReceiver?.let { runCatching { unregisterReceiver(it) } }
         com.noryan.romcore.core.primehack.jni.UiBridge.noticeSink = null
         com.noryan.romcore.core.primehack.jni.UiBridge.shaderSink = null

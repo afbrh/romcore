@@ -60,3 +60,11 @@ Dolphin's own `ControllerInterface.dispatchKeyEvent` is bypassed for physical ev
 
 `libprimehack_main.so` is arm64 only. If the Adreno custom-driver feature of Dolphin is ever wanted, the app needs
 `packaging.jniLibs.useLegacyPackaging = true` (not needed for the default system driver).
+
+## GPU memory / shader mode (do not change without measuring)
+
+`GFX.ini ShaderCompilationMode` must stay `0` (specialized shaders). Ubershader modes (1/2) make the Adreno Vulkan driver
+allocate ~24 MB of private GPU scratch memory per pipeline (kgsl `VK/others(58)`; not counted in PSS): hybrid mode 2 reached
+~4 GB in Prime 1's first room and +0.9 GB at the first morph-ball press, which got the process killed by lmkd on the Thor.
+`PrimeHackConfig.applyEarly` writes the key before the native engine loads GFX.ini (stale values would otherwise be live for
+one more launch). Measure with: `adb shell cat /sys/kernel/debug/kgsl/proc/<pid>/mem` (sum of sizes) or logcat tag `RomCoreMem`.

@@ -69,6 +69,7 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
         session = DolphinSession(this, romPath) { closeGame() }
         // romcore-api one-call integration: InputRouter (mapping/auto-profiles/hotkeys) + shared menu + quick save/load.
         hooks = RomCoreCoreHost.install(this, session, system)
+        MemWatch.start { t -> runOnUiThread { if (::hooks.isInitialized) hooks.notice(t) } }
         NativeLibrary.setEmulationHost(this)
         DolphinApplication.initialize(this)
         DolphinApplication.setAppActivity(this)
@@ -179,7 +180,14 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
         }, "dolphin-stop").start()
     }
 
+    /** Safety net: log memory state (incl. Adreno kgsl GPU memory) and warn the player when the system is about to kill us. */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        MemWatch.onTrim(level) { t -> runOnUiThread { if (::hooks.isInitialized) hooks.notice(t) } }
+    }
+
     override fun onDestroy() {
+        MemWatch.stop()
         super.onDestroy()
         if (::hooks.isInitialized) hooks.onDestroy()
         NativeLibrary.setEmulationHost(null)
