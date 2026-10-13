@@ -14,6 +14,7 @@ import org.yuzu.yuzu_emu.R
 import org.yuzu.yuzu_emu.YuzuApplication
 import org.yuzu.yuzu_emu.activities.EmulationActivity
 import org.yuzu.yuzu_emu.features.settings.model.BooleanSetting
+import org.yuzu.yuzu_emu.features.settings.model.StringSetting
 import org.yuzu.yuzu_emu.utils.NativeConfig
 
 /**
@@ -26,9 +27,13 @@ class EdenInitProvider : ContentProvider() {
     override fun onCreate(): Boolean {
         val app = context?.applicationContext as? Application ?: return false
         createNotificationChannels(app)
+        // Stage the bundled Turnip driver BEFORE the engine loads its Vulkan library (see EdenDriver).
+        val driver = EdenDriver.prepare(app)
         try {
             YuzuApplication.initializeForEmbedding(app)
             BooleanSetting.SHOW_INPUT_OVERLAY.setBoolean(false)
+            // Every launch: keep driver_path in step with the installed driver so Eden's onLaunchGame never swaps it.
+            StringSetting.DRIVER_PATH.setString(driver.zipPath ?: "")
             NativeConfig.saveGlobalConfig()
         } catch (t: Throwable) {
             Log.e(TAG, "Eden embedding init failed", t)

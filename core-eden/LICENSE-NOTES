@@ -1,0 +1,12 @@
+:core-eden notes
+
+* Engine: Eden (Yuzu lineage) - GPL-3.0-or-later, consumed from /Users/ry/Desktop/claude/eden-src (local commits only; never
+  push or upstream, Eden's repo forbids AI contributions).
+* Bundled GPU driver: src/main/assets/eden_turnip_driver.zip = "Turnip v26.2.0-R8" (Mesa main, Vulkan 1.4.354, packaged by
+  stevenmx, adrenotools format: meta.json + libvulkan_freedreno.so). It is the same file (md5 14d4ee4ddfae85673956228693f06030)
+  that :core-cemu and :core-armsx2 bundle and that sits at /sdcard/_ROMs/_BIOS/Turnip_v26.2.0-R8.zip.
+  Turnip is part of Mesa (freedreno), licensed under the MIT licence (Copyright Mesa contributors; Rob Clark, Google,
+  Valve, Igalia et al). The MIT licence requires the copyright + permission notice to accompany copies; see
+  https://docs.mesa3d.org/license.html. The driver is loaded at runtime by libadrenotools (BSD-2-Clause, bundled in Eden).
+* It is enforced on every launch (EdenDriver.kt). To force the stock driver create
+  /sdcard/Android/data/com.noryan.romcore/files/romcore_stock_driver.

@@ -30,6 +30,7 @@ object EdenHost {
         RomCoreBridge.loadingText = { h.setLoadingText(it) }
         RomCoreBridge.ready = { h.onGameReady() }
         RomCoreBridge.flushPending()
+        EdenDriver.pendingNotice?.let { h.notice(it); EdenDriver.pendingNotice = null }
         val window = activity.window
         val original: Window.Callback = window.callback
         window.callback = object : WindowCallbackWrapper(original) {
