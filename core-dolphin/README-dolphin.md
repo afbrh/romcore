@@ -62,3 +62,8 @@ async state writer to finish the file. Closing the game also writes `.../resume`
 Dolphin is GPL-2.0-or-later; RomCore is GPLv3 (compatible: "or later" lets the combined work be distributed under GPLv3).
 Third-party pieces inside dolphin-src/Externals carry their own licences (LGPL/BSD/MIT/Apache; mGBA is MPL-2.0; some are GPL-2.0-only-free).
 No BIOS, keys, firmware or ROMs are included. Dolphin does NOT need a BIOS for most games (HLE); a GC IPL is optional.
+
+## Shader cache persistence
+Same scheme as :core-primehack (see its README-INTEGRATION.md, "Shader cache persistence"): cache dir `<externalFiles>/dolphin/Cache`
+(was `externalCacheDir/dolphin`, wipeable), `ShaderCacheKeeper` flushes via `NativeLibrary.FlushShaderCaches` on menu-open/onPause/close and
+every 60 s; `RomCoreShader` logcat lines report "Shader cache: N entries". ShaderCompilationMode stays 0.

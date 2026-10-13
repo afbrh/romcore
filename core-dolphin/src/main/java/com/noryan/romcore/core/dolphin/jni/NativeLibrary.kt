@@ -365,6 +365,14 @@ object NativeLibrary {
     @JvmStatic
     external fun HasSurface(): Boolean
 
+    /** RomCore: persist shader caches now (full=true also rewrites the Vulkan VkPipelineCache blob). Safe from any thread. */
+    @JvmStatic
+    external fun FlushShaderCaches(full: Boolean)
+
+    /** RomCore: number of shader/pipeline entries restored from the on-disk caches in this process. */
+    @JvmStatic
+    external fun GetShaderCacheEntries(): Int
+
     @JvmStatic
     external fun UnPauseEmulation()
 

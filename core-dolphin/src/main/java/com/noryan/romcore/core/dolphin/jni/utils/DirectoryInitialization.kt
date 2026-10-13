@@ -54,8 +54,11 @@ object DirectoryInitialization {
         userPath = userDir.absolutePath
         NativeLibrary.SetUserDirectory(userPath)
 
-        val cacheDir = context.externalCacheDir ?: context.cacheDir
-        val dolphinCache = File(cacheDir, "dolphin").apply { mkdirs() }
+        // RomCore: the shader caches (Cache/Shaders/*.cache: shader + pipeline-UID + Vulkan pipeline blob) live in the
+        // user dir (<externalFiles>/dolphin/Cache), NOT in externalCacheDir: the system / "Clear cache" may wipe the
+        // latter at any time and the warm shader cache is what removes first-sight compile stalls.
+        val dolphinCache = File(userDir, "Cache").apply { mkdirs() }
+        migrateLegacyCache(context, dolphinCache)
         NativeLibrary.SetCacheDirectory(dolphinCache.path)
 
         extractSysDirectory(context)
@@ -63,6 +66,23 @@ object DirectoryInitialization {
 
         areDirectoriesAvailable = true
         directoryState.postValue(DirectoryInitializationState.DOLPHIN_DIRECTORIES_INITIALIZED)
+    }
+
+    /** One-time move of caches written by older builds into the persistent cache dir. */
+    private fun migrateLegacyCache(context: Context, dest: File) {
+        runCatching {
+            val old = File(context.externalCacheDir ?: return, "dolphin")
+            val oldShaders = File(old, "Shaders")
+            val newShaders = File(dest, "Shaders")
+            if (oldShaders.isDirectory && !newShaders.exists()) oldShaders.renameTo(newShaders)
+        }
+    }
+
+    /** "N entries (X MB)" for the on-disk shader cache; used for the log/notice. */
+    @JvmStatic
+    fun shaderCacheSummary(): String {
+        val files = File(getUserDirectory(), "Cache/Shaders").listFiles { f -> f.name.endsWith(".cache") } ?: return "empty"
+        return "${files.size} files, ${files.sumOf { it.length() } / 1024} KB"
     }
 
     @JvmStatic

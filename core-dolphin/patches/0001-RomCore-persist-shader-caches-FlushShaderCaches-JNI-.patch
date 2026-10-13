@@ -1,0 +1,160 @@
+From 78197f5cc7ff3052d7dba8f2539f89210ea654d1 Mon Sep 17 00:00:00 2001
+From: Ry <ry@Rys-MacBook-Pro.local>
+Date: Tue, 13 Oct 2026 14:48:56 -0500
+Subject: [PATCH] RomCore: persist shader caches - FlushShaderCaches JNI
+ (fflush append-only caches + save VkPipelineCache on GPU thread),
+ GetShaderCacheEntries
+
+---
+ Source/Android/jni/MainAndroid.cpp      | 35 +++++++++++++++++++++++++
+ Source/Core/VideoCommon/ShaderCache.cpp | 21 +++++++++++++++
+ Source/Core/VideoCommon/ShaderCache.h   |  3 +++
+ 3 files changed, 59 insertions(+)
+
+diff --git a/Source/Android/jni/MainAndroid.cpp b/Source/Android/jni/MainAndroid.cpp
+index e3c49df..8430a2a 100644
+--- a/Source/Android/jni/MainAndroid.cpp
++++ b/Source/Android/jni/MainAndroid.cpp
+@@ -2,6 +2,7 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+ #include <condition_variable>
++#include <atomic>
+ #include <cstdio>
+ #include <cstdlib>
+ #include <memory>
+@@ -61,9 +62,13 @@
+ #include "UICommon/GameFile.h"
+ #include "UICommon/UICommon.h"
+ 
++#include "VideoBackends/Vulkan/ObjectCache.h"
++#include "VideoCommon/AsyncRequests.h"
+ #include "VideoCommon/OnScreenDisplay.h"
+ #include "VideoCommon/Present.h"
++#include "VideoCommon/ShaderCache.h"
+ #include "VideoCommon/VideoBackendBase.h"
++#include "VideoCommon/VideoConfig.h"
+ 
+ #include "jni/AndroidCommon/AndroidCommon.h"
+ #include "jni/AndroidCommon/IDCache.h"
+@@ -197,6 +202,36 @@ void Host_TitleChanged()
+   env->CallStaticVoidMethod(IDCache::GetNativeLibraryClass(), IDCache::GetOnTitleChanged());
+ }
+ 
++namespace VideoCommon
++{
++extern std::atomic<u32> g_romcore_shader_cache_entries;
++}
++
++// RomCore: persist the shader caches NOW (menu open / app paused) so a quick process kill cannot lose them.
++// full=false: fflush the append-only disk caches (cheap). full=true: also rewrite the Vulkan VkPipelineCache blob
++// (normally only saved on a clean backend shutdown). Runs on the GPU thread via AsyncRequests.
++extern "C" JNIEXPORT void JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_FlushShaderCaches(JNIEnv*, jclass, jboolean full)
++{
++  auto& system = Core::System::GetInstance();
++  const Core::State st = Core::GetState(system);
++  if (st != Core::State::Running && st != Core::State::Paused)
++    return;
++  const bool do_full = full;
++  Core::RunOnCPUThread(system, [do_full] {
++    AsyncRequests::GetInstance()->PushEvent([do_full] {
++      if (g_shader_cache)
++        g_shader_cache->FlushDiskCaches();
++      if (do_full && g_backend_info.api_type == APIType::Vulkan && Vulkan::g_object_cache)
++        Vulkan::g_object_cache->SavePipelineCache();
++    });
++  });
++}
++
++extern "C" JNIEXPORT jint JNICALL Java_com_noryan_romcore_core_dolphin_jni_NativeLibrary_GetShaderCacheEntries(JNIEnv*, jclass)
++{
++  return static_cast<jint>(VideoCommon::g_romcore_shader_cache_entries.load());
++}
++
+ // RomCore: shader pre-compile progress -> NativeLibrary.onShaderCompileProgress (called from ShaderCache.cpp).
+ extern "C" void RomCore_ShaderCompileProgress(size_t completed, size_t total, bool finished)
+ {
+diff --git a/Source/Core/VideoCommon/ShaderCache.cpp b/Source/Core/VideoCommon/ShaderCache.cpp
+index d9c2017..07d23a9 100644
+--- a/Source/Core/VideoCommon/ShaderCache.cpp
++++ b/Source/Core/VideoCommon/ShaderCache.cpp
+@@ -3,6 +3,8 @@
+ 
+ #include "VideoCommon/ShaderCache.h"
+ 
++#include <atomic>
++
+ #ifdef ANDROID
+ // RomCore: strong definition lives in Android/jni/MainAndroid.cpp (weak so the unit-test binary still links);
+ // the shared RomCore loading screen shows the progress.
+@@ -38,6 +40,9 @@ std::unique_ptr<VideoCommon::ShaderCache> g_shader_cache;
+ 
+ namespace VideoCommon
+ {
++// RomCore: number of shader/pipeline entries restored from the on-disk caches this run.
++std::atomic<u32> g_romcore_shader_cache_entries{0};
++
+ ShaderCache::ShaderCache() : m_api_type{APIType::Nothing}
+ {
+ }
+@@ -109,6 +114,19 @@ void ShaderCache::Reload()
+   m_async_shader_compiler->ResizeWorkerThreads(g_ActiveConfig.GetShaderCompilerThreads());
+ }
+ 
++void ShaderCache::FlushDiskCaches()
++{
++  m_vs_cache.disk_cache.Sync();
++  m_uber_vs_cache.disk_cache.Sync();
++  m_ps_cache.disk_cache.Sync();
++  m_uber_ps_cache.disk_cache.Sync();
++  m_gs_cache.disk_cache.Sync();
++  m_gx_pipeline_disk_cache.Sync();
++  m_gx_uber_pipeline_disk_cache.Sync();
++  if (m_gx_pipeline_uid_cache_file.IsOpen())
++    m_gx_pipeline_uid_cache_file.Flush();
++}
++
+ void ShaderCache::RetrieveAsyncShaders()
+ {
+   m_async_shader_compiler->RetrieveWorkItems();
+@@ -286,6 +304,7 @@ void ShaderCache::LoadShaderCache(T& cache, APIType api_type, const char* type,
+   CacheReader reader(cache);
+   u32 count = cache.disk_cache.OpenAndRead(filename, reader);
+   INFO_LOG_FMT(VIDEO, "Loaded {} cached shaders from {}", count, filename);
++  g_romcore_shader_cache_entries += count;
+ }
+ 
+ template <typename T>
+@@ -341,6 +360,7 @@ void ShaderCache::LoadPipelineCache(T& cache, Common::LinearDiskCache<DiskKeyTyp
+   CacheReader reader(this, cache);
+   const u32 count = disk_cache.OpenAndRead(filename, reader);
+   INFO_LOG_FMT(VIDEO, "Loaded {} cached pipelines from {}", count, filename);
++  g_romcore_shader_cache_entries += count;
+ 
+   // If any of the pipelines in the cache failed to create, it's likely because of a change of
+   // driver version, or system configuration. In this case, when the UID cache picks up the pipeline
+@@ -840,6 +860,7 @@ void ShaderCache::LoadPipelineUIDCache()
+           {
+             // This just adds the pipeline to the map, it is compiled later.
+             AddSerializedGXPipelineUID(serialized_uid);
++            g_romcore_shader_cache_entries++;
+           }
+           else
+           {
+diff --git a/Source/Core/VideoCommon/ShaderCache.h b/Source/Core/VideoCommon/ShaderCache.h
+index c76f7da..2cf8d40 100644
+--- a/Source/Core/VideoCommon/ShaderCache.h
++++ b/Source/Core/VideoCommon/ShaderCache.h
+@@ -62,6 +62,9 @@ public:
+   // Retrieves all pending shaders/pipelines from the async compiler.
+   void RetrieveAsyncShaders();
+ 
++  // RomCore: fflush every append-only disk cache (shaders, pipeline UIDs). GPU thread only.
++  void FlushDiskCaches();
++
+   // Accesses ShaderGen shader caches
+   const AbstractPipeline* GetPipelineForUid(const GXPipelineUid& uid);
+   const AbstractPipeline* GetUberPipelineForUid(const GXUberPipelineUid& uid);
+-- 
+2.54.0 (Apple Git-157)
+

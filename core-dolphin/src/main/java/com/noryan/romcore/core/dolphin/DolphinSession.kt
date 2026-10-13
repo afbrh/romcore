@@ -29,7 +29,10 @@ class DolphinSession(
     private val resumeFile: File get() = File(stateDir, "resume")
 
     // ---- lifecycle -------------------------------------------------------------------------------------------
-    override fun pause() { if (NativeLibrary.IsRunningAndUnpaused()) NativeLibrary.PauseEmulation(true) }
+    override fun pause() {
+        if (NativeLibrary.IsRunningAndUnpaused()) NativeLibrary.PauseEmulation(true)
+        ShaderCacheKeeper.flush(full = true)   // menu open: persist the shader caches while the game is paused
+    }
     override fun resume() { if (NativeLibrary.IsRunning()) NativeLibrary.UnPauseEmulation() }
 
     /** Never blocks the caller (menu/hotkey run on the UI thread): save the auto-resume point, then onClose(). */
@@ -39,6 +42,7 @@ class DolphinSession(
                 // Auto-resume point (LaunchRequest.resumeState). Best effort, bounded wait.
                 runCatching { saveBlocking(resumeFile, 6000) }
             }
+            ShaderCacheKeeper.flushBlocking()
             onClose()
         }, "dolphin-close").start()
     }

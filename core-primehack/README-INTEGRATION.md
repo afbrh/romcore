@@ -68,3 +68,18 @@ allocate ~24 MB of private GPU scratch memory per pipeline (kgsl `VK/others(58)`
 ~4 GB in Prime 1's first room and +0.9 GB at the first morph-ball press, which got the process killed by lmkd on the Thor.
 `PrimeHackConfig.applyEarly` writes the key before the native engine loads GFX.ini (stale values would otherwise be live for
 one more launch). Measure with: `adb shell cat /sys/kernel/debug/kgsl/proc/<pid>/mem` (sum of sizes) or logcat tag `RomCoreMem`.
+
+## Shader cache persistence (mode 0 stays; measured numbers in the perf notes of the commit)
+
+* Dolphin writes three things per game/backend: `Cache/Shaders/<api>-<type>[-<gameid>]...cache` (shader + pipeline-UID caches,
+  append-only `LinearDiskCache`/UID file) and the Vulkan driver blob `Vulkan-Pipeline-<hostconfig>.cache` (VkPipelineCache).
+  `WaitForShadersBeforeStarting=True` replays every recorded UID (`CompileMissingPipelines`) behind the RomCore loading bar
+  ("Compiling shaders x/total"), so cached games start warm.
+* Location: `<externalFiles>/primehack/Cache/Shaders` (= `/sdcard/Android/data/com.noryan.romcore/files/primehack/Cache/Shaders`).
+  Previously it was `externalCacheDir/primehack`, which the system / "Clear cache" may wipe; `DirectoryInitialization` now uses the
+  user dir and moves an old `Shaders` dir over once.
+* Dolphin only fflush()es the append-only caches and saves the Vulkan blob on a *clean* backend shutdown. RomCore kills the
+  process when the game ends, so `NativeLibrary.FlushShaderCaches(full)` (new JNI; runs as a GPU-thread `AsyncRequests` event)
+  is called by `ShaderCacheKeeper` on menu open (pause), `onPause`, and every 60 s (cheap fflush only).
+* `NativeLibrary.GetShaderCacheEntries()` = entries restored from disk this run; logcat tags `RomCoreShader` / `RomCoreUi`.
+* Never bundle game-derived caches in the repo/APK (commercial-game derived, GPU/driver specific): they are built locally.

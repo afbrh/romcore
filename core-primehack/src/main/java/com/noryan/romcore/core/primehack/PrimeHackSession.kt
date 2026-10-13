@@ -30,6 +30,7 @@ class PrimeHackSession(
         EmulationActivity.hasUserPausedEmulation = true   // stops Dolphin's fragment un-pausing on resume while the menu is up
         if (NativeLibrary.IsRunning()) NativeLibrary.PauseEmulation(false)
         paused = true
+        ShaderCacheKeeper.flush(full = true)   // menu open: persist the shader caches while paused (Close Game kills the process)
     }
 
     override fun resume() {

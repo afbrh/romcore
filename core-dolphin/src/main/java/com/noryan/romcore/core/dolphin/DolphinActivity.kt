@@ -48,6 +48,7 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
     private var titleValid = false
     private var shadersDone = false
     private var shadersWaiting = false
+    private var shaderLogged = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -148,10 +149,14 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
         android.util.Log.i("RomCoreUi", "shader $completed/$total finished=$finished")
         runOnUiThread {
             if (!::hooks.isInitialized) return@runOnUiThread
-            if (finished) { shadersWaiting = false; hooks.setLoadingText(null); shadersDone = true; maybeReady(500) }
+            if (finished) {
+                shadersWaiting = false; hooks.setLoadingText(null); shadersDone = true; maybeReady(500)
+                ShaderCacheKeeper.logSummary(); ShaderCacheKeeper.startPeriodic()
+            }
             else {
                 shadersWaiting = true
                 hooks.setLoadingProgress(completed.toFloat() / maxOf(total, 1), "Compiling shaders $completed/$total")
+                if (!shaderLogged) { shaderLogged = true; ShaderCacheKeeper.logSummary("start, $total to compile") }
             }
         }
     }
@@ -196,6 +201,7 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
     }
 
     override fun onPause() {
+        ShaderCacheKeeper.flush(full = true)   // the process may be killed any time after the app leaves the foreground
         if (::hooks.isInitialized) hooks.onPause()
         if (runtimeReady && NativeLibrary.IsRunningAndUnpaused()) NativeLibrary.PauseEmulation(true)
         super.onPause()

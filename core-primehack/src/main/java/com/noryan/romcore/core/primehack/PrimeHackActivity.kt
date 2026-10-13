@@ -138,12 +138,17 @@ class PrimeHackActivity : EmulationActivity() {
     private var titleValid = false
     private var shadersDone = false
     private var shadersWaiting = false
+    private var shaderLogged = false
 
     /** Shader pre-compile progress goes to the shared RomCore loading screen (Dolphin's own ImGui bar is not drawn). */
     private fun onShaderCompile(completed: Int, total: Int, finished: Boolean) {
+        android.util.Log.i("RomCoreUi", "shader $completed/$total finished=$finished")
         val h = hooks ?: return
-        if (finished) { shadersWaiting = false; shadersDone = true; h.setLoadingText(null); maybeReady(500) }
-        else {
+        if (finished) {
+            shadersWaiting = false; shadersDone = true; h.setLoadingText(null); maybeReady(500)
+            ShaderCacheKeeper.logSummary(); ShaderCacheKeeper.startPeriodic()
+        } else {
+            if (!shaderLogged) { shaderLogged = true; ShaderCacheKeeper.logSummary("start, $total to compile") }
             shadersWaiting = true
             h.setLoadingProgress(completed.toFloat() / maxOf(total, 1), "Compiling shaders $completed/$total")
         }
@@ -154,7 +159,7 @@ class PrimeHackActivity : EmulationActivity() {
         if (readySignalled || !titleValid) return
         val fallback = delayMs >= 30_000
         window.decorView.postDelayed({
-            if (!readySignalled && !shadersWaiting && (shadersDone || fallback)) { readySignalled = true; hooks?.onGameReady() }
+            if (!readySignalled && !shadersWaiting && (shadersDone || fallback)) { readySignalled = true; android.util.Log.i("RomCoreUi", "onGameReady"); hooks?.onGameReady() }
         }, delayMs)
     }
 
@@ -188,6 +193,7 @@ class PrimeHackActivity : EmulationActivity() {
     }
 
     override fun onPause() {
+        ShaderCacheKeeper.flush(full = true)   // the process may be killed any time after the app leaves the foreground
         if (::session.isInitialized) {
             gyro?.stop(); session.releaseAll(); hooks?.onPause()
         }
