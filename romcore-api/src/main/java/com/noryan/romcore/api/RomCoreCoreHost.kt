@@ -47,6 +47,11 @@ object RomCoreCoreHost {
         val menu: RomCoreMenuHost = RomCoreMenu.attach(activity, session, system, router)
         private var savedSink: com.noryan.romcore.api.input.PadSink? = null
 
+        private val perf = PerfHints(activity, system).also { it.start() }
+
+        /** Optional: this core/game's real frame rate (default 60). Sets the ADPF target duration and display frame-rate hint. */
+        fun setTargetFps(fps: Int) { if (fps in 10..240) perf.targetFps = fps }
+
         init {
             ui.attachTopLayer()
             ui.onErrorShown = {
@@ -63,7 +68,7 @@ object RomCoreCoreHost {
         }
 
         /** The core drew its first real frame / finished native init: fades the loading screen out. */
-        fun onGameReady() = ui.onGameReady()
+        fun onGameReady() { ui.onGameReady(); perf.gameReady() }
 
         /** Optional: determinate bar (0..1, NaN = indeterminate) and a line of status text under LOADING. */
         @JvmOverloads fun setLoadingProgress(fraction: Float, text: String? = null) = ui.setLoadingProgress(fraction, text)
@@ -131,6 +136,6 @@ object RomCoreCoreHost {
         fun onPause() { router.releaseAll() }
 
         /** Activity.onDestroy. */
-        fun onDestroy() { menu.detach(); ui.destroy(); RomCoreUi.unregister(activity); router.releaseAll(); worker.shutdown() }
+        fun onDestroy() { perf.stop(); menu.detach(); ui.destroy(); RomCoreUi.unregister(activity); router.releaseAll(); worker.shutdown() }
     }
 }

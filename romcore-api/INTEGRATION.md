@@ -131,3 +131,10 @@ Behaviour:
 5. No emulator overlay is drawn: FPS/stat counters, OSD messages (e.g. PCSX2 `AddKeyedOSDMessage`, RetroArch notifications), pause/
    "paused" indicators, on-screen touch controls, input-overlay views, drawer/menu buttons. Disable in settings/defaults or patch out.
 6. `adb shell dumpsys window | grep -i toast` / a game session shows no Toast and no foreign dialog; Back opens only the shared menu.
+
+## Performance hints (automatic)
+
+`RomCoreCoreHost.install` also starts `PerfHints` (per core process): ADPF `PerformanceHintManager` session over the busiest
+threads (re-picked every 4 s), `Surface.setFrameRate(60, FIXED_SOURCE)` on every SurfaceView in the Activity, and GameManager
+game state. Default target is 60 fps; call `hooks.setTargetFps(30)` for a 30 fps core/game. For A/B tests create
+`<externalFilesDir>/perf_hints_off` (all), `perf_hints_adpf_off` or `perf_hints_framerate_off`. Log tag `RomCorePerf`.

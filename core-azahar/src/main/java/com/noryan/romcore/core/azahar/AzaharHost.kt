@@ -59,7 +59,7 @@ object AzaharHost {
         val first = a.getSharedPreferences("romcore_azahar_state", Context.MODE_PRIVATE)
         if (!first.getBoolean("defaults_v1", false)) {
             // One-time performance defaults (same ones proven in the RomRunner embedding); user may change later.
-            put(IntSetting.GRAPHICS_API, 1) // OpenGL
+            put(IntSetting.GRAPHICS_API, 2) // Vulkan (GL SIGSEGVs in OpenGL::Driver::ReportDriverInfo on the very first launch, before config.ini exists)
             put(IntSetting.RESOLUTION_FACTOR, 4)
             put(BooleanSetting.USE_FRAME_LIMIT, true)
             put(IntSetting.FRAME_LIMIT, 100)
