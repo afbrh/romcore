@@ -23,6 +23,10 @@ class RomCorePpssppActivity : PpssppActivity() {
     private val ui = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Portable saves: the memstick must be wired up BEFORE NativeApp.init (run by super.onCreate); the save root was
+        // already adopted from the launch Intent by RomCoreCrashGuard's pre-create hook.
+        runCatching { PpssppSaveLayout.prepare(applicationContext) }
+            .onFailure { android.util.Log.e("RomCorePpsspp", "save layout failed, PPSSPP falls back to the app dir", it) }
         super.onCreate(savedInstanceState)
         val rom = intent.getStringExtra(PpssppCore.EXTRA_ROM_PATH) ?: intent.data?.toString() ?: ""
         val session = PpssppSession(this, rom)

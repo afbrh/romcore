@@ -1,10 +1,15 @@
 package com.noryan.romcore.core.retroarch
 
 import android.content.Context
+import com.noryan.romcore.api.save.SaveRoot
 import java.io.File
 
 /** Core installation + generated retroarch.cfg / core option files. Safe to call from the shell process. */
 internal object RaFiles {
+    /** Pre-portable locations of the native save data (SaveMigration sources). */
+    fun legacySavesDir(ctx: Context) = File(baseDir(ctx), "saves")
+    fun legacyStatesDir(ctx: Context) = File(baseDir(ctx), "states")
+
     fun baseDir(ctx: Context): File =
         File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "retroarch").apply { mkdirs() }
 
@@ -27,8 +32,11 @@ internal object RaFiles {
 
     fun writeConfig(ctx: Context, spec: CoreSpec): File {
         val base = baseDir(ctx)
-        val saves = File(base, "saves").apply { mkdirs() }
-        val states = File(base, "states").apply { mkdirs() }
+        // Portable save data: battery saves (.srm/.rtc/.eep/.mpk/.fla, SwanStation memcards) and RA's own states live in the
+        // save root. writeConfig runs in the shell process inside launchIntent, i.e. before the :retroarch process or
+        // libretro exist, so the first launch already uses these paths (no late-config issue). BIOS (system/) and config stay local.
+        val saves = SaveRoot.coreSubDir(ctx, RetroArchCore.id, "saves")
+        val states = SaveRoot.coreSubDir(ctx, RetroArchCore.id, "states")
         val cfgDir = File(base, "config").apply { mkdirs() }
         val opt = File(cfgDir, spec.id + ".opt")
         if (!opt.exists()) opt.writeText(spec.options.entries.joinToString("\n") { "${it.key} = \"${it.value}\"" } + "\n")

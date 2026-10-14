@@ -42,7 +42,11 @@ internal class RaSession(
 
     // Called on the UI thread: never block it on the RetroArch thread (it may be busy or wedged). Ordered, bounded.
     private val pauser = java.util.concurrent.Executors.newSingleThreadExecutor { Thread(it, "romcore-ra-pause").apply { isDaemon = true } }
-    override fun pause() { paused = true; pauser.execute { RaBridge.request(RaBridge.OP_PAUSE, null, 1500) } }
+    override fun pause() { paused = true; pauser.execute {
+        RaBridge.request(RaBridge.OP_PAUSE, null, 1500)
+        // menu open / app pause: battery saves are cheap to flush and the process may be killed next (Close Game, lmkd)
+        if (ready) RaBridge.request(RaBridge.OP_FLUSH, null, 1000)
+    } }
     override fun resume() { paused = false; pauser.execute { RaBridge.request(RaBridge.OP_RESUME, null, 1500) } }
 
     override fun saveState(slot: Int): Boolean {

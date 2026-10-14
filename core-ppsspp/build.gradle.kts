@@ -57,6 +57,7 @@ dependencies {
     implementation("androidx.documentfile:documentfile:1.1.0")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("com.google.protobuf:protobuf-javalite:4.35.1")
+    testImplementation("junit:junit:4.13.2")
 }
 
 protobuf {

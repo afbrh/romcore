@@ -56,8 +56,14 @@ class WatermelonDsSession(
      */
     override fun close() {
         runCatching { MelonEmulator.pauseEmulation() }
-        activity.romCoreClose()
-        main.postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, 1500)
+        // Cartridge saves are written by melonDS' SaveManager (debounced 2 s, final write when the emulator is stopped).
+        // Stop the emulator HERE, synchronously on a worker, so the final .sav write in the save root completes before
+        // the process is killed (stopEmulation is idempotent: the Activity's own later stop is a no-op).
+        Thread {
+            runCatching { MelonEmulator.stopEmulation() }
+            main.post { activity.romCoreClose() }
+        }.apply { name = "romcore-melon-close"; isDaemon = true }.start()
+        main.postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, 5000)
     }
 
     override fun injectButton(pad: Pad, pressed: Boolean) {

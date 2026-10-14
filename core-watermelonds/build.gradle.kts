@@ -35,4 +35,5 @@ dependencies {
     api("androidx.work:work-runtime:2.11.2") // RomCoreHiltApplication is a Configuration.Provider
     // Hilt itself (plugin + compiler + the @HiltAndroidApp root) must live in the :app module; see RomCoreHiltApplication.
     implementation("com.google.dagger:hilt-android:2.60.1")
+    testImplementation("junit:junit:4.13.2")
 }

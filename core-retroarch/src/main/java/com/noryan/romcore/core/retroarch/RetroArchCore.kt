@@ -7,6 +7,7 @@ import com.noryan.romcore.api.CoreRegistry
 import com.noryan.romcore.api.LaunchRequest
 import com.noryan.romcore.api.SubCore
 import com.noryan.romcore.api.System
+import com.noryan.romcore.api.save.SaveMigration
 import java.io.File
 import java.io.RandomAccessFile
 
@@ -29,7 +30,12 @@ object RetroArchCore : CoreDescriptor {
     /** Human-readable libretro core file bundled for [system], or null. */
     fun coreFileFor(system: System): String? = CoreTable.SYSTEM_CORE[system]?.so
 
-    fun register() = CoreRegistry.register(this)
+    fun register() {
+        CoreRegistry.register(this)
+        // old app-storage native save dirs -> <root>/retroarch/{saves,states} (copy + verify + delete, see SAVEDATA.md)
+        SaveMigration.register(id, "retroarch battery saves", "saves") { RaFiles.legacySavesDir(it) }
+        SaveMigration.register(id, "retroarch native states", "states") { RaFiles.legacyStatesDir(it) }
+    }
 
     /**
      * Disc images share .iso/.bin/.img with PS2 etc. A PS1 disc carries "PLAYSTATION" as ISO9660 system id and is a

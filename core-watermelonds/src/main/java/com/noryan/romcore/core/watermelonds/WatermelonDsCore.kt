@@ -7,6 +7,8 @@ import com.noryan.romcore.api.CoreDescriptor
 import com.noryan.romcore.api.CoreRegistry
 import com.noryan.romcore.api.LaunchRequest
 import com.noryan.romcore.api.System
+import com.noryan.romcore.api.save.SaveMigration
+import com.noryan.romcore.api.save.SaveRoot
 import me.magnum.melonds.romcore.RomCoreBridge
 import me.magnum.melonds.ui.emulator.EmulatorActivity
 
@@ -46,7 +48,12 @@ object WatermelonDsCore : CoreDescriptor {
         }
     }
 
-    fun register() = CoreRegistry.register(this)
+    fun register() {
+        CoreRegistry.register(this)
+        // old locations of cartridge saves -> <root>/watermelonds/saves (copy + verify + delete, see SAVEDATA.md)
+        SaveMigration.register(id, "ds saves (app storage)", "saves") { WatermelonDsSaves.legacyAppSaves(it) }
+        SaveMigration.register(id, "ds saves next to ROM", "saves") { WatermelonDsSaves.adoptRomSideSaves(it) }
+    }
 }
 
 /**
@@ -71,7 +78,12 @@ internal object WatermelonDsDefaults {
         val renderer = mark.getString("renderer_override", null)?.takeIf { it.isNotBlank() } ?: RENDERER
         val prefs = ctx.getSharedPreferences("${ctx.packageName}_preferences", Context.MODE_PRIVATE)
         val firstRun = !mark.getBoolean(MARK, false)
-        val needs = firstRun ||
+        // Portable saves: WatermelonDS keeps cartridge saves (<rom>.sav) in `sram_dir` when `use_rom_dir` is off. Enforced on
+        // every launch (the save root can change); written here in the MAIN process, before :melonds reads the prefs.
+        val saveDir = SaveRoot.coreSubDir(ctx, WatermelonDsCore.id, "saves")
+        val saveUri = android.net.Uri.fromFile(saveDir).toString()
+        val savesOk = !prefs.getBoolean("use_rom_dir", true) && prefs.getStringSet("sram_dir", null)?.singleOrNull() == saveUri
+        val needs = firstRun || !savesOk ||
             prefs.getString("video_renderer", null) != renderer ||
             prefs.getString("video_internal_resolution", null) != RESOLUTION
         if (!needs) return
@@ -79,6 +91,8 @@ internal object WatermelonDsDefaults {
             .putString("soft_input_behaviour", "always_invisible")
             .putString("video_renderer", renderer)
             .putString("video_internal_resolution", RESOLUTION)
+            .putBoolean("use_rom_dir", false)
+            .putStringSet("sram_dir", setOf(saveUri))
             .commit() // commit(): the :melonds process reads this file right after launch
         if (firstRun) mark.edit().putBoolean(MARK, true).commit()
     }

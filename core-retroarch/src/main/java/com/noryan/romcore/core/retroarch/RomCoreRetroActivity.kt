@@ -96,6 +96,9 @@ class RomCoreRetroActivity : RetroActivityFuture() {
 
     override fun onPause() {
         if (::hooks.isInitialized) hooks.onPause()
+        // app backgrounded (or about to be killed): get battery saves onto the portable root now
+        if (::session.isInitialized && session.ready && !closing)
+            Thread { RaBridge.request(RaBridge.OP_FLUSH, null, 1000) }.apply { isDaemon = true; name = "romcore-ra-flush" }.start()
         super.onPause()
     }
 

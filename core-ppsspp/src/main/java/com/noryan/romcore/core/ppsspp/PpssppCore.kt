@@ -7,6 +7,7 @@ import com.noryan.romcore.api.CoreDescriptor
 import com.noryan.romcore.api.CoreRegistry
 import com.noryan.romcore.api.LaunchRequest
 import com.noryan.romcore.api.System
+import com.noryan.romcore.api.save.SaveMigration
 import java.io.File
 import java.io.RandomAccessFile
 
@@ -49,5 +50,10 @@ object PpssppCore : CoreDescriptor {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 
-    @JvmStatic fun register() = CoreRegistry.register(this)
+    @JvmStatic fun register() {
+        CoreRegistry.register(this)
+        // old app-storage memstick (<extFiles>/PSP/...) -> <root>/ppsspp/...  (copy + verify + delete)
+        SaveMigration.register(id, "psp game saves", "SAVEDATA") { File(PpssppSaveLayout.legacyPsp(it), "SAVEDATA") }
+        SaveMigration.register(id, "psp native states", "PPSSPP_STATE") { File(PpssppSaveLayout.legacyPsp(it), "PPSSPP_STATE") }
+    }
 }
