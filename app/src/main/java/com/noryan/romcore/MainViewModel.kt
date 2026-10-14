@@ -28,6 +28,9 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** State of the collection editor: new (collectionId == null) or editing an existing one. */
+data class CollectionEditor(val collectionId: Long?, val name: String, val selection: SelectionState, val error: String? = null)
+
 /** First-run / re-pick flow. The screen shown is a pure function of this state plus the All files grant. */
 sealed interface Setup {
     data class Searching(val kind: FolderSearch.Kind) : Setup
@@ -42,9 +45,23 @@ sealed interface Setup {
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val ra = app as RomCoreApp
     private val dao = ra.db.games()
+    private val cdao = ra.db.collections()
     val prefs = ra.prefs
 
     val games: StateFlow<List<GameEntity>> = dao.observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    /** Collections in tab order; null until the first DB read (so a saved collection tab is not dropped too early). */
+    val collections: StateFlow<List<CollectionEntity>?> =
+        cdao.observeCollections().map<List<CollectionEntity>, List<CollectionEntity>?> { it }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    /** collection id -> ids of its games (membership rows are removed by the DB when a game or collection disappears). */
+    val members: StateFlow<Map<Long, Set<Long>>> =
+        cdao.observeMembers().map { rows -> rows.groupBy({ it.collectionId }, { it.gameId }).mapValues { it.value.toSet() } }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+    /** Saved selected tab (0 = GAMES or a collection id); UI resolves it through [CollectionRules.resolveTab]. */
+    val selectedTab = MutableStateFlow(prefs.selectedTab)
+    /** The Settings screen replaces the games area while true. */
+    val settingsOpen = MutableStateFlow(false)
+    /** The NEW COLLECTION / EDIT GAMES screen; null = closed. */
+    val editor = MutableStateFlow<CollectionEditor?>(null)
     val accessGranted = MutableStateFlow(Environment.isExternalStorageManager())
     val romDir = MutableStateFlow(prefs.romDir)
     val biosDir = MutableStateFlow(prefs.biosDir)
@@ -332,6 +349,63 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 status.value = "SCAN FAILED"
             } finally { scanning.value = false }
         }
+    }
+
+    // ---- collections ----
+    fun selectTab(id: Long) { selectedTab.value = id; prefs.selectedTab = id; settingsOpen.value = false }
+    fun toggleSettings() { settingsOpen.value = !settingsOpen.value }
+
+    private fun names(except: Long? = null) = collections.value.orEmpty().filter { it.id != except }.map { it.name }
+
+    fun newCollection() {
+        editor.value = CollectionEditor(null, CollectionRules.defaultName(names()), SelectionState())
+        settingsOpen.value = false
+    }
+
+    fun editCollection(id: Long) {
+        val c = collections.value.orEmpty().firstOrNull { it.id == id } ?: return
+        val live = games.value.map { it.id }.toSet()
+        editor.value = CollectionEditor(id, c.name, SelectionState(CollectionRules.prune(members.value[id].orEmpty(), live)))
+        settingsOpen.value = false
+    }
+
+    fun updateEditor(f: (CollectionEditor) -> CollectionEditor) { editor.value = editor.value?.let(f)?.let { it.copy(error = null) } }
+    fun cancelEditor() { editor.value = null }
+
+    /** Validates and stores the editor; on a problem the editor stays open with [CollectionEditor.error] set. */
+    fun saveEditor() {
+        val e = editor.value ?: return
+        val cols = collections.value.orEmpty()
+        val err = CollectionRules.validateName(e.name, cols.map { it.id to it.name }, e.collectionId)?.text
+            ?: if (!e.selection.canSave()) "PICK AT LEAST 1 GAME" else null
+        if (err != null) { editor.value = e.copy(error = err); return }
+        val name = CollectionRules.clean(e.name)
+        val ids = CollectionRules.prune(e.selection.selected, games.value.map { it.id }.toSet())
+        if (ids.isEmpty()) { editor.value = e.copy(error = "PICK AT LEAST 1 GAME"); return }
+        editor.value = null
+        viewModelScope.launch {
+            if (e.collectionId == null) {
+                val id = withContext(Dispatchers.IO) { cdao.create(name, ids) }
+                selectTab(id)
+            } else withContext(Dispatchers.IO) { cdao.update(e.collectionId, name, ids) }
+        }
+    }
+
+    /** Rename only. Returns an error text or null. */
+    fun renameCollection(id: Long, raw: String): String? {
+        CollectionRules.validateName(raw, collections.value.orEmpty().map { it.id to it.name }, id)?.let { return it.text }
+        val name = CollectionRules.clean(raw)
+        viewModelScope.launch(Dispatchers.IO) { cdao.rename(id, name) }
+        return null
+    }
+
+    fun deleteCollection(id: Long) {
+        if (selectedTab.value == id) selectTab(CollectionRules.GAMES_TAB)
+        viewModelScope.launch(Dispatchers.IO) { cdao.delete(id) }
+    }
+
+    fun setMember(cid: Long, gid: Long, on: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) { if (on) cdao.addMember(cid, gid) else cdao.removeMember(cid, gid) }
     }
 
     fun setGameCore(g: GameEntity, id: String?) { viewModelScope.launch(Dispatchers.IO) { dao.setCore(g.id, id) } }

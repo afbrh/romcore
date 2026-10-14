@@ -36,9 +36,14 @@ import com.noryan.romcore.data.FolderSearch
 import com.noryan.romcore.data.CoreSetup
 import com.noryan.romcore.data.GameEntity
 import com.noryan.romcore.ui.components.FocusLine
+import com.noryan.romcore.ui.components.PixelIconButton
+import com.noryan.romcore.ui.components.PixelIcons
 import com.noryan.romcore.ui.components.TabButton
-
-private val TABS = listOf("GAMES", "SYSTEMS", "SETTINGS")
+import com.noryan.romcore.data.CollectionRules
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyListScope
 
 fun systemLabel(s: System): String = when (s) {
     System.NES -> "NES"; System.SNES -> "SNES"; System.N64 -> "N64"; System.GB -> "GameBoy"; System.GBC -> "GameBoy Color"
@@ -108,27 +113,100 @@ internal fun LogoMark(size: Int) {
 
 @Composable
 private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> Unit, pickSave: () -> Unit) {
-    var tab by rememberSaveable { mutableIntStateOf(0) }
-    val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    val collections by vm.collections.collectAsStateWithLifecycle()
+    val saved by vm.selectedTab.collectAsStateWithLifecycle()
+    val settingsOpen by vm.settingsOpen.collectAsStateWithLifecycle()
+    val editor by vm.editor.collectAsStateWithLifecycle()
+    val scanning by vm.scanning.collectAsStateWithLifecycle()
+    val n by vm.scanProgress.collectAsStateWithLifecycle()
+    val cols = collections.orEmpty()
+    // A saved collection tab is only trusted once the DB has answered; a deleted collection falls back to GAMES (never written back here).
+    val tab = if (collections == null) saved else CollectionRules.resolveTab(saved, cols)
+    var tabOpts by remember { mutableStateOf<TabOptions?>(null) }
+    val tabFocus = remember { HashMap<Long, FocusRequester>() }
+    val focusSeen = remember { mutableStateOf(false) }
+    fun focusOf(id: Long) = tabFocus.getOrPut(id) { FocusRequester() }
+    // Start on the selected tab (not the gear, which is first in focus order). Focus can only be taken once the window has it.
+    val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(windowFocused, collections != null) {
+        if (windowFocused && collections != null && !focusSeen.value) {
+            kotlinx.coroutines.delay(50)
+            runCatching { focusOf(tab).requestFocus() }
+        }
+    }
+    // Focus follows the screen that just closed: Settings -> gear; the editor -> the tab it produced (or the + after a cancel).
+    val gearFocus = remember { FocusRequester() }
+    val plusFocus = remember { FocusRequester() }
+    var closedSettings by remember { mutableStateOf(false) }
+    var closedEditor by remember { mutableStateOf(false) }
+    var sawSettings by remember { mutableStateOf(false) }
+    var sawEditor by remember { mutableStateOf(false) }
+    LaunchedEffect(settingsOpen) { if (settingsOpen) sawSettings = true else if (sawSettings) { sawSettings = false; closedSettings = true } }
+    LaunchedEffect(editor != null) { if (editor != null) sawEditor = true else if (sawEditor) { sawEditor = false; closedEditor = true } }
+    LaunchedEffect(closedSettings) { if (closedSettings) { closedSettings = false; runCatching { gearFocus.requestFocus() } } }
+    LaunchedEffect(closedEditor, tab, cols) {
+        if (closedEditor) {
+            if (tab != CollectionRules.GAMES_TAB) { closedEditor = false; runCatching { focusOf(tab).requestFocus() } }
+            else { kotlinx.coroutines.delay(250); closedEditor = false; runCatching { plusFocus.requestFocus() } }
+        }
+    }
+    var lastOpts by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(tabOpts) {
+        val o = tabOpts
+        if (o != null) lastOpts = o.id
+        else lastOpts?.let { id -> lastOpts = null; if (editor == null) runCatching { focusOf(id).requestFocus() } }
+    }
+    LaunchedEffect(cols, editor, settingsOpen) {
+        val o = tabOpts
+        if (o != null && (editor != null || cols.none { it.id == o.id })) tabOpts = null
+    }
+    BackHandler(enabled = editor != null || settingsOpen || tabOpts != null) {
+        when {
+            editor != null -> vm.cancelEditor()
+            tabOpts != null -> tabOpts = null
+            else -> vm.toggleSettings()
+        }
+    }
     Column(
         Modifier.fillMaxSize().onPreviewKeyEvent { e ->
+            focusSeen.value = true
             if (e.type == KeyEventType.KeyDown && (e.key == Key.ButtonL1 || e.key == Key.ButtonR1)) {
-                tab = (tab + (if (e.key == Key.ButtonR1) 1 else TABS.size - 1)) % TABS.size; true
+                if (editor == null) {
+                    val to = CollectionRules.cycleTab(tab, if (e.key == Key.ButtonR1) 1 else -1, cols)
+                    tabOpts = null
+                    vm.selectTab(to)
+                    runCatching { focusOf(to).requestFocus() }
+                }
+                true
             } else false
         }
     ) {
         Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-            Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TABS.forEachIndexed { i, name ->
-                    val mod = if (i == 0) Modifier.focusRequester(first) else Modifier
-                    TabButton(name, selected = i == tab, modifier = mod.widthIn(min = 130.dp)) { tab = i }
+            // Centered strip: GAMES + one tab per collection (scrolls when there are many; focus scrolls it into view), then a pinned +.
+            Row(Modifier.align(Alignment.Center).padding(horizontal = if (scanning) 150.dp else 56.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val newOpen = editor != null && editor?.collectionId == null
+                val showSel = !settingsOpen && !newOpen
+                Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TabButton("GAMES", selected = showSel && tab == CollectionRules.GAMES_TAB, modifier = Modifier.focusRequester(focusOf(CollectionRules.GAMES_TAB)).widthIn(min = 130.dp)) {
+                        tabOpts = null; vm.selectTab(CollectionRules.GAMES_TAB)
+                    }
+                    cols.forEach { c ->
+                        TabButton(CollectionRules.tabLabel(c.name), selected = showSel && tab == c.id,
+                            modifier = Modifier.focusRequester(focusOf(c.id)).widthIn(min = 90.dp, max = 200.dp),
+                            onAlt = { tabOpts = if (tabOpts?.id == c.id) null else TabOptions(c.id, TabOptions.Mode.MENU) }) {
+                            tabOpts = null; vm.selectTab(c.id)
+                        }
+                    }
                 }
+                PixelIconButton(PixelIcons.PLUS, selected = newOpen, description = "New collection", modifier = Modifier.focusRequester(plusFocus)) { tabOpts = null; vm.newCollection() }
             }
-            val scanning by vm.scanning.collectAsStateWithLifecycle()
-            val n by vm.scanProgress.collectAsStateWithLifecycle()
+            // Composed after the tab strip so the first focus (and the first D-pad press) lands on a tab; LEFT from the first tab reaches it.
+            PixelIconButton(PixelIcons.GEAR, selected = settingsOpen, description = "Settings", modifier = Modifier.align(Alignment.CenterStart).focusRequester(gearFocus)) { vm.toggleSettings() }
             if (scanning) Text("SCANNING $n", Modifier.align(Alignment.CenterEnd), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         }
+        tabOpts?.let { o -> cols.firstOrNull { it.id == o.id }?.let { c -> CollectionOptions(vm, c, o.mode, { tabOpts = o.copy(mode = it) }, { tabOpts = null }) } }
         val notice by vm.crashNotice.collectAsStateWithLifecycle()
         notice?.let { (title, hint) ->
             Column {
@@ -137,49 +215,73 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            when (tab) {
-                0 -> GamesTab(vm)
-                1 -> SystemsTab(vm)
-                else -> SettingsTab(vm, pickRom, pickBios, pickSave)
+            when {
+                editor != null -> CollectionEditorScreen(vm)
+                settingsOpen -> SettingsTab(vm, pickRom, pickBios, pickSave)
+                tab == CollectionRules.GAMES_TAB -> GameList(vm, null)
+                else -> GameList(vm, tab)
             }
         }
-        Text("L1/R1 TABS    A SELECT    X OPTIONS", Modifier.fillMaxWidth().padding(8.dp), style = MaterialTheme.typography.labelSmall,
+        val hint = when {
+            editor != null -> "A TOGGLE    B CANCEL"
+            settingsOpen -> "A SELECT    B BACK    X OPTIONS"
+            else -> "L1/R1 TABS    A SELECT    X OPTIONS"
+        }
+        Text(hint, Modifier.fillMaxWidth().padding(8.dp), style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
     }
 }
 
+/** The game list: the whole library ([collectionId] == null) or one collection's games. Same rows, launch and X options. */
 @Composable
-private fun GamesTab(vm: MainViewModel) {
+private fun GameList(vm: MainViewModel, collectionId: Long?) {
     val ctx = LocalContext.current
-    val games by vm.games.collectAsStateWithLifecycle()
+    val all by vm.games.collectAsStateWithLifecycle()
+    val members by vm.members.collectAsStateWithLifecycle()
+    val collections by vm.collections.collectAsStateWithLifecycle()
     val tick by vm.prefsTick.collectAsStateWithLifecycle()
     val scanning by vm.scanning.collectAsStateWithLifecycle()
     val launching by vm.launching.collectAsStateWithLifecycle()
-    var expanded by remember { mutableStateOf<Long?>(null) }
-    if (games.isEmpty()) {
+    var expanded by remember(collectionId) { mutableStateOf<Long?>(null) }
+    var addOpen by remember(collectionId) { mutableStateOf<Long?>(null) }
+    val games = if (collectionId == null) all else CollectionRules.gamesOf(all, members[collectionId].orEmpty())
+    val cols = collections.orEmpty()
+    if (collectionId == null && games.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(if (scanning) "SCANNING..." else "NO GAMES FOUND\nCheck the ROM folder in SETTINGS.", textAlign = TextAlign.Center,
+            Text(if (scanning) "SCANNING..." else "NO GAMES FOUND\nCheck the ROM folder in SETTINGS (gear, top left).", textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }
     LazyColumn(Modifier.fillMaxSize()) {
         if (launching) item { Text("PREPARING ROM...", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium) }
+        if (collectionId != null && games.isEmpty()) item(key = "empty") {
+            FocusLine("NO GAMES - PRESS X TO EDIT", dim = true, onAlt = { vm.editCollection(collectionId) }, onClick = { vm.editCollection(collectionId) })
+        }
         items(games, key = { it.id }) { g ->
             val sys = sysOf(g)
-            val core = remember(g, tick, games.size, g.coreOverride) { vm.coreFor(g) }
+            val core = remember(g, tick, all.size, g.coreOverride) { vm.coreFor(g) }
             Column {
                 FocusLine(
                     (if (g.favorite) "* " else "") + g.title,
                     right = (sys?.let(::systemLabel) ?: g.system) + if (core == null) " (NO CORE)" else "",
                     dim = core == null,
-                    onAlt = { expanded = if (expanded == g.id) null else g.id },
+                    onAlt = { expanded = if (expanded == g.id) null else g.id; addOpen = null },
                     onClick = { vm.launch(ctx, g) }
                 )
                 if (expanded == g.id) {
                     val cands = sys?.let { CoreRouter.candidatesFor(it, g.gameId) }.orEmpty()
                     FocusLine("PLAY", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.launch(ctx, g) }
                     FocusLine("FAVORITE", right = if (g.favorite) "ON" else "OFF", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.toggleFavorite(g) }
+                    if (collectionId != null)
+                        FocusLine("REMOVE FROM COLLECTION", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.setMember(collectionId, g.id, false); expanded = null }
+                    if (cols.isNotEmpty()) {
+                        FocusLine("ADD TO COLLECTION >", right = if (addOpen == g.id) "OPEN" else null, indent = 28.dp, style = MaterialTheme.typography.titleSmall) { addOpen = if (addOpen == g.id) null else g.id }
+                        if (addOpen == g.id) cols.forEach { c ->
+                            val inIt = g.id in members[c.id].orEmpty()
+                            FocusLine((if (inIt) "[X] " else "[ ] ") + CollectionRules.tabLabel(c.name), marked = inIt, indent = 56.dp, style = MaterialTheme.typography.titleSmall) { vm.setMember(c.id, g.id, !inIt) }
+                        }
+                    }
                     val auto = sys?.let { CoreRouter.autoChoice(it, g.title, gameId = g.gameId) }
                     val gChosen0 = CoreRouter.resolveOverride(g.coreOverride, cands)
                     FocusLine("CORE: AUTO", right = auto?.displayName ?: "-", marked = gChosen0 == null, indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.setGameCore(g, null) }
@@ -195,34 +297,29 @@ private fun GamesTab(vm: MainViewModel) {
     }
 }
 
-@Composable
-private fun SystemsTab(vm: MainViewModel) {
-    val games by vm.games.collectAsStateWithLifecycle()
-    val tick by vm.prefsTick.collectAsStateWithLifecycle()
-    var expanded by remember { mutableStateOf<System?>(null) }
+/** What Settings > SYSTEMS shows (the former SYSTEMS tab): per-system core choice, with the game count. */
+private fun LazyListScope.systemsItems(vm: MainViewModel, games: List<GameEntity>, tick: Int, expanded: System?, setExpanded: (System?) -> Unit) {
     val counts = games.groupingBy { it.system }.eachCount()
     val systems = System.entries.filter { counts.containsKey(it.name) || CoreRouter.candidates(it).isNotEmpty() }
         .filter { it != System.OTHER || counts.containsKey("OTHER") }
-    LazyColumn(Modifier.fillMaxSize()) {
-        items(systems, key = { it.name }) { s ->
-            val cands = CoreRouter.candidates(s)
-            val chosen = remember(tick, cands.size) { CoreRouter.resolveOverride(vm.prefs.systemCore(s), cands) }
-            val auto = CoreRouter.autoChoice(s, "")
-            val label = (chosen ?: auto)?.displayName ?: "NO CORE"
-            Column {
-                FocusLine("${systemLabel(s)}  (${counts[s.name] ?: 0})", right = label, dim = cands.isEmpty(),
-                    onAlt = { expanded = if (expanded == s) null else s },
-                    onClick = { expanded = if (expanded == s) null else s })
-                if (expanded == s) {
-                    if (cands.isEmpty()) Text("No installed core serves this system.", Modifier.padding(start = 44.dp, bottom = 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    else {
-                        FocusLine("CORE: AUTO", right = auto?.displayName, marked = chosen == null, indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.setSystemCore(s, null) }
-                        cands.forEach { c ->
-                            FocusLine("CORE: ${c.displayName}", marked = chosen?.id == c.id, right = if (chosen?.id == c.id) "SELECTED" else null,
-                                indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.setSystemCore(s, c.id) }
-                        }
-                        Text("Per-game overrides (X on a game) win over this.", Modifier.padding(start = 44.dp, bottom = 6.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    items(systems, key = { "sys:${it.name}" }) { s ->
+        val cands = CoreRouter.candidates(s)
+        val chosen = remember(tick, cands.size) { CoreRouter.resolveOverride(vm.prefs.systemCore(s), cands) }
+        val auto = CoreRouter.autoChoice(s, "")
+        val label = (chosen ?: auto)?.displayName ?: "NO CORE"
+        Column {
+            FocusLine("${systemLabel(s)}  (${counts[s.name] ?: 0})", right = label, dim = cands.isEmpty(), indent = 28.dp, style = MaterialTheme.typography.titleSmall,
+                onAlt = { setExpanded(if (expanded == s) null else s) },
+                onClick = { setExpanded(if (expanded == s) null else s) })
+            if (expanded == s) {
+                if (cands.isEmpty()) Text("No installed core serves this system.", Modifier.padding(start = 72.dp, bottom = 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else {
+                    FocusLine("CORE: AUTO", right = auto?.displayName, marked = chosen == null, indent = 56.dp, style = MaterialTheme.typography.titleSmall) { vm.setSystemCore(s, null) }
+                    cands.forEach { c ->
+                        FocusLine("CORE: ${c.displayName}", marked = chosen?.id == c.id, right = if (chosen?.id == c.id) "SELECTED" else null,
+                            indent = 56.dp, style = MaterialTheme.typography.titleSmall) { vm.setSystemCore(s, c.id) }
                     }
+                    Text("Per-game overrides (X on a game) win over this.", Modifier.padding(start = 72.dp, bottom = 6.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -242,6 +339,8 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
     val saveStatus by vm.saveStatus.collectAsStateWithLifecycle()
     val saveWarning by vm.saveWarning.collectAsStateWithLifecycle()
     val saveOthers by vm.saveOthers.collectAsStateWithLifecycle()
+    val tick by vm.prefsTick.collectAsStateWithLifecycle()
+    var openSystem by remember { mutableStateOf<System?>(null) }
     var open by remember { mutableStateOf<String?>(null) }
     fun toggle(k: String) { open = if (open == k) null else k }
     val rows = remember(vm.cores) { CoreRows.of(vm.cores, CoreBootstrap::versionOf) }
@@ -294,6 +393,9 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
             saveOthers.forEach { o -> item(key = "so:${o.path}") { FocusLine("USE ${o.path}", right = com.noryan.romcore.api.save.SaveRoot.sizeLabel(o.bytes), indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.chooseSave(o.path) } } }
             item { Note("All game saves and save states of every emulator live in this one folder (named ${com.noryan.romcore.api.save.SaveRoot.FOLDER_NAME}). Copy it to another device's ROMs folder and RomCore finds it by itself. Shader caches, configs, keys and BIOS are not stored there.") }
         }
+        item { Section("SYSTEMS") }
+        item { FocusLine("CORE PER SYSTEM", right = if (open == "systems") "OPEN" else null, onClick = { toggle("systems") }, onAlt = { toggle("systems") }) }
+        if (open == "systems") systemsItems(vm, games, tick, openSystem) { openSystem = it }
         item { Section("INSTALLED CORES (${rows.size})") }
         if (rows.isEmpty()) item { Note("No cores are installed in this build.") }
         items(rows, key = { it.key }) { c ->
@@ -324,9 +426,9 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
 }
 
 @Composable
-private fun Section(t: String) =
+internal fun Section(t: String) =
     Text(t, Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
 
 @Composable
-private fun Note(t: String) =
+internal fun Note(t: String) =
     Text(t, Modifier.padding(start = 44.dp, end = 16.dp, top = 2.dp, bottom = 6.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
