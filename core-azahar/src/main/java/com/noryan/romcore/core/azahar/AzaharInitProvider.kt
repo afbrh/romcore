@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import org.citra.citra_emu.CitraApplication
+import org.citra.citra_emu.NativeLibrary
 import org.citra.citra_emu.activities.EmulationActivity
 
 /**
@@ -25,6 +26,10 @@ class AzaharInitProvider : ContentProvider() {
             val dir = AzaharCore.ensureUserDir(app)
             app.getSharedPreferences(app.packageName + "_preferences", android.content.Context.MODE_PRIVATE).edit()
                 .putString("CITRA_DIRECTORY", Uri.fromFile(dir).toString()).remove("LIME3DS_DIRECTORY").commit()
+            // Portable save data: sdmc / nand / states go to <save root>/azahar BEFORE the native side builds its paths
+            // (it reads them on the first game start; the JNI call must precede DirectoryInitialization/createConfigFile).
+            val sd = AzaharCore.saveDirs(app)
+            NativeLibrary.setSaveDirectories(sd.sdmc.absolutePath, sd.nand.absolutePath, sd.states.absolutePath)
             CitraApplication.initializeForEmbedding(app)
         } catch (t: Throwable) {
             Log.e(TAG, "Azahar embedding init failed", t)

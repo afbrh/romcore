@@ -6,6 +6,9 @@ import com.noryan.romcore.api.CoreDescriptor
 import com.noryan.romcore.api.CoreRegistry
 import com.noryan.romcore.api.LaunchRequest
 import com.noryan.romcore.api.System
+import com.noryan.romcore.api.save.SaveMigration
+import com.noryan.romcore.api.save.SaveRoot
+import java.io.File
 import org.yuzu.yuzu_emu.activities.EmulationActivity
 import org.yuzu.yuzu_emu.model.Game
 
@@ -41,5 +44,21 @@ object EdenCore : CoreDescriptor {
         }
     }
 
-    fun register() = CoreRegistry.register(this)
+    /**
+     * Portable save data (SAVEDATA.md): Eden's `save_directory` (EdenPath::SaveDir, what the SaveDataFactory opens) points at
+     * `<save root>/eden/save`, giving `user/save/0000000000000000/<user uuid>/<titleid>` (game saves) and `system/save/...`.
+     * The patched eden-src also keeps the user profile (UUID, profiles.dat) and the Mii database there, because a game's save
+     * is filed under the profile UUID: without the profile a moved folder would be invisible on the new device.
+     * Keys, firmware, installed content (the NAND), config, shaders and drivers stay in `<externalFilesDir>`.
+     */
+    fun saveDir(ctx: Context): File = SaveRoot.coreSubDir(ctx, id, "save")
+
+    fun register() {
+        CoreRegistry.register(this)
+        // Old location: <externalFilesDir>/nand/{user/save, system/save/<profile + Mii>}. Copy -> verify -> delete-old.
+        fun nand(ctx: Context, rel: String) = File(File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "nand"), rel)
+        SaveMigration.register(id, "eden user saves", "save/user/save") { ctx -> nand(ctx, "user/save") }
+        SaveMigration.register(id, "eden profile", "save/system/save/8000000000000010") { ctx -> nand(ctx, "system/save/8000000000000010") }
+        SaveMigration.register(id, "eden mii database", "save/system/save/8000000000000030") { ctx -> nand(ctx, "system/save/8000000000000030") }
+    }
 }

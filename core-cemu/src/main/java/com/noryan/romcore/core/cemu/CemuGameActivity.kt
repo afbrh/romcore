@@ -48,6 +48,9 @@ class CemuGameActivity : AppCompatActivity() {
         @Volatile private var cemuInitialized = false
         private fun ensureCemuInitialized(app: Application) = synchronized(this) {
             if (!cemuInitialized) {
+                // Portable save data: mlc01 (game saves under usr/save, Wii U account) lives in <save root>/cemu/mlc01.
+                // Handed to the native side between its path setup and initializeEmulation (see cemu-src setMLCPath).
+                CemuApplication.mlcPathOverride = CemuCore.mlcDir(app).absolutePath
                 CemuApplication.initializeForEmbedding(app)
                 cemuInitialized = true
             }
@@ -111,7 +114,10 @@ class CemuGameActivity : AppCompatActivity() {
 
     // ---- lifecycle ---------------------------------------------------------------------------
     private fun closeGame() {
-        finishAndRemoveTask()
+        // Freeze the guest first so no in-flight save write is cut in half by the process kill in onDestroy
+        // (Cemu's file layer writes straight to the mlc01 files; there is no separate commit step to wait for).
+        runCatching { session.pause() }
+        window.decorView.postDelayed({ finishAndRemoveTask() }, 250)
     }
 
     override fun onDestroy() {

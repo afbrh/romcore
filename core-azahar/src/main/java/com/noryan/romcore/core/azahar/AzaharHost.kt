@@ -155,6 +155,11 @@ object AzaharHost {
             Thread {
                 val end = android.os.SystemClock.uptimeMillis() + 3000
                 while (NativeLibrary.isRunning() && android.os.SystemClock.uptimeMillis() < end) Thread.sleep(50)
+                // isRunning() flips as soon as stop is requested; the game's save files are only closed/flushed once the
+                // emulation thread has finished System::Shutdown. Never kill before that (portable save data).
+                val flushEnd = android.os.SystemClock.uptimeMillis() + 5000
+                while (!runCatching { NativeLibrary.isEmulationFinished() }.getOrDefault(true) &&
+                    android.os.SystemClock.uptimeMillis() < flushEnd) Thread.sleep(50)
                 Handler(Looper.getMainLooper()).postDelayed({ Process.killProcess(Process.myPid()) }, 250)
             }.start()
         }

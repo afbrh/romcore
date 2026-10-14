@@ -8,6 +8,8 @@ import com.noryan.romcore.api.CoreDescriptor
 import com.noryan.romcore.api.CoreRegistry
 import com.noryan.romcore.api.LaunchRequest
 import com.noryan.romcore.api.System
+import com.noryan.romcore.api.save.SaveMigration
+import com.noryan.romcore.api.save.SaveRoot
 import org.citra.citra_emu.model.Game
 
 /**
@@ -46,7 +48,19 @@ object AzaharCore : CoreDescriptor {
     fun userDir(ctx: Context): File =
         File(ctx.getExternalFilesDir(null)?.takeIf { it.exists() || it.mkdirs() } ?: ctx.filesDir, "azahar")
 
-    private val SUBDIRS = listOf("sdmc", "nand", "sysdata", "states", "shaders", "log", "config", "cheats", "dump", "load")
+    // sdmc / nand / states are NOT here: they live in the portable save root (see [saveDirs]); an empty copy here would only
+    // be left behind by the migration.
+    private val SUBDIRS = listOf("sysdata", "shaders", "log", "config", "cheats", "dump", "load")
+
+    /**
+     * Portable save data (SAVEDATA.md): `<root>/azahar/{sdmc,nand,states}`. sdmc = game saves + extdata (+ installed titles),
+     * nand = system saves/extdata (+ installed system titles), states = Azahar's native .cst. Everything else (config, shaders,
+     * log, sysdata, cheats, gpu_drivers) stays in [userDir]. Applied through NativeLibrary.setSaveDirectories before init.
+     */
+    class SaveDirs(val sdmc: File, val nand: File, val states: File)
+
+    fun saveDirs(ctx: Context): SaveDirs = SaveDirs(
+        SaveRoot.coreSubDir(ctx, id, "sdmc"), SaveRoot.coreSubDir(ctx, id, "nand"), SaveRoot.coreSubDir(ctx, id, "states"))
 
     /** Creates the folder and the sub-folders Azahar expects (it would create them lazily; this makes them visible up front). */
     fun ensureUserDir(ctx: Context): File = userDir(ctx).also { d ->
@@ -73,5 +87,11 @@ object AzaharCore : CoreDescriptor {
         }
     }
 
-    fun register() = CoreRegistry.register(this)
+    fun register() {
+        CoreRegistry.register(this)
+        // Old location (before portable saves): the three folders inside the user dir. Copy -> verify -> delete-old.
+        for (sub in listOf("sdmc", "nand", "states")) {
+            SaveMigration.register(id, "azahar $sub", sub) { ctx -> File(userDir(ctx), sub) }
+        }
+    }
 }

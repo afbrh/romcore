@@ -31,6 +31,9 @@ class EdenInitProvider : ContentProvider() {
         val driver = EdenDriver.prepare(app)
         try {
             YuzuApplication.initializeForEmbedding(app)
+            // Portable save data: config.ini has just been loaded, no game/profile has been touched yet, so this takes effect on
+            // THIS launch (the SaveDataFactory and the profile manager read EdenPath::SaveDir when the game starts).
+            NativeConfig.setSaveDir(EdenCore.saveDir(app).absolutePath)
             BooleanSetting.SHOW_INPUT_OVERLAY.setBoolean(false)
             // Every launch: keep driver_path in step with the installed driver so Eden's onLaunchGame never swaps it.
             StringSetting.DRIVER_PATH.setString(driver.zipPath ?: "")

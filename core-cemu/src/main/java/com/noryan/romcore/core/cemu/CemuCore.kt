@@ -6,6 +6,9 @@ import com.noryan.romcore.api.CoreDescriptor
 import com.noryan.romcore.api.CoreRegistry
 import com.noryan.romcore.api.LaunchRequest
 import com.noryan.romcore.api.System
+import com.noryan.romcore.api.save.SaveMigration
+import com.noryan.romcore.api.save.SaveRoot
+import java.io.File
 
 /**
  * Wii U via Cemu (SSimco's Android fork, MPL-2.0). Runs in its own android:process ":cemu"
@@ -44,5 +47,17 @@ object CemuCore : CoreDescriptor {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
-    fun register() = CoreRegistry.register(this)
+    /**
+     * Portable save data (SAVEDATA.md): the whole mlc01 (game saves `usr/save`, the Wii U account, boss data, generated `sys`
+     * stubs) lives in `<save root>/cemu/mlc01`. Cemu's `mlc_path` is a single directory, and RomCore never installs
+     * updates/DLC into it (they come packed in .wua), so it stays small. keys.txt, settings.xml, graphic packs and the GPU
+     * driver stay in `<externalFilesDir>`.
+     */
+    fun mlcDir(ctx: Context): File = SaveRoot.coreSubDir(ctx, id, "mlc01")
+
+    fun register() {
+        CoreRegistry.register(this)
+        // Old location: <externalFilesDir>/mlc01 (Cemu's default <userData>/mlc01). Copy -> verify -> delete-old.
+        SaveMigration.register(id, "cemu mlc01", "mlc01") { ctx -> File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "mlc01") }
+    }
 }
