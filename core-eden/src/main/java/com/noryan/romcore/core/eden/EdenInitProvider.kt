@@ -16,6 +16,7 @@ import org.yuzu.yuzu_emu.activities.EmulationActivity
 import org.yuzu.yuzu_emu.features.settings.model.BooleanSetting
 import org.yuzu.yuzu_emu.features.settings.model.StringSetting
 import org.yuzu.yuzu_emu.utils.NativeConfig
+import org.yuzu.yuzu_emu.utils.RomCoreBridge
 
 /**
  * Declared with android:process=":eden" so it only runs in the Eden game process, before Application.onCreate.
@@ -30,10 +31,10 @@ class EdenInitProvider : ContentProvider() {
         // Stage the bundled Turnip driver BEFORE the engine loads its Vulkan library (see EdenDriver).
         val driver = EdenDriver.prepare(app)
         try {
+            // Portable save data: Eden reads this between config load and System init (see DirectoryInitialization in eden-src);
+            // the profile (user UUID) is created right there, so it must already point at <save root>/eden/save.
+            RomCoreBridge.saveDir = EdenCore.saveDir(app).absolutePath
             YuzuApplication.initializeForEmbedding(app)
-            // Portable save data: config.ini has just been loaded, no game/profile has been touched yet, so this takes effect on
-            // THIS launch (the SaveDataFactory and the profile manager read EdenPath::SaveDir when the game starts).
-            NativeConfig.setSaveDir(EdenCore.saveDir(app).absolutePath)
             BooleanSetting.SHOW_INPUT_OVERLAY.setBoolean(false)
             // Every launch: keep driver_path in step with the installed driver so Eden's onLaunchGame never swaps it.
             StringSetting.DRIVER_PATH.setString(driver.zipPath ?: "")
