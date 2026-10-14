@@ -96,3 +96,27 @@ they are portable as-is because the engine finds them by those ids on any device
 - If the user switches roots in Settings, existing data in the old root is NOT moved (copy the folder by hand).
 - Debug helpers: `adb shell cat /sdcard/Android/data/com.noryan.romcore/files/savedata_root.txt` (the current root),
   `.../gamekeys.tsv` (path -> key table).
+
+---
+
+## Phase 2 results: what each core really does (supersedes any conflicting row above)
+
+All paths are relative to `<root>` = `<ROM folder>/_romcore-save-data`. Verified on the AYN Thor with a real game, Close Game,
+`pm clear` ("new device") and relaunch. Config keys alone were NOT enough for several engines; native patches (local source trees) were needed.
+
+| Core | Saved under `<root>/` | Stays local | Mechanism |
+|---|---|---|---|
+| retroarch | `retroarch/saves/<libretro core name>/*.srm` (+rtc/eep/mpk/fla), `retroarch/states/` | config, core options, system/BIOS | `savefile_directory` / `savestate_directory` in the generated cfg (written in the shell process in `launchIntent`) |
+| ppsspp | `ppsspp/SAVEDATA`, `ppsspp/PPSSPP_STATE` | `PSP/SYSTEM` (ini, caches), GAME, TEXTURES, Cheats | internal memstick `<filesDir>/ppsspp-memstick` via `memstick_dir.txt`; `SAVEDATA` and `PPSSPP_STATE` are symlinks to the root, everything else links back to the old ext dir |
+| watermelonds | `watermelonds/saves/<rom name>.sav` | `wfcsettings.bin` | prefs `use_rom_dir=false`, `sram_dir=file://<root>/watermelonds/saves` (enforced every launch). Old `.sav` files next to DS ROMs are adopted by migration |
+| dolphin | `dolphin/GC` (GCI-folder cards `GC/Card {A,B}/<REGION>/*.gci`, raw cards if used), `dolphin/Wii` (whole Wii NAND), `dolphin/SD/WiiSD.raw` | Config, Cache, GameSettings, `GC/SRAM.raw`, IPL.bin, Load/, StateSaves (undo scratch only) | Dolphin.ini `[Core] MemcardA/BPath, GCIFolderA/BPath`, `[General] NANDRootPath, WiiSDCardPath` + native patch: `ROMCORE_NAND_ROOT` env read before `Config::Init` (otherwise an empty second NAND is recreated in the old dir) |
+| primehack | `primehack/...` same layout as dolphin | same | same, applied in `PrimeHackConfig.applyEarly` |
+| armsx2 | `armsx2/memcards/` (pre-formatted `mcd001.ps2`, `mcd002.ps2`), `armsx2/sstates/` | bios, inis, cache, `memcard-backups/` | native patch: `ARMSX2_MEMCARDS_DIR` / `ARMSX2_SAVESTATES_DIR` env override of `[Folders]` after first-run defaults; `Ps2McdFormat` builds a formatted 8 MB card |
+| azahar | `azahar/{sdmc,nand,states}` (nand is the whole NAND) | `<extFiles>/azahar/{config,shaders,log,sysdata,cheats,dump,load,gpu_drivers}` | native JNI `NativeLibrary.setSaveDirectories` before `initializeForEmbedding` (no config keys exist on Android) |
+| cemu | `cemu/mlc01` (whole mlc01: `usr/save`, account) | keys.txt, settings.xml, graphic packs, customDrivers, shaderCache | native JNI `NativeActiveSettings.setMLCPath` before `initializeEmulation` (settings.xml is never loaded on Android) |
+| eden | `eden/save` (`user/save/...`, profile `system/save/8000000000000010`, Mii db `...30`) | NAND firmware/contents, keys, config, shaders, drivers, system settings saves | `save_directory` / `setSaveDir` applied between config load and `initializeSystem`; eden-src patched so profile + Mii DB use SaveDir (the save folder is named after the random profile UUID) |
+
+General lessons: (1) engine path config must be applied before native System init, not merely before the Activity; (2) flush before our fast Close Game kills
+the process (RetroArch OP_FLUSH, melonDS stopEmulation, Azahar isEmulationFinished, Cemu pause+250 ms, Eden write-flush patch); (3) symlinks work from internal
+storage to /sdcard but cannot be created inside /sdcard (incl. Android/data); (4) the portable Eden profile/Mii and the Dolphin NAND-root behaviour depend on the local
+engine patches, not stock builds.
