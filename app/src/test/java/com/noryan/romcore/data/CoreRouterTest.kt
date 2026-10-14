@@ -41,4 +41,46 @@ class CoreRouterTest {
     @Test fun autoChoiceIsDefaultSubCore() {
         assertEquals("retroarch:nestopia", CoreRouter.autoChoice(System.NES, "Mario", CoreRouter.candidates(System.NES, cores))!!.id)
     }
+
+    // ---- Twilight Princess -> Dusklight (routing by disc game ID) ----
+    private val prime = Fake("primehack", "PrimeHack", setOf(System.GAMECUBE, System.WII))
+    private val dusk = Fake("dusklight", "Dusklight (Twilight Princess)", setOf(System.GAMECUBE))
+    private val gc = listOf(other, prime, dusk)   // registry order of the real app: dolphin, primehack, dusklight
+
+    @Test fun twilightPrincessGameCubeIdsAutoRouteToDusklight() {
+        for (id in listOf("GZ2E01", "GZ2P01", "GZ2J01")) {
+            assertEquals(id, "dusklight", CoreRouter.autoChoice(System.GAMECUBE, "Whatever", CoreRouter.candidates(System.GAMECUBE, gc), id)!!.id)
+        }
+    }
+
+    @Test fun otherDiscsKeepTheirRouting() {
+        val c = CoreRouter.candidates(System.GAMECUBE, gc)
+        assertEquals("dolphin", CoreRouter.autoChoice(System.GAMECUBE, "Super Mario Sunshine", c, "GMSE01")!!.id)
+        assertEquals("dolphin", CoreRouter.autoChoice(System.GAMECUBE, "Unknown Game", c, null)!!.id)
+        assertEquals("primehack", CoreRouter.autoChoice(System.GAMECUBE, "Metroid Prime", c, "GM8E01")!!.id)
+        // a title that merely says Twilight Princess is not enough: only the disc ID routes (the Wii release is not claimed)
+        assertEquals("dolphin", CoreRouter.autoChoice(System.GAMECUBE, "The Legend of Zelda - Twilight Princess", c, "RZDE01")!!.id)
+        assertEquals("dolphin", CoreRouter.autoChoice(System.GAMECUBE, "The Legend of Zelda - Twilight Princess", c, null)!!.id)
+    }
+
+    @Test fun overrideStillWinsAndDusklightCannotHijackOtherGames() {
+        // per-game override to Dolphin beats the Dusklight default
+        assertEquals("dolphin", CoreRouter.choose(System.GAMECUBE, "TP", "GZ2E01", "dolphin", null, gc)!!.id)
+        // per-system override to Dolphin beats it too
+        assertEquals("dolphin", CoreRouter.choose(System.GAMECUBE, "TP", "GZ2P01", null, "dolphin", gc)!!.id)
+        // no override: Dusklight
+        assertEquals("dusklight", CoreRouter.choose(System.GAMECUBE, "TP", "GZ2J01", null, null, gc)!!.id)
+        // choosing Dusklight for the whole system must not break other GameCube games
+        assertEquals("dolphin", CoreRouter.choose(System.GAMECUBE, "Sunshine", "GMSE01", null, "dusklight", gc)!!.id)
+        assertEquals("dusklight", CoreRouter.choose(System.GAMECUBE, "TP", "GZ2E01", null, "dusklight", gc)!!.id)
+        // ... and a stale per-game Dusklight override on a non-TP disc falls back to automatic
+        assertEquals("dolphin", CoreRouter.choose(System.GAMECUBE, "Sunshine", "GMSE01", "dusklight", null, gc)!!.id)
+    }
+
+    @Test fun pickerOffersDusklightOnlyForTwilightPrincess() {
+        assertEquals(listOf("dolphin", "primehack", "dusklight"), CoreRouter.candidatesFor(System.GAMECUBE, "GZ2E01", gc).map { it.id })
+        assertEquals(listOf("dolphin", "primehack"), CoreRouter.candidatesFor(System.GAMECUBE, "GMSE01", gc).map { it.id })
+        assertEquals(listOf("dolphin", "primehack"), CoreRouter.candidatesFor(System.GAMECUBE, null, gc).map { it.id })
+        assertEquals("Dusklight (Twilight Princess)", CoreRouter.candidatesFor(System.GAMECUBE, "GZ2E01", gc).last().displayName)
+    }
 }

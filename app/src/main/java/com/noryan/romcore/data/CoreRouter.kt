@@ -34,19 +34,37 @@ object CoreRouter {
         return c.firstOrNull { it.id == id } ?: c.firstOrNull { it.core.id == id }
     }
 
+    /** Candidates for one game: [candidates] minus game-specific cores (Dusklight) that cannot run this disc. */
+    fun candidatesFor(s: System, gameId: String?, cores: List<CoreDescriptor> = CoreRegistry.all()): List<CoreChoice> =
+        candidates(s, cores).filter { GameSpecificCores.canRun(it.core.id, gameId) }
+
     fun choose(g: GameEntity, prefs: Prefs, cores: List<CoreDescriptor> = CoreRegistry.all()): CoreChoice? {
         val sys = runCatching { System.valueOf(g.system) }.getOrNull() ?: return null
-        val c = candidates(sys, cores)
-        if (c.isEmpty()) return null
-        resolveOverride(g.coreOverride, c)?.let { return it }
-        resolveOverride(prefs.systemCore(sys), c)?.let { return it }
-        return autoChoice(sys, g.title, c)
+        return choose(sys, g.title, g.gameId, g.coreOverride, prefs.systemCore(sys), cores)
     }
 
-    fun autoChoice(sys: System, title: String, c: List<CoreChoice> = candidates(sys)): CoreChoice? {
+    /**
+     * Per-game override > per-system override > automatic. A game-specific core (Dusklight) only counts as an override when
+     * it can actually run the game, so choosing it for the whole system never breaks other GameCube games.
+     */
+    fun choose(sys: System, title: String, gameId: String?, gameOverride: String?, systemOverride: String?,
+               cores: List<CoreDescriptor> = CoreRegistry.all()): CoreChoice? {
+        val c = candidates(sys, cores)
         if (c.isEmpty()) return null
+        resolveOverride(gameOverride, c)?.takeIf { GameSpecificCores.canRun(it.core.id, gameId) }?.let { return it }
+        resolveOverride(systemOverride, c)?.takeIf { GameSpecificCores.canRun(it.core.id, gameId) }?.let { return it }
+        return autoChoice(sys, title, c, gameId)
+    }
+
+    /**
+     * Automatic choice: a game-specific core whose game this is (Twilight Princess GameCube disc IDs -> Dusklight) wins, then
+     * PrimeHack for Metroid Prime titles, then the general core. [gameId] is the 6-char disc ID read by the scanner (null = unknown).
+     */
+    fun autoChoice(sys: System, title: String, c: List<CoreChoice> = candidates(sys), gameId: String? = null): CoreChoice? {
+        if (c.isEmpty()) return null
+        if (gameId != null) c.firstOrNull { GameSpecificCores.isGameSpecific(it.core.id) && GameSpecificCores.canRun(it.core.id, gameId) }?.let { return it }
         if (CoreSetup.isPrimeTitle(title)) c.firstOrNull { it.core.id == "primehack" }?.let { return it }
-        // PrimeHack only auto-runs Metroid Prime; everything else prefers the general core.
-        return c.firstOrNull { it.core.id != "primehack" } ?: c.first()
+        // PrimeHack only auto-runs Metroid Prime; Dusklight only auto-runs Twilight Princess; everything else prefers the general core.
+        return c.firstOrNull { it.core.id != "primehack" && !GameSpecificCores.isGameSpecific(it.core.id) } ?: c.first()
     }
 }

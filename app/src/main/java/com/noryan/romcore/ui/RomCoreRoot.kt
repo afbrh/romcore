@@ -177,10 +177,10 @@ private fun GamesTab(vm: MainViewModel) {
                     onClick = { vm.launch(ctx, g) }
                 )
                 if (expanded == g.id) {
-                    val cands = sys?.let(CoreRouter::candidates).orEmpty()
+                    val cands = sys?.let { CoreRouter.candidatesFor(it, g.gameId) }.orEmpty()
                     FocusLine("PLAY", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.launch(ctx, g) }
                     FocusLine("FAVORITE", right = if (g.favorite) "ON" else "OFF", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.toggleFavorite(g) }
-                    val auto = sys?.let { CoreRouter.autoChoice(it, g.title) }
+                    val auto = sys?.let { CoreRouter.autoChoice(it, g.title, gameId = g.gameId) }
                     val gChosen0 = CoreRouter.resolveOverride(g.coreOverride, cands)
                     FocusLine("CORE: AUTO", right = auto?.displayName ?: "-", marked = gChosen0 == null, indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.setGameCore(g, null) }
                     val gChosen = CoreRouter.resolveOverride(g.coreOverride, cands)

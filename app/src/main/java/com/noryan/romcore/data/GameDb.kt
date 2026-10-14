@@ -19,7 +19,9 @@ data class GameEntity(
     val lastPlayedAt: Long? = null,
     val playCount: Int = 0,
     /** Unpacked title folder (Wii U loadiine layout): one game, not a file. */
-    val isDir: Boolean = false
+    val isDir: Boolean = false,
+    /** 6-char GameCube/Wii disc ID (GZ2E01...) read by the scanner; null for non-disc games or unreadable images. Used for routing. */
+    val gameId: String? = null
 )
 
 @Dao
@@ -36,7 +38,14 @@ interface GameDao {
     @Query("UPDATE games SET lastPlayedAt = :t, playCount = playCount + 1 WHERE id = :id") suspend fun markPlayed(id: Long, t: Long)
 }
 
-@Database(entities = [GameEntity::class], version = 2, exportSchema = false)
+@Database(entities = [GameEntity::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun games(): GameDao
+}
+
+/** v2 -> v3: games.gameId (disc ID for routing). Existing rows keep their favourites / overrides; the next scan fills the IDs in. */
+val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE games ADD COLUMN gameId TEXT")
+    }
 }

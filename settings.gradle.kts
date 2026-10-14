@@ -65,3 +65,13 @@ includeBuild("../primehack-romcore-src/Source/Android") {
 
 // :core-ppsspp (PSP). PPSSPP (GPL-2.0+) native + Java built in-module from ../ppsspp-src (branch `romcore`); see core-ppsspp/patches.
 include(":core-ppsspp")
+
+// :core-dusklight (GameCube, The Legend of Zelda: Twilight Princess ONLY). Dusklight (CC0-1.0, decomp-based native port)
+// from ../dusklight-src (local branch `romcore-local`, never pushed): its platforms/android module is a library
+// consumed as a composite build; native lib libdusklight_main.so, SDL3 Java package dev.twilitrealm.dusksdl.
+// Native build: see core-dusklight/README-dusklight.md (cmake --preset android-arm64 in ../dusklight-src, NDK 29).
+include(":core-dusklight")
+includeBuild("../dusklight-src/platforms/android") {
+    name = "dusklight"
+    dependencySubstitution { substitute(module("dev.twilitrealm:app")).using(project(":app")) }
+}

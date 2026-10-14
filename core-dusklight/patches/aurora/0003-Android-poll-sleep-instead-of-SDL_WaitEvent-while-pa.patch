@@ -1,0 +1,54 @@
+From 873a780bce33fc399d95d1bb1f27d14f82b91f0e Mon Sep 17 00:00:00 2001
+From: Ry <ry@Rys-MacBook-Pro.local>
+Date: Wed, 14 Oct 2026 15:33:20 -0500
+Subject: [PATCH 3/3] Android: poll + sleep instead of SDL_WaitEvent while
+ paused
+
+SDL_WaitEvent busy-loops on Android while the Activity is resumed (it only blocks once the
+Activity itself is paused). A host/menu pause (aurora_set_host_paused) or focus-loss pause pinned a
+core at ~100%; polling with an 8 ms sleep brings it to ~2%.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ lib/window.cpp | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/lib/window.cpp b/lib/window.cpp
+index e9ad068..acaf59b 100644
+--- a/lib/window.cpp
++++ b/lib/window.cpp
+@@ -18,6 +18,7 @@
+ #include <SDL3/SDL_init.h>
+ #include <SDL3/SDL_hints.h>
+ #include <SDL3/SDL_stdinc.h>
++#include <SDL3/SDL_timer.h>
+ #include <SDL3/SDL_pixels.h>
+ #include <tracy/Tracy.hpp>
+ 
+@@ -295,11 +296,23 @@ const AuroraEvent* poll_events() {
+   input::set_mouse_scroll(0, 0);
+   if (is_paused()) {
+     ZoneScopedN("SDL_WaitEvent (paused)");
++#if defined(SDL_PLATFORM_ANDROID)
++    // RomCore integration: SDL_WaitEvent busy-loops on Android while the Activity is resumed (it only blocks once the
++    // Activity itself is paused), which pinned a core at 100% while the host menu / focus loss had paused the game.
++    // Poll and sleep instead; sync_paused() reports state changes that arrive without an event.
++    if (SDL_PollEvent(&event)) {
++      process_event(event);
++    } else {
++      SDL_Delay(8);
++      sync_paused();
++    }
++#else
+     if (SDL_WaitEvent(&event)) {
+       process_event(event);
+     } else {
+       Log.warn("SDL_WaitEvent failed: {}", SDL_GetError());
+     }
++#endif
+   }
+   while (true) {
+     bool hasEvent = false;
+-- 
+2.54.0 (Apple Git-157)
+

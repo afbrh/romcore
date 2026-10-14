@@ -1,0 +1,76 @@
+From 5163053b7db11580a2df41895da5c6251c4b6633 Mon Sep 17 00:00:00 2001
+From: Ry <ry@Rys-MacBook-Pro.local>
+Date: Wed, 14 Oct 2026 15:20:57 -0500
+Subject: [PATCH 2/2] RomCore: native library renamed libdusklight_main.so,
+ staged into jniLibs again
+
+Unique soname so it ships in the normal jniLibs dir next to the other embedded cores (no
+libmain.so collision, no side-loading).
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ cmake/BorealisAndroid.cmake                    |  4 +++-
+ .../android/gradle/borealis-application.gradle | 18 +++++-------------
+ 2 files changed, 8 insertions(+), 14 deletions(-)
+
+diff --git a/cmake/BorealisAndroid.cmake b/cmake/BorealisAndroid.cmake
+index d632278..2c262a4 100644
+--- a/cmake/BorealisAndroid.cmake
++++ b/cmake/BorealisAndroid.cmake
+@@ -34,7 +34,9 @@ function(borealis_configure_android_application target)
+         message(FATAL_ERROR "borealis Android application needs a detected application version")
+     endif ()
+ 
+-    set_target_properties(${target} PROPERTIES OUTPUT_NAME main)
++    # RomCore integration: unique library name (libdusklight_main.so) so it ships in the normal jniLibs dir next to
++    # PrimeHack/Dolphin's libmain.so-style libraries without a name collision (was OUTPUT_NAME main).
++    set_target_properties(${target} PROPERTIES OUTPUT_NAME dusklight_main)
+     target_link_options(${target} PRIVATE "-Wl,-u,SDL_main" "-Wl,--build-id=sha1")
+ 
+     set(_borealis_android_properties "${CMAKE_BINARY_DIR}/borealis-android.properties")
+diff --git a/platforms/android/gradle/borealis-application.gradle b/platforms/android/gradle/borealis-application.gradle
+index 784cd3c..32c618c 100644
+--- a/platforms/android/gradle/borealis-application.gradle
++++ b/platforms/android/gradle/borealis-application.gradle
+@@ -76,7 +76,7 @@ def stlLibrary = new File(
+ def stagedJniLibsDir = layout.buildDirectory.dir('generated/jniLibs/borealis')
+ def stageJniLibs = tasks.register('stageBorealisJniLibs', Sync) {
+     from(nativeLibrary) {
+-        rename { 'libmain.so' }
++        rename { 'libdusklight_main.so' }
+         into androidAbi
+     }
+     from(stlLibrary) {
+@@ -154,17 +154,9 @@ android {
+ 
+     sourceSets {
+         main {
+-            // RomRunner integration: deliberately NOT wiring stagedJniLibsDir as a jniLibs source
+-            // here. This module's native output is renamed to libmain.so (see
+-            // BorealisAndroid.cmake's OUTPUT_NAME "main"), which collides by filename with
+-            // PrimeHack's own Dolphin-core libmain.so already embedded in RomRunner — both would
+-            // enter the same jniLibs merge and silently pick a winner via AGP's default
+-            // pickFirsts-or-fail behavior, with the loser's code never actually loading despite
+-            // System.loadLibrary("main") appearing to succeed. Instead, RomRunner bundles this
+-            // module's libmain.so as a plain asset and side-loads it via an explicit-path
+-            // System.load() — see DuskLightEmbeddedLauncher.kt and GAMESHELF_INTEGRATION.md. The
+-            // stageBorealisJniLibs task above still runs (harmless — it just stages an unused
+-            // build output) since preBuild still depends on it below.
++            // RomCore integration: the native library is renamed libdusklight_main.so (BorealisAndroid.cmake), unique among
++            // the embedded cores, so it ships through the normal jniLibs merge (no side-loading, no asset copy).
++            jniLibs.srcDirs += [stagedJniLibsDir]
+             assets.srcDirs += [generatedAssetsDir]
+             java.srcDirs += [sdlJavaDir, auroraJavaDir, borealisJavaDir]
+         }
+@@ -173,7 +165,7 @@ android {
+     packaging {
+         jniLibs {
+             if (stripValue.get() == '0') {
+-                keepDebugSymbols += '**/libmain.so'
++                keepDebugSymbols += '**/libdusklight_main.so'
+             }
+         }
+     }
+-- 
+2.54.0 (Apple Git-157)
+

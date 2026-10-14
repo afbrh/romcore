@@ -1,0 +1,138 @@
+From 59826c2730d3f616df26edcb3dfb296156a9697c Mon Sep 17 00:00:00 2001
+From: Ry <ry@Rys-MacBook-Pro.local>
+Date: Wed, 14 Oct 2026 14:30:28 -0500
+Subject: [PATCH 1/2] RomRunner-era local patches (SDL3 java rename, libs,
+ authority)
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ cmake/BorealisAndroid.cmake                   |  6 +++-
+ .../gradle/borealis-application.gradle        | 30 +++++++++++++++----
+ .../encounter/borealis/BorealisActivity.java  |  8 +++--
+ .../borealis/BorealisDocumentsProvider.java   |  7 ++++-
+ platforms/android/proguard-rules.pro          |  2 +-
+ 5 files changed, 42 insertions(+), 11 deletions(-)
+
+diff --git a/cmake/BorealisAndroid.cmake b/cmake/BorealisAndroid.cmake
+index ecd2820..d632278 100644
+--- a/cmake/BorealisAndroid.cmake
++++ b/cmake/BorealisAndroid.cmake
+@@ -12,7 +12,11 @@ function(borealis_configure_android_application target)
+     if (NOT _borealis_android_target_type STREQUAL "SHARED_LIBRARY")
+         message(FATAL_ERROR "borealis Android application '${target}' must be created with add_library(... SHARED)")
+     endif ()
+-    if (NOT AURORA_SDL3_JAVA_SOURCE_DIR OR NOT IS_DIRECTORY "${AURORA_SDL3_JAVA_SOURCE_DIR}/org/libsdl/app")
++    # RomRunner integration: this checkout's SDL3 Java package was renamed from org.libsdl.app to
++    # dev.twilitrealm.dusksdl (see extern/aurora/cmake/patches/apply-sdl3-java-package-rename.cmake)
++    # to avoid colliding with a different SDL3 point release's copy of the same classes, also
++    # embedded in RomRunner.
++    if (NOT AURORA_SDL3_JAVA_SOURCE_DIR OR NOT IS_DIRECTORY "${AURORA_SDL3_JAVA_SOURCE_DIR}/dev/twilitrealm/dusksdl")
+         message(FATAL_ERROR "borealis Android application needs Aurora's populated SDL Java source directory")
+     endif ()
+     if (NOT AURORA_ANDROID_JAVA_SOURCE_DIR OR NOT IS_DIRECTORY "${AURORA_ANDROID_JAVA_SOURCE_DIR}/dev/encounter/aurora")
+diff --git a/platforms/android/gradle/borealis-application.gradle b/platforms/android/gradle/borealis-application.gradle
+index 152799d..784cd3c 100644
+--- a/platforms/android/gradle/borealis-application.gradle
++++ b/platforms/android/gradle/borealis-application.gradle
+@@ -124,11 +124,18 @@ android {
+     ndkVersion = ndkVersionValue
+ 
+     defaultConfig {
+-        applicationId = androidConfig.applicationId
++        // RomRunner integration: this module is a library (see app/build.gradle) — a library's
++        // defaultConfig can't declare applicationId/versionCode/versionName; the app consuming it
++        // (RomRunner) owns those. minSdk kept since it's still meaningful as this source tree's
++        // own floor.
+         minSdk = androidConfig.minSdk ?: nativeApiLevel
+-        targetSdk = androidConfig.targetSdk ?: 36
+-        versionCode = versionCodeValue
+-        versionName = versionNameValue
++        // RomRunner integration: consumerProguardFiles (not buildTypes.release.proguardFiles
++        // below, which only affects a standalone build of this module) is what actually
++        // propagates -keep rules into the CONSUMING app's own R8 pass — critical here since R8
++        // otherwise strips native-only JNI entry points like SDLActivity.onNativeSoftReturnKey()
++        // as "unused" (nothing in Java calls them; only RegisterNatives from native code does,
++        // which R8 can't see). Same lesson already learned for the other embedded cores.
++        consumerProguardFiles(project.file(androidConfig.proguardRules ?: 'proguard-rules.pro'))
+     }
+ 
+     buildTypes {
+@@ -137,7 +144,8 @@ android {
+         }
+         release {
+             minifyEnabled = true
+-            shrinkResources = true
++            // RomRunner integration: shrinkResources is application-only (needs the final app's
++            // full resource table) — invalid for a library module, which this now is.
+             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+                 borealisRules,
+                 project.file(androidConfig.proguardRules ?: 'proguard-rules.pro')
+@@ -146,7 +154,17 @@ android {
+ 
+     sourceSets {
+         main {
+-            jniLibs.srcDirs = [stagedJniLibsDir]
++            // RomRunner integration: deliberately NOT wiring stagedJniLibsDir as a jniLibs source
++            // here. This module's native output is renamed to libmain.so (see
++            // BorealisAndroid.cmake's OUTPUT_NAME "main"), which collides by filename with
++            // PrimeHack's own Dolphin-core libmain.so already embedded in RomRunner — both would
++            // enter the same jniLibs merge and silently pick a winner via AGP's default
++            // pickFirsts-or-fail behavior, with the loser's code never actually loading despite
++            // System.loadLibrary("main") appearing to succeed. Instead, RomRunner bundles this
++            // module's libmain.so as a plain asset and side-loads it via an explicit-path
++            // System.load() — see DuskLightEmbeddedLauncher.kt and GAMESHELF_INTEGRATION.md. The
++            // stageBorealisJniLibs task above still runs (harmless — it just stages an unused
++            // build output) since preBuild still depends on it below.
+             assets.srcDirs += [generatedAssetsDir]
+             java.srcDirs += [sdlJavaDir, auroraJavaDir, borealisJavaDir]
+         }
+diff --git a/platforms/android/java/dev/encounter/borealis/BorealisActivity.java b/platforms/android/java/dev/encounter/borealis/BorealisActivity.java
+index 3b05241..9288d2e 100644
+--- a/platforms/android/java/dev/encounter/borealis/BorealisActivity.java
++++ b/platforms/android/java/dev/encounter/borealis/BorealisActivity.java
+@@ -27,8 +27,12 @@ import android.view.WindowInsetsController;
+ 
+ import dev.encounter.aurora.AuroraSurface;
+ 
+-import org.libsdl.app.SDLActivity;
+-import org.libsdl.app.SDLSurface;
++// RomRunner integration: this checkout's vendored SDL3 Java package was renamed from
++// org.libsdl.app to dev.twilitrealm.dusksdl to avoid colliding with a different SDL3 point
++// release's copy of the same classes, also embedded in RomRunner (see
++// extern/aurora/cmake/patches/apply-sdl3-java-package-rename.cmake).
++import dev.twilitrealm.dusksdl.SDLActivity;
++import dev.twilitrealm.dusksdl.SDLSurface;
+ 
+ import java.io.File;
+ import java.io.FileNotFoundException;
+diff --git a/platforms/android/java/dev/encounter/borealis/BorealisDocumentsProvider.java b/platforms/android/java/dev/encounter/borealis/BorealisDocumentsProvider.java
+index 5e69f71..dded1c1 100644
+--- a/platforms/android/java/dev/encounter/borealis/BorealisDocumentsProvider.java
++++ b/platforms/android/java/dev/encounter/borealis/BorealisDocumentsProvider.java
+@@ -293,7 +293,12 @@ public class BorealisDocumentsProvider extends DocumentsProvider {
+     }
+ 
+     private String authority() {
+-        return getContext().getPackageName() + ".documents";
++        // RomRunner integration: "<packageName>.documents" collides with RetroArch's own
++        // RetroDocumentsProvider, already embedded under that exact same authority suffix — both
++        // would resolve to the same content authority once merged into RomRunner's manifest.
++        // Kept in sync with the authority declared for this provider in
++        // platforms/android/app/src/main/AndroidManifest.xml.
++        return getContext().getPackageName() + ".dusklight.documents";
+     }
+ 
+     private Uri getChildDocumentsUri(String parentDocumentId) {
+diff --git a/platforms/android/proguard-rules.pro b/platforms/android/proguard-rules.pro
+index 6713a3e..73c6c25 100644
+--- a/platforms/android/proguard-rules.pro
++++ b/platforms/android/proguard-rules.pro
+@@ -1,4 +1,4 @@
+ # SDL and the Aurora/Borealis activity classes expose methods through JNI.
+--keep class org.libsdl.app.** { *; }
++-keep class dev.twilitrealm.dusksdl.** { *; }
+ -keep class dev.encounter.aurora.** { *; }
+ -keep class dev.encounter.borealis.** { *; }
+-- 
+2.54.0 (Apple Git-157)
+

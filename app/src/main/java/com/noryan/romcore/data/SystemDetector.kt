@@ -93,7 +93,7 @@ object SystemDetector {
             // system folder. Never a 3DS/Wii U/Switch/etc. game by extension or by a folder name like "Nintendo 3DS" alone.
             fromFolders(folders)?.takeIf { it in BIN_BY_FOLDER_OK }?.let { return it }
             val h = header() ?: return null
-            for (c in CoreRegistry.all().sortedBy { if (it.id == "primehack") 0 else 1 }) {
+            for (c in CoreRegistry.all().sortedBy { if (it.id == "primehack" || it.id == "dusklight") 0 else 1 }) {
                 if ("bin" !in c.extensions && c.extensions.isNotEmpty()) continue
                 runCatching { c.sniff(path, h) }.getOrNull()?.takeIf { it == System.PS1 || it == System.PS2 }?.let { return it }
             }
@@ -103,7 +103,7 @@ object SystemDetector {
         val h = header()
         if (h != null) {
             // Cores that only recognise specific titles (PrimeHack) go first so they win over the general GC/Wii sniffer.
-            for (c in CoreRegistry.all().sortedBy { if (it.id == "primehack") 0 else 1 }) {
+            for (c in CoreRegistry.all().sortedBy { if (it.id == "primehack" || it.id == "dusklight") 0 else 1 }) {
                 if (ext !in c.extensions && c.extensions.isNotEmpty()) continue
                 runCatching { c.sniff(path, h) }.getOrNull()?.let { return it }
             }

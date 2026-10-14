@@ -11,7 +11,7 @@ import com.noryan.romcore.api.CoreRegistry
  */
 object CoreBootstrap {
     private const val TAG = "CoreBootstrap"
-    val CORE_IDS = listOf("retroarch", "ppsspp", "dolphin", "primehack", "cemu", "eden", "azahar", "watermelonds", "armsx2")
+    val CORE_IDS = listOf("retroarch", "ppsspp", "dolphin", "primehack", "cemu", "eden", "azahar", "watermelonds", "armsx2", "dusklight")
 
     private val DISPLAY_CASE = mapOf(
         "retroarch" to listOf("RetroArch", "Retroarch"), "primehack" to listOf("PrimeHack", "Primehack"),
@@ -84,6 +84,7 @@ object CoreBootstrap {
         "cemu" to "Cemu 0.5-4 (SSimco android port)",
         "azahar" to "Azahar 95db543",
         "armsx2" to "ARMSX2 0d7a2b9",
+        "dusklight" to "Dusklight b245c6b (romcore patches)",
         "dolphin" to "Dolphin mainline", "eden" to "Eden v0.2.0-371", "ppsspp" to "PPSSPP", "watermelonds" to "WatermelonDS 0.8.0.rc2",
     )
 }

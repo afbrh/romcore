@@ -1,0 +1,599 @@
+From 0e2136e97dc17e7a7f49cd13301e4cfda4dfe646 Mon Sep 17 00:00:00 2001
+From: Ry <ry@Rys-MacBook-Pro.local>
+Date: Wed, 14 Oct 2026 15:20:57 -0500
+Subject: [PATCH 2/2] RomCore embedding layer: hidden Dusklight UI, SDL virtual
+ gamepad, host pause, unique native lib
+
+- src/dusk/romcore_embed.{hpp,cpp}: DUSK_ROMCORE_EMBED gate, JNI bridge (virtual gamepad, host pause),
+  first-visible-frame / notice / fatal events to the host Activity
+- Dusklight UI (overlay, touch controls, menu bar, console, prelaunch, preset, crash-report consent,
+  ImGui menus, toasts, UI input) is never created/shown in embedded mode; no sentry/crash handler
+- fatal errors become a host error panel instead of abort(); Info log level
+- DuskActivity loads libdusklight_main.so normally; drops the RomRunner side-load; exposes host natives/events
+- gradle: NDK 29 pinned, optional mod packages not bundled
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ files.cmake                                   |   2 +
+ platforms/android/app/build.gradle            |  10 +-
+ .../com/twilitrealm/dusk/DuskActivity.java    |  42 ++--
+ src/dusk/imgui/ImGuiConsole.cpp               |   6 +
+ src/dusk/logging.cpp                          |   8 +
+ src/dusk/romcore_embed.cpp                    | 225 ++++++++++++++++++
+ src/dusk/romcore_embed.hpp                    |  29 +++
+ src/dusk/ui/ui.cpp                            |  14 ++
+ src/m_Do/m_Do_main.cpp                        |  39 ++-
+ 9 files changed, 345 insertions(+), 30 deletions(-)
+ create mode 100644 src/dusk/romcore_embed.cpp
+ create mode 100644 src/dusk/romcore_embed.hpp
+
+diff --git a/files.cmake b/files.cmake
+index 0834dc9f0d..cc04d1b61f 100644
+--- a/files.cmake
++++ b/files.cmake
+@@ -1676,6 +1676,8 @@ set(DUSK_FILES
+         src/dusk/ui/window.cpp
+         src/dusk/ui/window.hpp
+         src/dusk/version.cpp
++        src/dusk/romcore_embed.cpp
++        src/dusk/romcore_embed.hpp
+         src/dusk/utilities.cpp
+         src/helpers/batch.cpp
+         src/helpers/offset_ptr.cpp
+diff --git a/platforms/android/app/build.gradle b/platforms/android/app/build.gradle
+index 3ce2eb43a6..93fa69a5d5 100644
+--- a/platforms/android/app/build.gradle
++++ b/platforms/android/app/build.gradle
+@@ -24,18 +24,18 @@ ext.borealisAndroid = [
+     propertiesFile: new File(duskRepoDir, 'build/android-arm64/borealis-android.properties'),
+     namespace: 'dev.twilitrealm.dusk',
+     applicationId: 'dev.twilitrealm.dusk',
++    // RomCore integration: the native library is built with NDK 29 (cmake --preset android-arm64); pin it so Gradle does not need
++    // ANDROID_NDK_VERSION in the environment.
++    ndkVersion: System.getenv('ANDROID_NDK_VERSION') ?: '29.0.14206865',
+     abis: ['arm64-v8a'],
+     assets: [
+         [
+             from: new File(duskRepoDir, 'res'),
+             into: 'res',
+             excludes: ['**/.DS_Store']
+-        ],
+-        [
+-            from: new File(duskRepoDir, 'build/android-arm64/bundled_mods'),
+-            into: 'mods',
+-            includes: ['*.dusk']
+         ]
++        // RomCore integration: the optional mod packages (cosmetics, randomizer) are NOT bundled - RomCore ships vanilla
++        // Twilight Princess and has no mod UI, so shipping them would only add size.
+     ],
+     proguardRules: file('proguard-rules.pro')
+ ]
+diff --git a/platforms/android/app/src/main/java/com/twilitrealm/dusk/DuskActivity.java b/platforms/android/app/src/main/java/com/twilitrealm/dusk/DuskActivity.java
+index c9b982fd2c..0b072effa6 100644
+--- a/platforms/android/app/src/main/java/com/twilitrealm/dusk/DuskActivity.java
++++ b/platforms/android/app/src/main/java/com/twilitrealm/dusk/DuskActivity.java
+@@ -17,34 +17,38 @@ public class DuskActivity extends BorealisActivity {
+     @Override
+     protected void onCreate(Bundle savedInstanceState) {
+         extractBundledMods();
+-        // RomRunner integration: "main" is loaded explicitly from a private-storage copy
+-        // (extracted by DuskLightEmbeddedLauncher.ensureNativeLibInstalled before this Activity
+-        // is even started) rather than via the standard Borealis getLibraries()/
+-        // SDL.loadLibrary("main") mechanism below, which searches nativeLibraryDir — this
+-        // module's own libmain.so is deliberately NOT packaged there (see
+-        // borealis-application.gradle) because it shares its exact output filename with
+-        // PrimeHack's own Dolphin-core libmain.so, also embedded in RomRunner; letting both into
+-        // the same nativeLibraryDir would silently satisfy whichever core calls
+-        // System.loadLibrary("main") first with the OTHER core's native code.
+-        System.load(new File(getApplicationInfo().dataDir, "dusklight/libmain.so").getAbsolutePath());
+         super.onCreate(savedInstanceState);
+     }
+ 
+     @Override
+     protected String[] getLibraries() {
+-        // Loaded explicitly above instead of via the standard mechanism — see onCreate().
+-        return new String[0];
++        // RomCore integration: the native library is libdusklight_main.so (renamed from libmain.so, see
++        // extern/borealis/cmake/BorealisAndroid.cmake) so it can ship in the normal jniLibs directory next to the other
++        // cores without a file-name collision. SDL3 is statically linked into it (BUILD_SHARED_LIBS=OFF).
++        return new String[] { "dusklight_main" };
+     }
+ 
+     @Override
+     protected String getMainSharedObject() {
+-        // RomRunner integration: the default implementation (SDLActivity.getMainSharedObject())
+-        // returns getApplicationInfo().nativeLibraryDir + "/libmain.so" — RomRunner's actual
+-        // nativeLibraryDir contains PrimeHack's own Dolphin-core libmain.so (see onCreate()'s
+-        // comment), so that default would hand SDL_RunApp a dlsym(SDL_main) lookup against the
+-        // WRONG native library entirely. Point it at the same explicit path already System.load()ed
+-        // in onCreate() instead.
+-        return new File(getApplicationInfo().dataDir, "dusklight/libmain.so").getAbsolutePath();
++        // SDL's nativeRunMain() dlopen()s this only to dlsym(SDL_main). The bare soname resolves to the library that
++        // System.loadLibrary() already mapped (extracted or mmapped from the APK alike).
++        return "libdusklight_main.so";
++    }
++
++    // ---- RomCore host bridge (implemented in src/dusk/romcore_embed.cpp) ---------------------------------------
++    // Button/axis ids are SDL_GamepadButton / SDL_GamepadAxis values. Triggers rest at -32768 (SDL virtual-joystick
++    // convention). The physical controller is hidden from SDL; this virtual pad is the only gamepad the game sees.
++    public static native void nativeRomCoreButton(int sdlButton, boolean down);
++    public static native void nativeRomCoreAxis(int sdlAxis, int value);
++    public static native void nativeRomCoreReleaseAll();
++    public static native void nativeRomCoreSetPaused(boolean paused);
++
++    /**
++     * Native -> host events. kind 0 = first frames presented, 1 = notice(a), 2 = fatal error(a = title, b = message).
++     * Called on the game thread; the RomCore subclass overrides this.
++     */
++    public void onRomCoreEvent(int kind, String a, String b) {
++        Log.i(TAG, "romcore event " + kind + ": " + a + " " + b);
+     }
+ 
+     // Bundled mod packages ship as APK assets, which the native loader cannot read directly;
+diff --git a/src/dusk/imgui/ImGuiConsole.cpp b/src/dusk/imgui/ImGuiConsole.cpp
+index badf7297c2..62669ee3a3 100644
+--- a/src/dusk/imgui/ImGuiConsole.cpp
++++ b/src/dusk/imgui/ImGuiConsole.cpp
+@@ -1,5 +1,6 @@
+ #define IMGUI_DEFINE_MATH_OPERATORS
+ #include "ImGuiConsole.hpp"
++#include "dusk/romcore_embed.hpp"
+ 
+ #include "ImGuiEngine.hpp"
+ 
+@@ -266,6 +267,11 @@ namespace dusk {
+     void ImGuiConsole::PreDraw() {
+         ZoneScoped;
+ 
++        // RomCore embedding: no ImGui debug menu / overlays / hotkeys (keyboard is never delivered either).
++        if (romcore::enabled()) {
++            return;
++        }
++
+         UpdateSettings();
+ 
+         if (ImGui::IsKeyPressed(ImGuiKey_F11)) {
+diff --git a/src/dusk/logging.cpp b/src/dusk/logging.cpp
+index b85635f1a5..20238249fd 100644
+--- a/src/dusk/logging.cpp
++++ b/src/dusk/logging.cpp
+@@ -1,4 +1,5 @@
+ #include "dusk/logging.h"
++#include "dusk/romcore_embed.hpp"
+ 
+ #include <tracy/Tracy.hpp>
+ 
+@@ -46,5 +47,12 @@ void dusk::InitializeLogging(
+     options.legacyFilePrefixes = {"dusk"};
+     options.divert = &divert_stub_messages;
+     standard.apply_to(options);
++    if (dusk::romcore::enabled()) {
++        // RomCore embedding: Info level (Debug logs every game frame to logcat and costs CPU); fatal errors become RomCore's error panel instead of a silent abort().
++        options.level = borealis::LogLevel::Info;
++        options.onFatal = [](std::string_view text) {
++            dusk::romcore::fatal("Dusklight stopped", std::string(text));
++        };
++    }
+     borealis::log::init(options);
+ }
+diff --git a/src/dusk/romcore_embed.cpp b/src/dusk/romcore_embed.cpp
+new file mode 100644
+index 0000000000..bf55ad2397
+--- /dev/null
++++ b/src/dusk/romcore_embed.cpp
+@@ -0,0 +1,225 @@
++#include "dusk/romcore_embed.hpp"
++
++#include <atomic>
++#include <chrono>
++#include <cstdlib>
++#include <mutex>
++#include <string>
++#include <thread>
++
++#include <aurora/aurora.h>
++#include <aurora/gfx.h>
++
++#if defined(__ANDROID__)
++#include <SDL3/SDL.h>
++#include <SDL3/SDL_system.h>
++#include <jni.h>
++
++#include "dusk/logging.h"
++#endif
++
++namespace dusk::romcore {
++
++bool enabled() noexcept {
++    static const bool value = [] {
++        const char* env = std::getenv("DUSK_ROMCORE_EMBED");
++        return env != nullptr && env[0] != '\0' && env[0] != '0';
++    }();
++    return value;
++}
++
++#if defined(__ANDROID__)
++namespace {
++
++// Event kinds understood by DuskActivity.onRomCoreEvent(int, String, String).
++constexpr int kEventReady = 0;
++constexpr int kEventNotice = 1;
++constexpr int kEventError = 2;
++
++void send_event(int kind, const std::string& a, const std::string& b) noexcept {
++    JNIEnv* env = static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv());
++    jobject activity = static_cast<jobject>(SDL_GetAndroidActivity());
++    if (env == nullptr || activity == nullptr) {
++        return;
++    }
++    jclass cls = env->GetObjectClass(activity);
++    jmethodID method =
++        cls != nullptr ? env->GetMethodID(cls, "onRomCoreEvent", "(ILjava/lang/String;Ljava/lang/String;)V") : nullptr;
++    if (method != nullptr) {
++        jstring ja = env->NewStringUTF(a.c_str());
++        jstring jb = env->NewStringUTF(b.c_str());
++        env->CallVoidMethod(activity, method, static_cast<jint>(kind), ja, jb);
++        if (ja != nullptr) env->DeleteLocalRef(ja);
++        if (jb != nullptr) env->DeleteLocalRef(jb);
++    }
++    if (env->ExceptionCheck()) {
++        env->ExceptionClear();
++    }
++    if (cls != nullptr) env->DeleteLocalRef(cls);
++    env->DeleteLocalRef(activity);
++}
++
++// ---- virtual gamepad -------------------------------------------------------------------------------------------
++// RomCore's InputRouter delivers canonical pad state; it is exposed to the game as ONE SDL virtual gamepad so the
++// normal Aurora/Dusklight input path (port assignment, bindings, deadzones) is unchanged. The physical controller is
++// hidden from SDL by the Activity (events swallowed) and by SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT.
++constexpr Uint16 kVendor = 0x5243;   // "RC"
++constexpr Uint16 kProduct = 0x0001;
++
++std::mutex g_padMutex;
++SDL_Joystick* g_joystick = nullptr;
++SDL_JoystickID g_joystickId = 0;
++
++// Gamepad button -> virtual joystick button index. SDL assigns indices in the fixed order of
++// VIRTUAL_JoystickGetGamepadMapping (A B X Y BACK GUIDE START LSTICK RSTICK LSHOULDER RSHOULDER DPAD U D L R).
++constexpr SDL_GamepadButton kButtonOrder[] = {
++    SDL_GAMEPAD_BUTTON_SOUTH,          SDL_GAMEPAD_BUTTON_EAST,           SDL_GAMEPAD_BUTTON_WEST,
++    SDL_GAMEPAD_BUTTON_NORTH,          SDL_GAMEPAD_BUTTON_BACK,           SDL_GAMEPAD_BUTTON_START,
++    SDL_GAMEPAD_BUTTON_LEFT_STICK,     SDL_GAMEPAD_BUTTON_RIGHT_STICK,    SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,
++    SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, SDL_GAMEPAD_BUTTON_DPAD_UP,        SDL_GAMEPAD_BUTTON_DPAD_DOWN,
++    SDL_GAMEPAD_BUTTON_DPAD_LEFT,      SDL_GAMEPAD_BUTTON_DPAD_RIGHT,
++};
++constexpr int kButtonCount = sizeof(kButtonOrder) / sizeof(kButtonOrder[0]);
++
++// Last requested state, replayed when the joystick is (re)attached.
++bool g_buttonState[SDL_GAMEPAD_BUTTON_COUNT] = {};
++Sint16 g_axisState[SDL_GAMEPAD_AXIS_COUNT] = {0, 0, 0, 0, SDL_JOYSTICK_AXIS_MIN, SDL_JOYSTICK_AXIS_MIN};
++
++int button_index(int sdlButton) {
++    for (int i = 0; i < kButtonCount; ++i) {
++        if (static_cast<int>(kButtonOrder[i]) == sdlButton) return i;
++    }
++    return -1;
++}
++
++bool ensure_attached_locked() {
++    if (g_joystick != nullptr) return true;
++    if (!SDL_WasInit(SDL_INIT_JOYSTICK)) return false;
++
++    SDL_VirtualJoystickDesc desc;
++    SDL_INIT_INTERFACE(&desc);
++    desc.type = SDL_JOYSTICK_TYPE_GAMEPAD;
++    desc.vendor_id = kVendor;
++    desc.product_id = kProduct;
++    desc.naxes = SDL_GAMEPAD_AXIS_COUNT;
++    desc.nbuttons = kButtonCount;
++    desc.name = "RomCore Pad";
++    for (const auto b : kButtonOrder) desc.button_mask |= (1u << static_cast<unsigned>(b));
++    for (int a = 0; a < SDL_GAMEPAD_AXIS_COUNT; ++a) desc.axis_mask |= (1u << static_cast<unsigned>(a));
++
++    g_joystickId = SDL_AttachVirtualJoystick(&desc);
++    if (g_joystickId == 0) {
++        DuskLog.warn("RomCore: SDL_AttachVirtualJoystick failed: {}", SDL_GetError());
++        return false;
++    }
++    g_joystick = SDL_OpenJoystick(g_joystickId);
++    if (g_joystick == nullptr) {
++        DuskLog.warn("RomCore: SDL_OpenJoystick(virtual) failed: {}", SDL_GetError());
++        SDL_DetachVirtualJoystick(g_joystickId);
++        g_joystickId = 0;
++        return false;
++    }
++    DuskLog.info("RomCore: virtual gamepad attached (instance {})", g_joystickId);
++    for (int i = 0; i < kButtonCount; ++i) {
++        SDL_SetJoystickVirtualButton(g_joystick, i, g_buttonState[static_cast<int>(kButtonOrder[i])]);
++    }
++    for (int a = 0; a < SDL_GAMEPAD_AXIS_COUNT; ++a) {
++        SDL_SetJoystickVirtualAxis(g_joystick, a, g_axisState[a]);
++    }
++    return true;
++}
++
++std::atomic<bool> g_readyFired{false};
++std::atomic<int> g_frames{0};
++int g_drawFrames = 0;
++constexpr uint32_t kMinDraws = 4;
++constexpr int kDrawFramesNeeded = 3;
++
++}  // namespace
++
++void on_frame() noexcept {
++    {
++        std::lock_guard lock(g_padMutex);
++        ensure_attached_locked();
++    }
++    const int frames = ++g_frames;
++    static const bool debug = std::getenv("DUSK_ROMCORE_DEBUG") != nullptr;
++    const AuroraStats* stats = aurora_get_stats();
++    const uint32_t draws = stats != nullptr ? stats->drawCallCount : 0;
++    if (debug && frames <= 600) {
++        DuskLog.info("RomCore frame {} draws={}", frames, draws);
++    }
++    if (g_readyFired.load()) {
++        return;
++    }
++    // "Ready" = the game has really put something on screen: several consecutive presented frames that each issued draw
++    // calls (the first frames are black while the DVD thread loads the logo scene).
++    g_drawFrames = draws >= kMinDraws ? g_drawFrames + 1 : 0;
++    if (g_drawFrames >= kDrawFramesNeeded && !g_readyFired.exchange(true)) {
++        DuskLog.info("RomCore: first visible frame at presented frame {}", frames);
++        send_event(kEventReady, "", "");
++    }
++}
++
++void notice(std::string_view text) noexcept {
++    DuskLog.info("RomCore notice: {}", text);
++    send_event(kEventNotice, std::string(text), "");
++}
++
++void fatal(std::string_view title, std::string_view message) noexcept {
++    DuskLog.error("RomCore fatal: {}: {}", title, message);
++    send_event(kEventError, std::string(title), std::string(message));
++    // The host closes the game (kills the process) when the user dismisses the panel; wait for that.
++    for (int i = 0; i < 6000; ++i) {
++        std::this_thread::sleep_for(std::chrono::milliseconds(100));
++    }
++}
++
++extern "C" {
++
++JNIEXPORT void JNICALL Java_dev_twilitrealm_dusk_DuskActivity_nativeRomCoreButton(
++    JNIEnv*, jclass, jint sdlButton, jboolean down) {
++    const int idx = button_index(sdlButton);
++    if (idx < 0) return;
++    std::lock_guard lock(g_padMutex);
++    g_buttonState[sdlButton] = down != JNI_FALSE;
++    if (g_joystick != nullptr) SDL_SetJoystickVirtualButton(g_joystick, idx, down != JNI_FALSE);
++}
++
++JNIEXPORT void JNICALL Java_dev_twilitrealm_dusk_DuskActivity_nativeRomCoreAxis(
++    JNIEnv*, jclass, jint sdlAxis, jint value) {
++    if (sdlAxis < 0 || sdlAxis >= SDL_GAMEPAD_AXIS_COUNT) return;
++    const int clamped = value < SDL_JOYSTICK_AXIS_MIN ? SDL_JOYSTICK_AXIS_MIN
++                                                      : (value > SDL_JOYSTICK_AXIS_MAX ? SDL_JOYSTICK_AXIS_MAX : value);
++    std::lock_guard lock(g_padMutex);
++    g_axisState[sdlAxis] = static_cast<Sint16>(clamped);
++    if (g_joystick != nullptr) SDL_SetJoystickVirtualAxis(g_joystick, sdlAxis, static_cast<Sint16>(clamped));
++}
++
++JNIEXPORT void JNICALL Java_dev_twilitrealm_dusk_DuskActivity_nativeRomCoreReleaseAll(JNIEnv*, jclass) {
++    std::lock_guard lock(g_padMutex);
++    for (int i = 0; i < SDL_GAMEPAD_BUTTON_COUNT; ++i) g_buttonState[i] = false;
++    for (int a = 0; a < SDL_GAMEPAD_AXIS_COUNT; ++a) {
++        g_axisState[a] = (a >= SDL_GAMEPAD_AXIS_LEFT_TRIGGER) ? SDL_JOYSTICK_AXIS_MIN : 0;
++    }
++    if (g_joystick == nullptr) return;
++    for (int i = 0; i < kButtonCount; ++i) SDL_SetJoystickVirtualButton(g_joystick, i, false);
++    for (int a = 0; a < SDL_GAMEPAD_AXIS_COUNT; ++a) SDL_SetJoystickVirtualAxis(g_joystick, a, g_axisState[a]);
++}
++
++JNIEXPORT void JNICALL Java_dev_twilitrealm_dusk_DuskActivity_nativeRomCoreSetPaused(
++    JNIEnv*, jclass, jboolean paused) {
++    aurora_set_host_paused(paused != JNI_FALSE);
++}
++
++}  // extern "C"
++
++#else  // !__ANDROID__
++
++void on_frame() noexcept {}
++void notice(std::string_view) noexcept {}
++void fatal(std::string_view, std::string_view) noexcept {}
++
++#endif
++
++}  // namespace dusk::romcore
+diff --git a/src/dusk/romcore_embed.hpp b/src/dusk/romcore_embed.hpp
+new file mode 100644
+index 0000000000..6d24f3fa3b
+--- /dev/null
++++ b/src/dusk/romcore_embed.hpp
+@@ -0,0 +1,29 @@
++#pragma once
++
++#include <string_view>
++
++// RomCore embedding layer (local patch, never upstreamed).
++//
++// When Dusklight runs inside the RomCore Android app (DuskActivity exports DUSK_ROMCORE_EMBED=1 before the native
++// library starts) RomCore owns EVERY pixel that is not the game: loading screen, overlays, toasts, dialogs, the
++// pause/Back menu, controller mapping. This module is the only seam between the two:
++//   * enabled()        gate used by the UI code to keep Dusklight's own menus/overlays/prelaunch/settings unreachable
++//   * on_frame()       per presented frame: virtual-gamepad housekeeping + "first frame" signal for the loading screen
++//   * notice()/fatal() text for RomCore's banner / blocking error panel (instead of Dusklight toasts / abort())
++//   * JNI entry points (dev.twilitrealm.dusk.DuskActivity.nativeRomCore*) that feed RomCore's canonical pad into an
++//     SDL virtual gamepad, pause the game while RomCore's menu is open and flush saves before the process is killed.
++namespace dusk::romcore {
++
++bool enabled() noexcept;
++
++// Called on the game thread right after aurora_end_frame().
++void on_frame() noexcept;
++
++// Transient message for RomCore's banner (Android: DuskActivity.onRomCoreEvent). Safe from any thread.
++void notice(std::string_view text) noexcept;
++
++// Blocking error for RomCore's error panel; waits (bounded) for the host to close the game, then returns so the caller
++// can abort. Safe from any thread.
++void fatal(std::string_view title, std::string_view message) noexcept;
++
++}  // namespace dusk::romcore
+diff --git a/src/dusk/ui/ui.cpp b/src/dusk/ui/ui.cpp
+index 88f19a5914..5f8be08c30 100644
+--- a/src/dusk/ui/ui.cpp
++++ b/src/dusk/ui/ui.cpp
+@@ -13,6 +13,7 @@
+ #include "dusk/config.hpp"
+ #include "dusk/mods/queue.hpp"
+ #include "dusk/mods/updates.hpp"
++#include "dusk/romcore_embed.hpp"
+ 
+ #include <RmlUi/Core.h>
+ #include <RmlUi/Core/ElementText.h>
+@@ -207,6 +208,10 @@ const char* connection_state_icon(SDL_JoystickConnectionState state) noexcept {
+ }
+ 
+ void handle_event(const SDL_Event& event) noexcept {
++    // RomCore embedding: Dusklight's own UI never receives input (it is never shown either).
++    if (romcore::enabled()) {
++        return;
++    }
+     if (!aurora::rmlui::is_initialized()) {
+         return;
+     }
+@@ -340,6 +345,9 @@ void apply_scoped_styles(Document& doc) noexcept {
+ 
+ Document& push_document(std::unique_ptr<Document> doc, bool show, bool passive) noexcept {
+     Document& ret = *doc;
++    if (romcore::enabled()) {
++        show = false;  // RomCore embedding: no Dusklight UI is ever shown
++    }
+     if (passive) {
+         sPassiveDocuments.push_back(std::move(doc));
+     } else {
+@@ -467,6 +475,9 @@ Document* top_document() noexcept {
+ 
+ void update() noexcept {
+     ZoneScopedN("Dusk UI update");
++    if (romcore::enabled()) {
++        return;  // RomCore embedding: no documents, no mod/update network traffic
++    }
+     mods::queue::update();
+     mods::updates::update();
+     if (!aurora::rmlui::is_initialized()) {
+@@ -689,6 +700,9 @@ Insets safe_area_insets(Rml::Context* context) noexcept {
+ }
+ 
+ void push_toast(Toast toast) noexcept {
++    if (romcore::enabled()) {
++        return;  // RomCore embedding: Dusklight toasts are not shown (RomCore owns notices)
++    }
+     sToasts.push_back(std::move(toast));
+ }
+ 
+diff --git a/src/m_Do/m_Do_main.cpp b/src/m_Do/m_Do_main.cpp
+index 58a1f3bfbd..2515ee6013 100644
+--- a/src/m_Do/m_Do_main.cpp
++++ b/src/m_Do/m_Do_main.cpp
+@@ -49,6 +49,7 @@
+ #include "dusk/gyro.h"
+ #include "dusk/hq_minimap.hpp"
+ #include "dusk/imgui/ImGuiConsole.hpp"
++#include "dusk/romcore_embed.hpp"
+ #include "dusk/imgui/ImGuiEngine.hpp"
+ #include "dusk/interp/frame_interpolation.h"
+ #include "dusk/iso_validate.hpp"
+@@ -331,6 +332,7 @@ void main01(void) {
+         }
+ 
+         aurora_end_frame();
++        dusk::romcore::on_frame();
+ 
+         FrameMark;
+ 
+@@ -650,8 +652,11 @@ int game_main(int argc, char* argv[]) {
+     if (const char* logPath = borealis::log::file_path()) {
+         sentryOptions.attachments.emplace_back(logPath);
+     }
+-    borealis::sentry::initialize(sentryOptions);
+-    borealis::crash::install();
++    if (!dusk::romcore::enabled()) {
++        // RomCore embedding: no crash reporter / sentry (Android's own crash handling + RomCore's crash guard apply).
++        borealis::sentry::initialize(sentryOptions);
++        borealis::crash::install();
++    }
+     // TODO: How to handle this?
+     // PADSetDefaultMapping(&defaultPadMapping, PAD_TYPE_STANDARD);
+ 
+@@ -735,6 +740,11 @@ int game_main(int argc, char* argv[]) {
+     dusk::audio::SetEnableReverb(dusk::getSettings().audio.enableReverb);
+ 
+     // Run ImGui UI loop if Aurora couldn't initialize a backend
++    if (auroraInfo.backend == BACKEND_NULL && dusk::romcore::enabled()) {
++        dusk::romcore::fatal("Graphics unavailable",
++            "This device could not start a Vulkan graphics backend that Twilight Princess (Dusklight) needs.");
++        return 1;
++    }
+     if (auroraInfo.backend == BACKEND_NULL) {
+         launchUILoop();
+         borealis::shutdown();
+@@ -758,10 +768,13 @@ int game_main(int argc, char* argv[]) {
+     dusk::texture_replacements::reload();
+     dusk::ui::initialize();
+     dusk::ui::apply_scale();
+-    dusk::ui::push_document(std::make_unique<dusk::ui::Overlay>(), true, true);
+-    dusk::ui::push_document(std::make_unique<dusk::ui::TouchControls>(), false, true);
+-    dusk::ui::push_document(std::make_unique<dusk::ui::MenuBar>(), false);
+-    dusk::ui::push_document(std::make_unique<dusk::ui::CommandConsole>(), false);
++    if (!dusk::romcore::enabled()) {
++        // RomCore embedding: Dusklight's overlay, touch controls, menu bar and console are never created.
++        dusk::ui::push_document(std::make_unique<dusk::ui::Overlay>(), true, true);
++        dusk::ui::push_document(std::make_unique<dusk::ui::TouchControls>(), false, true);
++        dusk::ui::push_document(std::make_unique<dusk::ui::MenuBar>(), false);
++        dusk::ui::push_document(std::make_unique<dusk::ui::CommandConsole>(), false);
++    }
+ 
+     // Invalidate a bad saved isoPath so that Dusklight can't get blocked from starting up.
+     // This is only a metadata check; full hash verification is handled by the prelaunch UI.
+@@ -847,6 +860,14 @@ int game_main(int argc, char* argv[]) {
+         dusk::IsGameLaunched = true;
+     }
+ 
++    if (!dvd_opened && dusk::romcore::enabled()) {
++        // RomCore embedding: RomCore picks the disc and validates it up front; there is no launcher UI to fall back to.
++        dusk::romcore::fatal("Cannot start Twilight Princess",
++            "Dusklight could not open this disc image. It must be a GameCube Twilight Princess disc (GZ2E01, GZ2P01 "
++            "or GZ2J01) in ISO, CISO, GCZ, RVZ, WIA, WBFS, NFS or TGC format. Details: "
++            + dvdPath);
++        return 1;
++    }
+     if (!dvd_opened) {
+         if (dusk::getSettings().backend.isoPath.getValue().empty()) {
+             forcePreLaunchUI = true;
+@@ -932,6 +953,11 @@ int game_main(int argc, char* argv[]) {
+         mods_init(dusk::ConfigPath / "mods");
+     }
+ 
++    if (dusk::romcore::enabled()) {
++        // RomCore embedding: no prelaunch / game-mode chooser / crash-report consent / preset window. Tell the
++        // prelaunch state the game is already running and go straight to the game loop.
++        dusk::ui::prelaunch_state().firstLaunch = false;
++    } else {
+     if (!skipPreLaunchUI && showPrelaunchAfterInit) {
+         dusk::ui::push_document(std::make_unique<dusk::ui::Prelaunch>(), true);
+     }
+@@ -955,6 +981,7 @@ int game_main(int argc, char* argv[]) {
+     if (!dusk::getSettings().backend.wasPresetChosen) {
+         dusk::ui::push_document(std::make_unique<dusk::ui::PresetWindow>());
+     }
++    }  // !romcore::enabled()
+ 
+     OSReport("Starting main01 (Game Loop)...\n");
+ 
+-- 
+2.54.0 (Apple Git-157)
+

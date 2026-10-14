@@ -72,10 +72,15 @@ object RomScanner {
                 val size = if (r.isDir) 0L else r.file.length()
                 val detected = system ?: SystemDetector.detect(path, ext, r.folders, size) { readHeader(r.file) }
                 if (detected == null) continue
+                // GameCube / Wii discs: remember the 6-char disc ID (routing by game ID, e.g. Twilight Princess -> Dusklight).
+                // Reused while the file is unchanged (same size) so rescans do not touch every image again.
+                val gameId = if (r.isDir || (detected != System.GAMECUBE && detected != System.WII)) null
+                else if (prev != null && prev.sizeBytes == size && prev.gameId != null) prev.gameId
+                else com.noryan.romcore.api.DiscId.readFile(r.file)?.gameId
                 out += GameEntity(
                     id = prev?.id ?: 0, uri = path, realPath = path, fileName = name, title = cleanTitle(name),
                     system = detected.name, sizeBytes = size, coreOverride = prev?.coreOverride, favorite = prev?.favorite ?: false,
-                    lastPlayedAt = prev?.lastPlayedAt, playCount = prev?.playCount ?: 0, isDir = r.isDir
+                    lastPlayedAt = prev?.lastPlayedAt, playCount = prev?.playCount ?: 0, isDir = r.isDir, gameId = gameId
                 )
                 if (++n % 25 == 0) onProgress(n)
             }

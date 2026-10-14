@@ -70,3 +70,26 @@ object CoreSetup {
         (call(obj("com.noryan.romcore.core.primehack.PrimeHackCore"), "isPrimeTitle", title) as? Boolean)
             ?: Regex("metroid\\s*[-:._ ]*\\s*prime|prime\\s*(2|3)\\b|prime trilogy", RegexOption.IGNORE_CASE).containsMatchIn(title)
 }
+
+/** Dusklight (Twilight Princess) is a one-game core: its descriptor decides which game IDs it can run (reflective, optional module). */
+object GameSpecificCores {
+    private val TP_GC_IDS = setOf("GZ2E01", "GZ2P01", "GZ2J01")
+
+    /** Cores that can only run particular games, id -> predicate on the 6-char disc game ID (null = unknown ID). */
+    private val matchers: Map<String, (String?) -> Boolean> = mapOf("dusklight" to ::isTwilightPrincess)
+
+    fun isTwilightPrincess(gameId: String?): Boolean {
+        if (gameId == null) return false
+        val r = runCatching {
+            Class.forName("com.noryan.romcore.core.dusklight.DusklightCore").let { c ->
+                c.getMethod("isTwilightPrincessGameId", String::class.java).invoke(c.getField("INSTANCE").get(null), gameId) as? Boolean
+            }
+        }.getOrNull()
+        return r ?: (gameId in TP_GC_IDS)
+    }
+
+    fun isGameSpecific(coreId: String) = coreId in matchers
+
+    /** True when [coreId] may run the game with this disc ID (cores that are not game-specific can run anything). */
+    fun canRun(coreId: String, gameId: String?): Boolean = matchers[coreId]?.invoke(gameId) ?: true
+}

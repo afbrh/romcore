@@ -5,6 +5,7 @@ import android.os.Process
 import androidx.room.Room
 import com.noryan.romcore.core.watermelonds.RomCoreHiltApplication
 import com.noryan.romcore.data.AppDatabase
+import com.noryan.romcore.data.MIGRATION_2_3
 import com.noryan.romcore.data.Prefs
 import dagger.hilt.android.HiltAndroidApp
 
@@ -22,7 +23,7 @@ class RomCoreApp : RomCoreHiltApplication() {
         com.noryan.romcore.api.crash.RomCoreCrashGuard.install(this) // core processes: no silent relaunch after a crash
         if (!isMainProcess()) return
         CoreBootstrap.registerAll()
-        db = Room.databaseBuilder(this, AppDatabase::class.java, "romcore.db").fallbackToDestructiveMigration(true).build()
+        db = Room.databaseBuilder(this, AppDatabase::class.java, "romcore.db").addMigrations(MIGRATION_2_3).fallbackToDestructiveMigration(true).build()
         prefs = Prefs(this)
     }
 

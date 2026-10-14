@@ -1,0 +1,128 @@
+From c8e4dbdf510cca3d8e3bdd72da3149484dc6ae5c Mon Sep 17 00:00:00 2001
+From: Ry <ry@Rys-MacBook-Pro.local>
+Date: Wed, 14 Oct 2026 14:30:28 -0500
+Subject: [PATCH 1/3] RomRunner-era local patches (SDL3 java rename, libs,
+ authority)
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ cmake/AuroraSDL3Provider.cmake                |  8 ++-
+ .../apply-sdl3-java-package-rename.cmake      | 64 +++++++++++++++++++
+ .../dev/encounter/aurora/AuroraSurface.java   |  4 +-
+ 3 files changed, 74 insertions(+), 2 deletions(-)
+ create mode 100644 cmake/patches/apply-sdl3-java-package-rename.cmake
+
+diff --git a/cmake/AuroraSDL3Provider.cmake b/cmake/AuroraSDL3Provider.cmake
+index 0f148b0..14dc421 100644
+--- a/cmake/AuroraSDL3Provider.cmake
++++ b/cmake/AuroraSDL3Provider.cmake
+@@ -148,6 +148,9 @@ elseif (_aurora_sdl3_provider STREQUAL "vendor")
+       COMMAND ${CMAKE_COMMAND}
+         -DSDL_SOURCE_DIR=<SOURCE_DIR>
+         -P "${CMAKE_CURRENT_LIST_DIR}/patches/apply-sdl3-android-security-exception.cmake"
++      COMMAND ${CMAKE_COMMAND}
++        -DSDL_SOURCE_DIR=<SOURCE_DIR>
++        -P "${CMAKE_CURRENT_LIST_DIR}/patches/apply-sdl3-java-package-rename.cmake"
+       EXCLUDE_FROM_ALL
+     )
+     FetchContent_MakeAvailable(SDL)
+@@ -167,7 +170,10 @@ if (ANDROID)
+   endif ()
+   FetchContent_GetProperties(SDL SOURCE_DIR _aurora_sdl3_source_dir)
+   set(_aurora_sdl3_java_source_dir "${_aurora_sdl3_source_dir}/android-project/app/src/main/java")
+-  if (NOT IS_DIRECTORY "${_aurora_sdl3_java_source_dir}/org/libsdl/app")
++  # RomRunner integration: this checkout's SDL3 Java package was renamed from org.libsdl.app to
++  # dev.twilitrealm.dusksdl (see patches/apply-sdl3-java-package-rename.cmake) to avoid colliding
++  # with a different SDL3 point release's copy of the same classes, also embedded in RomRunner.
++  if (NOT IS_DIRECTORY "${_aurora_sdl3_java_source_dir}/dev/twilitrealm/dusksdl")
+     message(FATAL_ERROR "aurora: SDL Android Java sources were not found at ${_aurora_sdl3_java_source_dir}")
+   endif ()
+   set(AURORA_SDL3_JAVA_SOURCE_DIR "${_aurora_sdl3_java_source_dir}" CACHE INTERNAL
+diff --git a/cmake/patches/apply-sdl3-java-package-rename.cmake b/cmake/patches/apply-sdl3-java-package-rename.cmake
+new file mode 100644
+index 0000000..ddd2f0c
+--- /dev/null
++++ b/cmake/patches/apply-sdl3-java-package-rename.cmake
+@@ -0,0 +1,64 @@
++if (NOT DEFINED SDL_SOURCE_DIR)
++  message(FATAL_ERROR "SDL_SOURCE_DIR is required")
++endif ()
++
++# RomRunner integration: DuskLight is embedded in RomRunner alongside another SDL3-based core
++# (ARMSX2) that vendors a DIFFERENT SDL3 point release (3.5.0 vs this pin's 3.4.10) under the
++# same Java package, org.libsdl.app — a genuine API difference exists between the two versions
++# (SDLControllerManager.onNativePadDown/onNativePadUp gained a parameter), so simply picking one
++# copy over the other at the Android build's duplicate-class step would silently break controller
++# input in whichever core loses. Renaming this copy's Java package (and the matching native JNI
++# prefix / RegisterNatives class-path lookups) to something unique lets both coexist safely.
++set(_java_base "${SDL_SOURCE_DIR}/android-project/app/src/main/java")
++set(_old_java_dir "${_java_base}/org/libsdl/app")
++set(_new_java_dir "${_java_base}/dev/twilitrealm/dusksdl")
++
++if (EXISTS "${_new_java_dir}")
++  message(STATUS "SDL3 Java package rename patch already applied")
++  return()
++endif ()
++
++if (NOT IS_DIRECTORY "${_old_java_dir}")
++  message(FATAL_ERROR "SDL Android Java package directory is missing: ${_old_java_dir}")
++endif ()
++
++file(MAKE_DIRECTORY "${_java_base}/dev/twilitrealm")
++file(RENAME "${_old_java_dir}" "${_new_java_dir}")
++
++file(GLOB _java_files "${_new_java_dir}/*.java")
++if (NOT _java_files)
++  message(FATAL_ERROR "No Java files found after renaming to ${_new_java_dir}")
++endif ()
++foreach (_f IN LISTS _java_files)
++  file(READ "${_f}" _contents)
++  string(REPLACE "package org.libsdl.app;" "package dev.twilitrealm.dusksdl;" _contents "${_contents}")
++  file(WRITE "${_f}" "${_contents}")
++endforeach ()
++
++# Native side, part 1: the JNI export symbol prefix (SDL_android.c defines this once and reuses
++# it via the SDL_JAVA_*_INTERFACE macros for every Java_<prefix>_<Class>_<method> export).
++set(_android_c "${SDL_SOURCE_DIR}/src/core/android/SDL_android.c")
++if (NOT EXISTS "${_android_c}")
++  message(FATAL_ERROR "SDL_android.c is missing: ${_android_c}")
++endif ()
++file(READ "${_android_c}" _contents)
++string(REGEX REPLACE "SDL_JAVA_PREFIX([ \t]+)org_libsdl_app" "SDL_JAVA_PREFIX\\1dev_twilitrealm_dusksdl" _contents "${_contents}")
++# Native side, part 2: explicit RegisterNatives class-path lookups — these are hardcoded string
++# literals, not derived from SDL_JAVA_PREFIX, so they need their own replacement.
++string(REPLACE "org/libsdl/app/SDLActivity" "dev/twilitrealm/dusksdl/SDLActivity" _contents "${_contents}")
++string(REPLACE "org/libsdl/app/SDLInputConnection" "dev/twilitrealm/dusksdl/SDLInputConnection" _contents "${_contents}")
++string(REPLACE "org/libsdl/app/SDLAudioManager" "dev/twilitrealm/dusksdl/SDLAudioManager" _contents "${_contents}")
++string(REPLACE "org/libsdl/app/SDLControllerManager" "dev/twilitrealm/dusksdl/SDLControllerManager" _contents "${_contents}")
++string(REPLACE "org/libsdl/app/HIDDeviceManager" "dev/twilitrealm/dusksdl/HIDDeviceManager" _contents "${_contents}")
++file(WRITE "${_android_c}" "${_contents}")
++
++# hidapi's Android backend defines its own separate copy of the same macro.
++set(_hid_cpp "${SDL_SOURCE_DIR}/src/hidapi/android/hid.cpp")
++if (NOT EXISTS "${_hid_cpp}")
++  message(FATAL_ERROR "hid.cpp is missing: ${_hid_cpp}")
++endif ()
++file(READ "${_hid_cpp}" _contents)
++string(REGEX REPLACE "SDL_JAVA_PREFIX([ \t]+)org_libsdl_app" "SDL_JAVA_PREFIX\\1dev_twilitrealm_dusksdl" _contents "${_contents}")
++file(WRITE "${_hid_cpp}" "${_contents}")
++
++message(STATUS "Applied SDL3 Java package rename patch (org.libsdl.app -> dev.twilitrealm.dusksdl)")
+diff --git a/platforms/android/java/dev/encounter/aurora/AuroraSurface.java b/platforms/android/java/dev/encounter/aurora/AuroraSurface.java
+index 453b6e6..234da23 100644
+--- a/platforms/android/java/dev/encounter/aurora/AuroraSurface.java
++++ b/platforms/android/java/dev/encounter/aurora/AuroraSurface.java
+@@ -3,7 +3,9 @@ package dev.encounter.aurora;
+ import android.content.Context;
+ import android.view.SurfaceHolder;
+ 
+-import org.libsdl.app.SDLSurface;
++// RomRunner integration: renamed org.libsdl.app -> dev.twilitrealm.dusksdl — see
++// extern/aurora/cmake/patches/apply-sdl3-java-package-rename.cmake.
++import dev.twilitrealm.dusksdl.SDLSurface;
+ 
+ public class AuroraSurface extends SDLSurface {
+     private static native void nativeSetSurfaceReady(boolean ready);
+-- 
+2.54.0 (Apple Git-157)
+

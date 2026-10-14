@@ -1,0 +1,297 @@
+From f64b5eeb531b1fb8c07417d4da49eff85bac187e Mon Sep 17 00:00:00 2001
+From: Ry <ry@Rys-MacBook-Pro.local>
+Date: Wed, 14 Oct 2026 14:30:28 -0500
+Subject: [PATCH 1/2] RomRunner-era local patches: library module, authority,
+ launcher removal, side-loaded libmain, proguard
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ GAMESHELF_INTEGRATION.md                      | 142 ++++++++++++++++++
+ platforms/android/app/build.gradle            |  16 +-
+ platforms/android/app/proguard-rules.pro      |  10 ++
+ .../android/app/src/main/AndroidManifest.xml  |   9 +-
+ .../com/twilitrealm/dusk/DuskActivity.java    |  27 ++++
+ platforms/android/build.gradle                |   6 +-
+ 6 files changed, 203 insertions(+), 7 deletions(-)
+ create mode 100644 GAMESHELF_INTEGRATION.md
+
+diff --git a/GAMESHELF_INTEGRATION.md b/GAMESHELF_INTEGRATION.md
+new file mode 100644
+index 0000000000..bc62fc75bd
+--- /dev/null
++++ b/GAMESHELF_INTEGRATION.md
+@@ -0,0 +1,142 @@
++# DuskLight → RomRunner embedding notes
++
++RomRunner (`/Users/ry/Desktop/claude/GameShelf`) embeds this checkout's `platforms/android` module
++as a library, via `settings.gradle.kts`'s `includeBuild("../dusklight-src/platforms/android")`.
++
++## License / policy gate
++
++CC0-1.0 (public domain, see `LICENSE.md`). The README's "we do not accept contributions that are
++primarily AI-generated" clause governs pull requests back to this upstream repo — it does not
++restrict downstream reuse of CC0-licensed code in a separate project. No blocker, same conclusion
++reached for every other embedded core in RomRunner.
++
++## Local patches applied (none of these are upstreamed — this is a local, patched checkout only)
++
++1. **`platforms/android/app/build.gradle`**: `com.android.application` → `com.android.library`,
++   added `group = 'dev.twilitrealm'` / `version = 'embedded'` so RomRunner's composite build can
++   substitute `dev.twilitrealm:app` for this project.
++2. **`extern/borealis/platforms/android/gradle/borealis-application.gradle`**:
++   - Removed `applicationId`/`versionCode`/`versionName` from `defaultConfig` (invalid for a
++     library module — RomRunner, the consuming app, owns those now).
++   - Removed the `jniLibs.srcDirs = [stagedJniLibsDir]` line entirely. This module's native output
++     is hardcoded to `libmain.so` (see `extern/borealis/cmake/BorealisAndroid.cmake`'s
++     `set_target_properties(target PROPERTIES OUTPUT_NAME main)`), which is the EXACT same
++     filename PrimeHack's own Dolphin-core library uses, also embedded in RomRunner. Leaving both
++     wired into the standard jniLibs merge would let one silently win and the other's
++     `System.loadLibrary("main")` call resolve to completely wrong native code. Instead,
++     `libmain.so` is bundled as a plain RomRunner asset and side-loaded explicitly — see below.
++3. **`extern/borealis/platforms/android/java/dev/encounter/borealis/BorealisDocumentsProvider.java`**
++   (`authority()` method) + **`platforms/android/app/src/main/AndroidManifest.xml`**: changed the
++   `BorealisDocumentsProvider`'s authority from `<packageName>.documents` to
++   `<packageName>.dusklight.documents` — RetroArch's own `RetroDocumentsProvider`, already embedded
++   in RomRunner, declares the identical `${applicationId}.documents` authority, which would
++   otherwise collide once merged.
++4. **`platforms/android/app/src/main/AndroidManifest.xml`**: removed `DuskActivity`'s `LAUNCHER`
++   intent-filter category — RomRunner's own `MainActivity` is the sole launcher entry, matching
++   every other embedded core.
++5. **`platforms/android/app/src/main/java/com/twilitrealm/dusk/DuskActivity.java`**: three changes,
++   all needed together:
++   - An explicit `System.load(new File(getApplicationInfo().dataDir, "dusklight/libmain.so")...)`
++     call at the top of `onCreate()` — replacing the standard Borealis/SDL
++     `getLibraries() → System.loadLibrary("main")` mechanism, which searches `nativeLibraryDir`
++     (where `libmain.so` is deliberately absent per patch #2 above). RomRunner's
++     `DuskLightEmbeddedLauncher.ensureNativeLibInstalled()` extracts the bundled asset to this
++     exact path *before* starting the Activity, so the file already exists by the time this runs.
++   - Overrode `getLibraries()` to return `new String[0]`, so `SDLActivity.loadLibraries()` (called
++     from further up the `onCreate()` chain) doesn't *also* try `System.loadLibrary("main")` — a
++     second, bare-name load that would resolve against `nativeLibraryDir` and find PrimeHack's
++     copy instead. Safe to skip entirely: `BUILD_SHARED_LIBS=OFF` means SDL3 itself is statically
++     linked into this one `libmain.so`, so there's no separate `libSDL3.so` to load either.
++   - Overrode `getMainSharedObject()` to return the same explicit dataDir path. This was the
++     trickiest of the three to find: `SDLActivity.main()` doesn't use whatever was already
++     `System.load()`ed — it independently calls `getMainSharedObject()`
++     (default: `getApplicationInfo().nativeLibraryDir + "/libmain.so"`) and passes that path to a
++     *fresh* `dlopen()` in native code (`nativeRunMain` in `SDL_android.c`) purely to `dlsym()` the
++     `SDL_main` entry point. Left at its default, this silently `dlopen()`s PrimeHack's
++     `nativeLibraryDir` copy instead (same SONAME, different — wrong — code), producing "Couldn't
++     find function SDL_main in library .../lib/arm64/libmain.so" and a near-instant, exception-free
++     return from `main()` (looks like a clean quit, not a crash, from the Kotlin/Activity-lifecycle
++     side — this is the "why did it come back to the games list so fast" failure mode). Confirmed
++     `getMainSharedObject()` is designed to be overridden — that's what its doc comment says.
++6. **`extern/borealis/platforms/android/gradle/borealis-application.gradle`**: added
++   `consumerProguardFiles(project.file(androidConfig.proguardRules ?: 'proguard-rules.pro'))` to
++   `defaultConfig`. This is the mechanism (not `buildTypes.release.proguardFiles`, which only
++   affects a standalone build of this module) that actually propagates `-keep` rules into
++   RomRunner's own R8 pass — same lesson the RetroArch integration already learned. Matters here
++   because `androidConfig.proguardRules` in `app/build.gradle` resolves to **this module's own**
++   `platforms/android/app/proguard-rules.pro` (see #7) — not Borealis's own copy at
++   `extern/borealis/platforms/android/proguard-rules.pro`, which is a different file used only for
++   #6's `buildTypes.release.proguardFiles`.
++7. **`platforms/android/app/proguard-rules.pro`**: added `-keep class dev.twilitrealm.dusksdl.** { *; }`
++   (plus the Aurora/Borealis package equivalents, mirroring Borealis's own copy). Without this, R8
++   obfuscates/strips native-only JNI entry points like `SDLActivity.onNativeSoftReturnKey()` and
++   `SDLControllerManager.onNativeJoySensor(...)` as "unused" — nothing in *Java* calls them, only
++   `RegisterNatives` from native code does, which R8 has no visibility into. Symptom:
++   `NoSuchMethodError`/`Failed to register native method ... in ... classes2.dex` at runtime, even
++   though the method is genuinely declared in the source.
++8. **SDL3 Java package rename** (`org.libsdl.app` → `dev.twilitrealm.dusksdl`): ARMSX2 (also
++   embedded in RomRunner) vendors a *different* SDL3 point release (3.5.0 vs. this pin's 3.4.10)
++   under the identical Java package — a genuine API difference exists between them
++   (`SDLControllerManager.onNativePadDown`/`onNativePadUp` gained a parameter), so simply excluding
++   one copy at the Android build's duplicate-class step would silently break controller input in
++   whichever core lost. Renamed via a new CMake patch,
++   `extern/aurora/cmake/patches/apply-sdl3-java-package-rename.cmake`, wired into the `FetchContent`
++   step in `extern/aurora/cmake/AuroraSDL3Provider.cmake` (alongside the two patches already there)
++   — **this one persists automatically across re-fetches**, unlike patches #1–#7 above, which are
++   direct edits to tracked files and must be manually reapplied after a `git pull`/re-clone. The
++   patch renames the Java package/directory, the JNI export prefix (`SDL_JAVA_PREFIX` in
++   `SDL_android.c` and `hidapi/android/hid.cpp`), and the hardcoded `RegisterNatives` class-path
++   string literals (also in `SDL_android.c`) together, since none of these are derived from a
++   single shared constant. Three *tracked* (non-fetched) files also needed matching import/check
++   updates: `extern/aurora/cmake/AuroraSDL3Provider.cmake` and
++   `extern/borealis/cmake/BorealisAndroid.cmake` (both had a hardcoded
++   `IS_DIRECTORY ".../org/libsdl/app"` existence check), `extern/borealis/platforms/android/java/
++   dev/encounter/borealis/BorealisActivity.java` (`import org.libsdl.app.SDLActivity/SDLSurface`),
++   `extern/aurora/platforms/android/java/dev/encounter/aurora/AuroraSurface.java` (same), and
++   `extern/borealis/platforms/android/proguard-rules.pro` (the `-keep` rule itself, see #7).
++
++No custom `Application` subclass is declared anywhere in this module's manifest, so — unlike
++PrimeHack (`DolphinApplication`) and Cemu (`CemuApplication`) — no `initializeForEmbedding()` shim
++was needed in `RomRunnerApp.kt`.
++
++## Confirmed ROM launch argument
++
++`src/m_Do/m_Do_main.cpp`'s `game_main()` parses CLI args via `cxxopts`: the game file is `--dvd
++<path>` (also accepted positionally). `--backend <auto|d3d12|d3d11|metal|vulkan|null>` selects the
++graphics backend. `DuskActivity.getArguments()` reads these from the `dusk_argv` (String array) or
++`dusk_args` (single string) Intent extras — see `DuskLightEmbeddedLauncher.kt`.
++
++The engine opens the DVD path via plain SDL/C++ file I/O (no `content://` URI support for reads —
++confirmed via `extern/borealis/src/io.cpp`, which only special-cases `content://` for *write* mode).
++`DuskLightEmbeddedLauncher` resolves a real filesystem path via `SafPathUtils.realPathFromDocumentUri`
++before launching — same constraint, and same fallback (a Toast telling the user their ROMs folder
++needs to be on internal storage) `AzaharEmbeddedLauncher` already has for the same reason.
++
++## Rebuilding / updating this checkout later
++
++1. `git -C /Users/ry/Desktop/claude/dusklight-src pull` (or re-clone) — **patches #1–#7 above will
++   need to be re-applied** (direct edits to tracked files, not upstreamed). Patch #8 (the SDL3 Java
++   package rename) re-applies itself automatically on the next `cmake --preset` — it's a
++   `PATCH_COMMAND` hook, not a tracked-file edit. Diff against this file's description, or keep a
++   local patch/diff file if #1–#7 need to happen often.
++2. Rebuild the native library:
++   ```
++   export ANDROID_HOME=/Users/ry/Library/Android/sdk
++   export ANDROID_NDK_VERSION=29.0.14206865
++   export PATH="$ANDROID_HOME/cmake/3.31.6/bin:$PATH"
++   cd /Users/ry/Desktop/claude/dusklight-src
++   cmake --preset android-arm64
++   cmake --build --preset android-arm64
++   ```
++3. Strip debug symbols (the raw build output is ~340MB; stripped is ~45MB) and copy into
++   RomRunner's assets, replacing the existing copies:
++   ```
++   NDK=/Users/ry/Library/Android/sdk/ndk/29.0.14206865
++   "$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-strip" --strip-debug --strip-unneeded \
++     build/android-arm64/libmain.so -o /tmp/libmain_stripped.so
++   cp /tmp/libmain_stripped.so ../GameShelf/app/src/main/assets/dusklight/libmain.so
++   rsync -a --delete res/ ../GameShelf/app/src/main/assets/res/
++   ```
++4. `cd ../GameShelf && ./gradlew :app:assembleDebug` (same composite-build wiring as every other
++   embedded core — no other steps needed unless DuskLight's own Gradle/manifest structure changed
++   upstream, in which case re-check patches #1–#5 above still apply cleanly).
+diff --git a/platforms/android/app/build.gradle b/platforms/android/app/build.gradle
+index aba966b448..3ce2eb43a6 100644
+--- a/platforms/android/app/build.gradle
++++ b/platforms/android/app/build.gradle
+@@ -1,5 +1,19 @@
+ plugins {
+-    id 'com.android.application'
++    id 'com.android.library'
++}
++
++// RomRunner integration: consumed as a library module via composite build (see
++// GameShelf/settings.gradle.kts / GAMESHELF_INTEGRATION.md), mirroring the same convention
++// already used for azahar-src/armsx2-src/primehack-src/cemu-src.
++group = 'dev.twilitrealm'
++version = 'embedded'
++
++// RomRunner integration: declared explicitly rather than relying on borealis-application.gradle's
++// own `compileSdk = androidConfig.compileSdk ?: 37` fallback below — AGP validates that a library
++// module's compileSdk is set before that shared script's `android {}` block ever runs, so the
++// fallback alone isn't sufficient here.
++android {
++    compileSdk = 37
+ }
+ 
+ def duskRepoDir = rootProject.projectDir.parentFile.parentFile
+diff --git a/platforms/android/app/proguard-rules.pro b/platforms/android/app/proguard-rules.pro
+index 308a46ab83..898397f80f 100644
+--- a/platforms/android/app/proguard-rules.pro
++++ b/platforms/android/app/proguard-rules.pro
+@@ -1 +1,11 @@
+ -keep class dev.twilitrealm.dusk.DuskActivity { *; }
++# RomRunner integration: this is the file actually wired as consumerProguardFiles (see
++# borealis-application.gradle's defaultConfig) — Borealis's OWN copy of proguard-rules.pro (used
++# only for this module's own standalone release build, not propagated to a consuming app) has the
++# equivalent SDL/Aurora/Borealis JNI keep rules, but they need to ALSO live here to actually reach
++# RomRunner's own R8 pass. Without this, R8 strips/renames native-only JNI entry points like
++# SDLControllerManager.onNativeJoySensor() as "unused"/obfuscatable, since RegisterNatives calls
++# from native code aren't a call site R8 can see.
++-keep class dev.twilitrealm.dusksdl.** { *; }
++-keep class dev.encounter.aurora.** { *; }
++-keep class dev.encounter.borealis.** { *; }
+diff --git a/platforms/android/app/src/main/AndroidManifest.xml b/platforms/android/app/src/main/AndroidManifest.xml
+index 8dc7bf3236..0e5aa43847 100644
+--- a/platforms/android/app/src/main/AndroidManifest.xml
++++ b/platforms/android/app/src/main/AndroidManifest.xml
+@@ -28,7 +28,7 @@
+ 
+         <provider
+             android:name="dev.encounter.borealis.BorealisDocumentsProvider"
+-            android:authorities="${applicationId}.documents"
++            android:authorities="${applicationId}.dusklight.documents"
+             android:exported="true"
+             android:grantUriPermissions="true"
+             android:permission="android.permission.MANAGE_DOCUMENTS">
+@@ -37,6 +37,9 @@
+             </intent-filter>
+         </provider>
+ 
++        <!-- RomRunner integration: LAUNCHER intent-filter removed — RomRunner's own MainActivity
++             is the only launcher entry (mirrors PrimeHack/Azahar/ARMSX2/Cemu). RomRunner launches
++             DuskActivity directly by explicit component (see DuskLightEmbeddedLauncher.kt). -->
+         <activity
+             android:name="dev.twilitrealm.dusk.DuskActivity"
+             android:alwaysRetainTaskState="true"
+@@ -45,10 +48,6 @@
+             android:label="@string/app_name"
+             android:launchMode="singleInstance"
+             android:preferMinimalPostProcessing="true">
+-            <intent-filter>
+-                <action android:name="android.intent.action.MAIN" />
+-                <category android:name="android.intent.category.LAUNCHER" />
+-            </intent-filter>
+             <intent-filter>
+                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+             </intent-filter>
+diff --git a/platforms/android/app/src/main/java/com/twilitrealm/dusk/DuskActivity.java b/platforms/android/app/src/main/java/com/twilitrealm/dusk/DuskActivity.java
+index 4c1d8d41eb..c9b982fd2c 100644
+--- a/platforms/android/app/src/main/java/com/twilitrealm/dusk/DuskActivity.java
++++ b/platforms/android/app/src/main/java/com/twilitrealm/dusk/DuskActivity.java
+@@ -17,9 +17,36 @@ public class DuskActivity extends BorealisActivity {
+     @Override
+     protected void onCreate(Bundle savedInstanceState) {
+         extractBundledMods();
++        // RomRunner integration: "main" is loaded explicitly from a private-storage copy
++        // (extracted by DuskLightEmbeddedLauncher.ensureNativeLibInstalled before this Activity
++        // is even started) rather than via the standard Borealis getLibraries()/
++        // SDL.loadLibrary("main") mechanism below, which searches nativeLibraryDir — this
++        // module's own libmain.so is deliberately NOT packaged there (see
++        // borealis-application.gradle) because it shares its exact output filename with
++        // PrimeHack's own Dolphin-core libmain.so, also embedded in RomRunner; letting both into
++        // the same nativeLibraryDir would silently satisfy whichever core calls
++        // System.loadLibrary("main") first with the OTHER core's native code.
++        System.load(new File(getApplicationInfo().dataDir, "dusklight/libmain.so").getAbsolutePath());
+         super.onCreate(savedInstanceState);
+     }
+ 
++    @Override
++    protected String[] getLibraries() {
++        // Loaded explicitly above instead of via the standard mechanism — see onCreate().
++        return new String[0];
++    }
++
++    @Override
++    protected String getMainSharedObject() {
++        // RomRunner integration: the default implementation (SDLActivity.getMainSharedObject())
++        // returns getApplicationInfo().nativeLibraryDir + "/libmain.so" — RomRunner's actual
++        // nativeLibraryDir contains PrimeHack's own Dolphin-core libmain.so (see onCreate()'s
++        // comment), so that default would hand SDL_RunApp a dlsym(SDL_main) lookup against the
++        // WRONG native library entirely. Point it at the same explicit path already System.load()ed
++        // in onCreate() instead.
++        return new File(getApplicationInfo().dataDir, "dusklight/libmain.so").getAbsolutePath();
++    }
++
+     // Bundled mod packages ship as APK assets, which the native loader cannot read directly;
+     // mirror them into internal storage (the loader's CachePath/bundled_mods search dir)
+     // before SDL_main starts.
+diff --git a/platforms/android/build.gradle b/platforms/android/build.gradle
+index 4b1f3fb3f2..e3807a3f1b 100644
+--- a/platforms/android/build.gradle
++++ b/platforms/android/build.gradle
+@@ -1,3 +1,7 @@
+ plugins {
+-    id 'com.android.application' version '9.1.1' apply false
++    // RomRunner integration: bumped to 9.2.1 and switched to com.android.library — this module is
++    // now a library (see app/build.gradle) consumed via composite build, and RomRunner's project
++    // standardizes on AGP 9.2.1 (a single AGP version is required across a whole Gradle build);
++    // matches the same fix already applied for RetroArch's own composite-build inclusion.
++    id 'com.android.library' version '9.2.1' apply false
+ }
+-- 
+2.54.0 (Apple Git-157)
+

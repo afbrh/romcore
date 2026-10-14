@@ -1,0 +1,29 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- NOTE for :app: the Dusklight library's <application> declares icon/label/theme/networkSecurityConfig/
+         enableOnBackInvokedCallback; the final app's own <application> already replaces/removes those
+         (tools:replace / tools:remove in app/src/main/AndroidManifest.xml). -->
+    <application>
+
+        <!-- RomCore is the front-end: Dusklight's stock launcher Activity (it also carried the USB-attach filter) is dropped and
+             replaced by the RomCore subclass below. -->
+        <activity android:name="dev.twilitrealm.dusk.DuskActivity" tools:node="remove" />
+
+        <!-- Dusklight's DocumentsProvider exposed its data dir to the system file picker; RomCore does not want that. -->
+        <provider android:name="dev.encounter.borealis.BorealisDocumentsProvider" tools:node="remove" />
+
+        <!-- The whole Dusklight runtime lives in its own process so libdusklight_main.so (SDL3 statically linked), its Vulkan
+             device and SDL state never share an address space with the other RomCore cores. The process is ended on Close Game. -->
+        <activity
+            android:name="com.noryan.romcore.core.dusklight.DusklightActivity"
+            android:process=":dusklight"
+            android:taskAffinity="com.noryan.romcore.dusklight"
+            android:launchMode="singleTask"
+            android:exported="false"
+            android:alwaysRetainTaskState="true"
+            android:screenOrientation="sensorLandscape"
+            android:preferMinimalPostProcessing="true"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
+            android:configChanges="layoutDirection|locale|grammaticalGender|fontScale|fontWeightAdjustment|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|density" />
+    </application>
+</manifest>
