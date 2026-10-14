@@ -1,0 +1,52 @@
+From 27acd4441339ca85dd2b485e46784d120b2cf7e0 Mon Sep 17 00:00:00 2001
+From: Ry <ry@Rys-MacBook-Pro.local>
+Date: Tue, 13 Oct 2026 23:24:13 -0500
+Subject: [PATCH 2/2] RomCore: ROMCORE_NAND_ROOT env points the Wii NAND at the
+ portable save folder before Config::Init; crash-recovery restore after config
+ load
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ Source/Core/UICommon/UICommon.cpp | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/Source/Core/UICommon/UICommon.cpp b/Source/Core/UICommon/UICommon.cpp
+index 677d9eccae..f9e6f2b9d3 100644
+--- a/Source/Core/UICommon/UICommon.cpp
++++ b/Source/Core/UICommon/UICommon.cpp
+@@ -3,6 +3,7 @@
+ 
+ #include "UICommon/UICommon.h"
+ 
++#include <cstdlib>
+ #include <algorithm>
+ #include <clocale>
+ #include <cmath>
+@@ -125,7 +126,11 @@ static void RefreshConfig()
+ 
+ void Init()
+ {
+-  Core::RestoreWiiSettings(Core::RestoreReason::CrashRecovery);
++  // RomCore: Config::Init() may touch the Wii NAND (SYSCONF config layer) before Dolphin.ini [General] NANDRootPath is applied
++  // (InitCustomPaths() runs from the config-changed callback), which created an empty second NAND under the default
++  // <user dir>/Wii on every launch. The host exports the portable NAND root before native init; use it from the start.
++  if (const char* romcore_nand = std::getenv("ROMCORE_NAND_ROOT"); romcore_nand != nullptr && *romcore_nand != '\0')
++    File::SetUserPath(D_WIIROOT_IDX, romcore_nand);
+ 
+   Config::Init();
+   const auto config_changed_callback = [] {
+@@ -134,6 +139,11 @@ void Init()
+   };
+   s_config_changed_callback_id = Config::AddConfigChangedCallback(config_changed_callback);
+   Config::AddLayer(ConfigLoaders::GenerateBaseConfigLoader());
++
++  // RomCore: the Wii NAND root (Dolphin.ini [General] NANDRootPath) lives in the portable save folder. InitCustomPaths() has
++  // pointed D_WIIROOT_IDX there by now; running the crash-recovery restore BEFORE the config was loaded created an empty
++  // NAND skeleton (fst.bin, shared2/sys/SYSCONF) at the default <user dir>/Wii on every launch.
++  Core::RestoreWiiSettings(Core::RestoreReason::CrashRecovery);
+   SConfig::Init();
+   g_Config.Init();
+   Discord::Init();
+-- 
+2.54.0 (Apple Git-157)
+

@@ -58,5 +58,8 @@ object DolphinCore : CoreDescriptor {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 
-    fun register() = CoreRegistry.register(this)
+    fun register() {
+        DolphinSaveData.registerMigrations()
+        CoreRegistry.register(this)
+    }
 }

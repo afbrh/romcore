@@ -1,0 +1,29 @@
+From 2d7b090d8cdee205f30d82c187b545c74ab67f3f Mon Sep 17 00:00:00 2001
+From: Ry <ry@Rys-MacBook-Pro.local>
+Date: Tue, 13 Oct 2026 22:18:19 -0500
+Subject: [PATCH 1/2] RomCore: flush dirty raw GC memory cards every 2 s (was
+ 15 s) so a process kill cannot lose the last save
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ Source/Core/Core/HW/GCMemcard/GCMemcardRaw.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Source/Core/Core/HW/GCMemcard/GCMemcardRaw.cpp b/Source/Core/Core/HW/GCMemcard/GCMemcardRaw.cpp
+index 1a8644b..e667b12 100644
+--- a/Source/Core/Core/HW/GCMemcard/GCMemcardRaw.cpp
++++ b/Source/Core/Core/HW/GCMemcard/GCMemcardRaw.cpp
+@@ -100,7 +100,9 @@ void MemoryCard::FlushThread()
+ 
+   Common::SetCurrentThreadName(fmt::format("Memcard {} flushing thread", m_card_slot).c_str());
+ 
+-  const auto flush_interval = std::chrono::seconds(15);
++  // RomCore: a dirty card is written back every 2 s instead of 15 s. RomCore kills this process right after Close Game / when
++  // the app is backgrounded and portable save data must not lose the last save (the exit flush only runs on a clean shutdown).
++  const auto flush_interval = std::chrono::seconds(2);
+ 
+   while (true)
+   {
+-- 
+2.54.0 (Apple Git-157)
+

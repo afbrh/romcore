@@ -78,5 +78,8 @@ object PrimeHackCore : CoreDescriptor {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
-    fun register() = CoreRegistry.register(this)
+    fun register() {
+        PrimeHackSaveData.registerMigrations()
+        CoreRegistry.register(this)
+    }
 }

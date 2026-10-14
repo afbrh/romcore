@@ -56,7 +56,10 @@ object Armsx2Core : CoreDescriptor {
         }
     }
 
-    fun register() = CoreRegistry.register(this)
+    fun register() {
+        Armsx2SaveData.registerMigrations()
+        CoreRegistry.register(this)
+    }
 
     // ---- BIOS handling (shared by the shell, e.g. a settings screen) ---------------------------------------------------
 

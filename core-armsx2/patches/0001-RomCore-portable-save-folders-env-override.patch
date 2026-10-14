@@ -1,0 +1,51 @@
+From 31b2653b728d6d7ef48ba2b8a55291b5a5763500 Mon Sep 17 00:00:00 2001
+From: Ry <ry@Rys-MacBook-Pro.local>
+Date: Tue, 13 Oct 2026 22:18:20 -0500
+Subject: [PATCH] RomCore: ARMSX2_MEMCARDS_DIR / ARMSX2_SAVESTATES_DIR env
+ override of [Folders] MemoryCards/Savestates before the folders load
+ (portable save data); memcard backup follows the card folder
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ platforms/android/app/src/main/cpp/native-lib.cpp        | 9 +++++++++
+ .../app/src/main/java/com/armsx2/MemoryCardBackup.kt     | 4 +++-
+ 2 files changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/platforms/android/app/src/main/cpp/native-lib.cpp b/platforms/android/app/src/main/cpp/native-lib.cpp
+index 0eff15b..a9aafae 100644
+--- a/platforms/android/app/src/main/cpp/native-lib.cpp
++++ b/platforms/android/app/src/main/cpp/native-lib.cpp
+@@ -450,6 +450,15 @@ Java_kr_co_iefriends_pcsx2_NativeApp_initialize(JNIEnv *env, jclass clazz,
+     if (!_szBiosFolder.empty())
+         si.SetStringValue("Folders", "Bios", _szBiosFolder.c_str());
+ 
++    // RomCore: portable save data. The host (RomCore) exports the absolute folders for memory cards and PCSX2 save states
++    // BEFORE this call (android.system.Os.setenv in the :armsx2 process); applying them here, after the first-run defaults
++    // above and before LoadStartupSettings() reads [Folders], makes them valid for the very first boot (a value pushed after
++    // initialize() would only apply from the next launch). Re-asserted on every launch, so a moved save folder is followed.
++    if (const char* mcd = getenv("ARMSX2_MEMCARDS_DIR"); mcd && *mcd)
++        si.SetStringValue("Folders", "MemoryCards", mcd);
++    if (const char* sst = getenv("ARMSX2_SAVESTATES_DIR"); sst && *sst)
++        si.SetStringValue("Folders", "Savestates", sst);
++
+     // Mirror Username from secrets → BASE so Achievements::Initialize's
+     // GetBaseStringSettingValue("Achievements","Username") finds it on a
+     // returning user even after the base settings layer is loaded from disk.
+diff --git a/platforms/android/app/src/main/java/com/armsx2/MemoryCardBackup.kt b/platforms/android/app/src/main/java/com/armsx2/MemoryCardBackup.kt
+index 1763345..33b4e4e 100644
+--- a/platforms/android/app/src/main/java/com/armsx2/MemoryCardBackup.kt
++++ b/platforms/android/app/src/main/java/com/armsx2/MemoryCardBackup.kt
+@@ -130,7 +130,9 @@ object MemoryCardBackup {
+     // ---- locations ------------------------------------------------------------------------
+ 
+     fun cardsDir(context: Context): File =
+-        File(MainActivityRuntime.assetCopyRoot(context), CARDS_DIR)
++        // RomCore: the host relocates the cards to its portable save folder (ARMSX2_MEMCARDS_DIR, see native-lib.cpp initialize).
++        runCatching { android.system.Os.getenv("ARMSX2_MEMCARDS_DIR") }.getOrNull()?.takeIf { it.isNotBlank() }?.let(::File)
++            ?: File(MainActivityRuntime.assetCopyRoot(context), CARDS_DIR)
+ 
+     /**
+      * Sibling of the cards folder, never inside it. The core enumerates cards by scanning
+-- 
+2.54.0 (Apple Git-157)
+

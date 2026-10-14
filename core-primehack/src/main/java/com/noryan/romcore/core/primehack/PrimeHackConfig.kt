@@ -85,6 +85,9 @@ object PrimeHackConfig {
     fun applyEarly(ctx: Context) {
         val dir = DirectoryInitialization.getUserDirectoryPath(ctx) ?: return
         enforceVideoSafety(File(File(dir, "Config").also { it.mkdirs() }, "GFX.ini"))
+        // Portable save data: memory cards / Wii NAND / SD image live under <saveRoot>/primehack (rewritten every launch, here
+        // because UICommon::Init reads Dolphin.ini once at native init - a value written later applies one launch late).
+        runCatching { PrimeHackSaveData.applyIni(ctx, dir) }
     }
 
     private fun enableGeckoCodes(file: File, names: List<String>) {

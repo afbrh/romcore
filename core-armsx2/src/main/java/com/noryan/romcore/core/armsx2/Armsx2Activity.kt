@@ -31,6 +31,8 @@ class Armsx2Activity : MainActivityRuntime() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // Before anything composes: ARMSX2's banners/toasts/dialogs route to RomCore, its frontend surfaces never draw.
         HostUi.owned = true
+        // Portable save data: memory cards + PCSX2 save states live in <saveRoot>/armsx2. Must precede super.onCreate (native init).
+        Armsx2SaveData.prepare(this)
         Armsx2Prefs.prepare(
             this,
             intent.getStringExtra(Armsx2Core.EXTRA_ROM_PATH),

@@ -26,7 +26,7 @@ internal object DolphinRuntime {
             GCAdapter.manager = it
             WiimoteAdapter.manager = it
         }
-        DolphinDefaults.apply(DirectoryInitialization.getUserDirectoryPath(app))
+        DolphinDefaults.apply(DirectoryInitialization.getUserDirectoryPath(app), app) // also points the engine at <root>/dolphin (save data)
         DirectoryInitialization.initializeBlocking(app)
         initialized = true
     }

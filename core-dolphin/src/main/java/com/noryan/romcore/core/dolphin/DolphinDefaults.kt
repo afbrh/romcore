@@ -52,8 +52,9 @@ internal object DolphinDefaults {
         ),
     )
 
-    fun apply(userDir: File) {
+    fun apply(userDir: File, ctx: android.content.Context? = null) {
         val cfg = File(userDir, "Config").apply { mkdirs() }
+        if (ctx != null) DolphinSaveData.applyIni(ctx, userDir) // portable save data paths, every launch, before native init
         for ((file, sections) in ENFORCED) mergeIni(File(cfg, file), sections)
         if (File(cfg, MARKER).exists()) return
         for ((file, sections) in DEFAULTS) mergeIni(File(cfg, file), sections)
