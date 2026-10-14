@@ -38,3 +38,30 @@ per-game options). The word "RetroArch" is not shown to users. The libretro fron
 GPL-3.0 software (c) the RetroArch team and the cores keep their own licenses/copyrights; those notices are preserved
 here, in the source headers and in the shipped license files. Internal names (module, package, process `:retroarch`,
 `retroarch/` data directory) are unchanged implementation details.
+
+## CRT shader (NES / SNES only)
+`assets/retroarch_shaders/romcore-crt.glsl` + `romcore-crt.glslp` are RomCore's own code (GPL-3.0-or-later), written from scratch
+(general public CRT-emulation ideas only; nothing copied from third-party shaders). Single pass, 5 texture taps, GLSL ES 1.00 style
+(no `#version` line, so it works on GLES2/GLES3 through RetroArch's GL driver). Look: scanlines tied to the source line count scaled
+to the output (analytically box-filtered, so no moire at 1080p/non-integer scale; brighter pixels widen the beam like a real tube;
+fade-out when a source line covers < 4 output pixels, e.g. bsnes 448-line hi-res/interlace), 3-pixel RGB aperture-grille mask,
+sharp-bilinear horizontal pixels with a soft beam, light bloom. FLAT: no curvature, corner rounding, vignette or bezel.
+Tunables are `#define`s at the top of the .glsl: `SCANLINE_STRENGTH 0.55`, `BEAM_WIDEN 0.55`, `MASK_STRENGTH 0.35`,
+`BEAM_SOFTNESS 0.35`, `EDGE_SOFT_PX 2.0`, `BLOOM 0.14`, `BRIGHTNESS_COMP 1.06`, `LINE_FADE_PX/LINE_FULL_PX 2/4`.
+
+Wiring (`CrtShader.kt`, `RaFiles.writeConfig`, written in the shell process in `launchIntent`): this RetroArch build has no `video_shader`
+config key, so the preset is installed to `<ext files>/retroarch/shaders/` (re-copied on every APK update) as `global.glslp` and
+`rgui_config_directory` points there; `video_shader_enable=true`, `auto_shaders_enable=true`. For every other system (and when the
+pref is off) the shader keys are `false`/empty and `global.glslp` is deleted, so nothing sticks. Core aspect and `video_smooth`/
+`video_scale_integer` are untouched (preset's `filter_linear0=true` filters the source for pass 0).
+Pref: boolean `retro_crt_filter` in SharedPreferences file `romcore` (default true, no UI yet; `CrtShader.PREF_KEY`).
+
+Device verification checklist (when the Thor is free):
+1. Install, launch NES (Super Mario Bros.nes, The Legend of Zelda.nes) and SNES (Super Mario World, Super Metroid, ALttP): scanlines + faint
+   RGB stripes + soft glow, rectangular flat image, no dark corners; screenshot each, then set `retro_crt_filter=false` and compare.
+2. fps still ~60 (no dropped frames, GPU not pegged).
+3. `adb logcat -s RetroArch` : expect `[Shaders] Shader preset found at ".../shaders/global.glslp"`, `[GLSL] Found GLSL vertex/fragment shader`,
+   `Linking GLSL program`; no `Failed to compile` / `Failed to parse GLSL shader` / `Failed to apply shader`. Check no on-screen "Loading shader" text.
+4. Non-NES/SNES unaffected: GBA (Metroid Fusion), plus one of N64/Genesis/PS1; `global.glslp` must be gone after such a launch, logcat shows no `[Shaders]` preset.
+5. bsnes hi-res/interlaced game (e.g. Seiken Densetsu 3 / Kirby's Dream Land 3 menus or any 512x448 screen): no moire, scanlines faded.
+6. Compare 4:3 aspect on 1920x1080 (viewport 1440x1080, ~5.6x horizontal, 4.5x vertical): look for uneven line thickness (moire).

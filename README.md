@@ -15,6 +15,9 @@ JAVA_HOME=<JDK17>/Contents/Home, ANDROID_HOME, VCPKG_ROOT=<cemu-src>/dependencie
 No ROMs, BIOS, keys or firmware are included. Switch needs your own prod.keys + firmware; PS2 needs your BIOS.
 Known license issues before distributing: Azahar (GPL-2.0-only) vs GPLv3 code; genesis_plus_gx is non-commercial.
 
+## NES/SNES CRT filter
+NES and SNES libretro cores automatically get a flat CRT shader (scanlines, aperture grille, soft beam, bloom; no curvature). Other systems never do. Turn off with the boolean pref `retro_crt_filter` in SharedPreferences `romcore` (default true, no UI yet). Details, tunables and device checklist: core-retroarch/LICENSES-cores.md.
+
 ## Main screen (app shell)
 Controller-first, no popups (inline fold-downs). Top row: SETTINGS gear (upper left), centered tab row `GAMES` + one tab per
 collection + `+` (new collection). L1/R1 cycle the content tabs (GAMES and collections) only; A selects, X / Menu / long-press

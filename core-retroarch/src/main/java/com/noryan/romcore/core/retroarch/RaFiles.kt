@@ -30,7 +30,11 @@ internal object RaFiles {
         return dest.absolutePath
     }
 
-    fun writeConfig(ctx: Context, spec: CoreSpec): File {
+    /** [crtFilter] = the user's `retro_crt_filter` pref; the CRT shader is only ever applied to NES/SNES cores. */
+    fun writeConfig(ctx: Context, spec: CoreSpec, crtFilter: Boolean = true): File {
+        val crt = crtFilter && CrtShader.appliesTo(spec)
+        val shadersDir: File? = if (crt) runCatching { CrtShader.install(ctx) }.getOrNull() else null
+        if (shadersDir == null) CrtShader.uninstallAutoPreset(ctx)
         val base = baseDir(ctx)
         // Portable save data: battery saves (.srm/.rtc/.eep/.mpk/.fla, SwanStation memcards) and RA's own states live in the
         // save root. writeConfig runs in the shell process inside launchIntent, i.e. before the :retroarch process or
@@ -85,7 +89,6 @@ internal object RaFiles {
             "video_vsync" to "true",
             "video_smooth" to "false",
             "video_threaded" to "false",
-            "video_shader_enable" to "false",
             "video_scale_integer" to "false",
             "video_aspect_ratio_auto" to "true",
             "video_max_swapchain_images" to "3",
@@ -101,6 +104,7 @@ internal object RaFiles {
             "run_ahead_enabled" to "false",
             "fastforward_ratio" to "1.0",
         )
+        cfg.putAll(CrtShader.configKeys(shadersDir))
         cfg.putAll(spec.cfg)
         // RomCore owns all UI and the device has physical controls: no on-screen overlay/gamepad, whatever a core spec says.
         cfg["input_overlay_enable"] = "false"
