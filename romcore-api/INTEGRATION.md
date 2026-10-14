@@ -158,3 +158,9 @@ no `stateNotNeeded` / `excludeFromRecents` / `noHistory` change is needed or rel
    process's started Services are stopped (Eden's `ForegroundService` is START_STICKY and would otherwise resurrect an empty `:eden`).
 5. A core process that starts without any stamped Activity within 5 s (sticky-service resurrection) stops its services and exits.
 Pure logic + unit tests: `CrashLogic.kt`, `CrashLogicTest`. Debug aid: `adb shell run-as com.noryan.romcore cat files/romcore_crash.log`.
+
+## Portable save data (automatic for shared-menu states; per-core mapping in SAVEDATA.md)
+
+Save states made from the shared menu (`CoreSessionBase.statePath/thumbnailPath`) live in the portable save root
+`<root>/states/<coreId>/<gameKey>/slotN`, not in `filesDir`. `SaveRoot.current(ctx)` gives the root in any process (the Intent extra
+`romcore.saveRoot` is adopted automatically before your Activity's onCreate). Engine-native saves: see `SAVEDATA.md`.

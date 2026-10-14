@@ -84,6 +84,7 @@ object RomCoreCrashGuard {
 
     private fun onPreCreate(app: Application, proc: String, a: Activity) {
         val intent = a.intent ?: return
+        runCatching { com.noryan.romcore.api.save.SaveRoot.adopt(intent) } // before any engine code: where the portable save data lives
         val id = intent.getStringExtra(EXTRA_LAUNCH_ID) ?: return
         sawLaunch = true
         val store = store(app)

@@ -72,6 +72,7 @@ fun RomCoreRoot(vm: MainViewModel) {
     val setup by vm.setup.collectAsStateWithLifecycle()
     val romPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { it?.let(vm::pickRom) }
     val biosPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { it?.let(vm::pickBios) }
+    val savePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { it?.let(vm::pickSave) }
     val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(owner) {
         val ob = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) vm.refreshAccess() }
@@ -91,8 +92,10 @@ fun RomCoreRoot(vm: MainViewModel) {
                         onPick = { if (roms) romPicker.launch(null) else biosPicker.launch(null) },
                         onSkipOrCancel = { if (roms) vm.cancelSetup() else vm.skipBios() })
                 }
+                s is Setup.ChooseSave -> SaveChooseScreen(s.candidates, s.cancellable, onChoose = vm::chooseSave, onSearchAgain = vm::searchSaveAgain,
+                    onPick = { savePicker.launch(null) }, onCancel = vm::cancelSetup)
                 s is Setup.NotFound -> NotFoundScreen(s.cancellable, onPick = { romPicker.launch(null) }, onSearchAgain = { vm.startRomSearch() }, onCancel = vm::cancelSetup)
-                else -> MainScreen(vm, pickRom = { romPicker.launch(null) }, pickBios = { biosPicker.launch(null) })
+                else -> MainScreen(vm, pickRom = { romPicker.launch(null) }, pickBios = { biosPicker.launch(null) }, pickSave = { savePicker.launch(null) })
             }
         }
     }
@@ -104,7 +107,7 @@ internal fun LogoMark(size: Int) {
 }
 
 @Composable
-private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> Unit) {
+private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> Unit, pickSave: () -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
@@ -137,7 +140,7 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
             when (tab) {
                 0 -> GamesTab(vm)
                 1 -> SystemsTab(vm)
-                else -> SettingsTab(vm, pickRom, pickBios)
+                else -> SettingsTab(vm, pickRom, pickBios, pickSave)
             }
         }
         Text("L1/R1 TABS    A SELECT    X OPTIONS", Modifier.fillMaxWidth().padding(8.dp), style = MaterialTheme.typography.labelSmall,
@@ -227,7 +230,7 @@ private fun SystemsTab(vm: MainViewModel) {
 }
 
 @Composable
-private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> Unit) {
+private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> Unit, pickSave: () -> Unit) {
     val ctx = LocalContext.current
     val romDir by vm.romDir.collectAsStateWithLifecycle()
     val biosDir by vm.biosDir.collectAsStateWithLifecycle()
@@ -235,6 +238,10 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
     val biosNote by vm.biosNote.collectAsStateWithLifecycle()
     val status by vm.status.collectAsStateWithLifecycle()
     val games by vm.games.collectAsStateWithLifecycle()
+    val saveInfo by vm.saveInfo.collectAsStateWithLifecycle()
+    val saveStatus by vm.saveStatus.collectAsStateWithLifecycle()
+    val saveWarning by vm.saveWarning.collectAsStateWithLifecycle()
+    val saveOthers by vm.saveOthers.collectAsStateWithLifecycle()
     var open by remember { mutableStateOf<String?>(null) }
     fun toggle(k: String) { open = if (open == k) null else k }
     val rows = remember(vm.cores) { CoreRows.of(vm.cores, CoreBootstrap::versionOf) }
@@ -271,6 +278,21 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
             if (biosNote.isNotEmpty()) item { Note(biosNote) }
             biosLines.forEach { l -> item { Note(l) } }
             item { Note("Copies PS2 BIOS, Switch prod.keys + firmware and PS1 and other console BIOS into the cores. Your files are only read; newer copies are never overwritten.") }
+        }
+        item { Section("SAVE DATA FOLDER") }
+        item {
+            FocusLine(if (saveWarning != null) "APP STORAGE (WARNING)" else saveInfo?.path?.substringAfterLast('/') ?: "-",
+                right = saveInfo?.let { com.noryan.romcore.api.save.SaveRoot.sizeLabel(it.bytes) }, onClick = { toggle("save") }, onAlt = { toggle("save") })
+        }
+        if (saveWarning != null) item { Note("WARNING: $saveWarning") }
+        if (open == "save") {
+            item { Note(saveInfo?.path ?: "Not set up yet") }
+            saveInfo?.let { i -> item { Note("${i.dataFiles}${if (i.capped) "+" else ""} save files, ${com.noryan.romcore.api.save.SaveRoot.sizeLabel(i.bytes)}, last changed ${saveDate(i.lastModified)}") } }
+            item { FocusLine("SEARCH AGAIN", right = "AUTO-FIND", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.searchSaveAgain() } }
+            item { FocusLine("PICK FOLDER...", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { pickSave() } }
+            if (saveStatus.isNotEmpty()) item { Note("STATUS: $saveStatus") }
+            saveOthers.forEach { o -> item(key = "so:${o.path}") { FocusLine("USE ${o.path}", right = com.noryan.romcore.api.save.SaveRoot.sizeLabel(o.bytes), indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.chooseSave(o.path) } } }
+            item { Note("All game saves and save states of every emulator live in this one folder (named ${com.noryan.romcore.api.save.SaveRoot.FOLDER_NAME}). Copy it to another device's ROMs folder and RomCore finds it by itself. Shader caches, configs, keys and BIOS are not stored there.") }
         }
         item { Section("INSTALLED CORES (${rows.size})") }
         if (rows.isEmpty()) item { Note("No cores are installed in this build.") }

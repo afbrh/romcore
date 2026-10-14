@@ -17,6 +17,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.noryan.romcore.data.FolderSearch
+import com.noryan.romcore.data.SaveDiscovery
+import com.noryan.romcore.api.save.SaveRoot
 import com.noryan.romcore.ui.components.FocusLine
 import com.noryan.romcore.ui.components.ActionButton
 
@@ -120,3 +122,35 @@ fun NotFoundScreen(cancellable: Boolean, onPick: () -> Unit, onSearchAgain: () -
         if (cancellable) FocusLine("CANCEL", Modifier.width(460.dp), center = true, style = MaterialTheme.typography.titleMedium) { onCancel() }
     }
 }
+
+/** Several `_romcore-save-data` folders were found: pick the one to use for all save data and save states. */
+@Composable
+fun SaveChooseScreen(
+    candidates: List<SaveDiscovery.Candidate>, cancellable: Boolean,
+    onChoose: (String) -> Unit, onSearchAgain: () -> Unit, onPick: () -> Unit, onCancel: () -> Unit
+) {
+    val fr = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { fr.requestFocus() } }
+    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Spacer(Modifier.height(8.dp))
+        Text("WHICH SAVE DATA FOLDER?", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+        Text("Found ${candidates.size} \"${SaveRoot.FOLDER_NAME}\" folders. RomCore keeps ALL saves and save states in one of them. Pick one; you can change it later in SETTINGS.",
+            Modifier.widthIn(max = 720.dp).padding(horizontal = 16.dp, vertical = 6.dp), style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+        LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+            itemsIndexed(candidates, key = { _, c -> c.path }) { i, c ->
+                Column {
+                    FocusLine(c.path, if (i == 0) Modifier.focusRequester(fr) else Modifier, right = SaveRoot.sizeLabel(c.bytes)) { onChoose(c.path) }
+                    Text("${c.dataFiles}${if (c.capped) "+" else ""} save files   last changed ${saveDate(c.lastModified)}",
+                        Modifier.padding(start = 28.dp, bottom = 6.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            item { FocusLine("SEARCH AGAIN", style = MaterialTheme.typography.titleSmall) { onSearchAgain() } }
+            item { FocusLine("PICK ANOTHER FOLDER...", style = MaterialTheme.typography.titleSmall) { onPick() } }
+            item { FocusLine("CANCEL", style = MaterialTheme.typography.titleSmall, dim = !cancellable) { if (cancellable) onCancel() } }
+        }
+    }
+}
+
+internal fun saveDate(ms: Long): String =
+    if (ms <= 0) "-" else java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.ROOT).format(java.util.Date(ms))

@@ -5,8 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.noryan.romcore.api.CoreSession
 import com.noryan.romcore.api.Pad
+import com.noryan.romcore.api.save.SaveRoot
 import java.io.File
-import java.security.MessageDigest
 
 /** Info about one save-state slot, shown inline in the menu. */
 class SlotInfo(val slot: Int, val exists: Boolean, val timestampMs: Long = 0L, val thumbnail: Bitmap? = null)
@@ -22,9 +22,10 @@ interface StateSlotProvider {
 }
 
 /**
- * Optional helper base for every core's CoreSession. Standard state location (app-private, no permissions):
- *   <filesDir>/states/<coreId>/<romHash>/slotN   (+ slotN.png thumbnail, optional)
- * where romHash = first 16 hex chars of SHA-1(romPath). Subclasses implement [writeState]/[readState] against a File,
+ * Optional helper base for every core's CoreSession. Standard state location = the PORTABLE save root (see [SaveRoot]):
+ *   <saveRoot>/states/<coreId>/<gameKey>/slotN   (+ slotN.png thumbnail, optional)
+ * where gameKey = the ROM file name without extension ([SaveRoot.gameKey]). (Older builds used
+ * <filesDir>/states/<coreId>/<sha1(romPath)[:16]>/slotN; the shell migrates that into the save root.) Subclasses implement [writeState]/[readState] against a File,
  * or override saveState/loadState entirely if the engine owns its own paths (still use [statePath] where possible).
  * saveState/loadState are called OFF the main thread by the menu.
  */
@@ -35,13 +36,13 @@ abstract class CoreSessionBase(
 ) : CoreSession, StateSlotProvider {
     companion object {
         const val SLOTS = 10
-        fun romHash(romPath: String): String =
-            MessageDigest.getInstance("SHA-1").digest(romPath.toByteArray()).joinToString("") { "%02x".format(it) }.take(16)
+        /** Legacy path hash (only the migration needs it). */
+        fun romHash(romPath: String): String = SaveRoot.legacyHash(romPath)
         fun stateDir(context: Context, coreId: String, romPath: String): File =
-            File(context.filesDir, "states/$coreId/${romHash(romPath)}")
+            SaveRoot.statesDir(context, coreId, SaveRoot.gameKey(context, romPath))
     }
 
-    open val stateDir: File get() = stateDir(context, coreId, romPath).also { it.mkdirs() }
+    open val stateDir: File get() = stateDir(context, coreId, romPath)
     fun statePath(slot: Int): File = File(stateDir, "slot$slot")
     fun thumbnailPath(slot: Int): File = File(stateDir, "slot$slot.png")
 

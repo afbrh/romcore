@@ -15,6 +15,11 @@ import com.noryan.romcore.api.LaunchRequest
 import com.noryan.romcore.api.System
 import com.noryan.romcore.api.crash.CrashText
 import com.noryan.romcore.api.crash.RomCoreCrashGuard
+import com.noryan.romcore.api.save.SaveMigration
+import com.noryan.romcore.api.save.SaveRoot
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import com.noryan.romcore.data.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,6 +34,8 @@ sealed interface Setup {
     data class Choose(val kind: FolderSearch.Kind, val candidates: List<FolderSearch.Candidate>, val cancellable: Boolean) : Setup
     /** Nothing found for [kind]: offer the folder picker (ROMs only; a missing BIOS folder is skipped silently). */
     data class NotFound(val kind: FolderSearch.Kind, val cancellable: Boolean) : Setup
+    /** Several `_romcore-save-data` folders were found: pick one. [cancellable] = a folder is already in use (keep it). */
+    data class ChooseSave(val candidates: List<SaveDiscovery.Candidate>, val cancellable: Boolean) : Setup
     data object Ready : Setup
 }
 
@@ -58,6 +65,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     @Volatile var debugRoots: List<File>? = null
     private var searchJob: Job? = null
 
+    // ---- portable save-data folder (see romcore-api/SAVEDATA.md) ----
+    /** The folder in use: path + size/count (null until resolved). */
+    val saveInfo = MutableStateFlow<SaveDiscovery.Candidate?>(null)
+    /** One-line status for Settings ("READY", "SEARCHING", "MIGRATED 12 FILES"...). */
+    val saveStatus = MutableStateFlow("")
+    /** Non-null: the portable folder could not be created/used, app storage is used instead. */
+    val saveWarning = MutableStateFlow<String?>(null)
+    /** Other copies of the folder found while one is in use: offered in Settings, never forced. */
+    val saveOthers = MutableStateFlow<List<SaveDiscovery.Candidate>>(emptyList())
+    private var saveJob: Job? = null
+    private var saveResolved = false
+    private val migrateMutex = Mutex()
+
     val cores: List<CoreDescriptor> get() = CoreRegistry.all()
 
     init { if (accessGranted.value) begin() }
@@ -66,6 +86,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Called on every resume / new intent: report core processes that died without a clean Close Game. */
     fun checkCrashes() {
         val ctx: Context = getApplication()
+        // The save folder vanished (SD card pulled, folder deleted/moved): search again.
+        if (saveResolved && saveJob?.isActive != true) viewModelScope.launch {
+            val gone = withContext(Dispatchers.IO) { SaveRoot.persisted(ctx)?.let { !File(it).isDirectory } ?: !SaveRoot.isFallback(ctx) }
+            if (gone) { saveStatus.value = "FOLDER MISSING - SEARCHING"; resolveSaveRoot() }
+        }
         viewModelScope.launch {
             val reports = withContext(Dispatchers.IO) { runCatching { RomCoreCrashGuard.scan(ctx) }.getOrDefault(emptyList()) }
             val r = reports.firstOrNull() ?: return@launch
@@ -87,6 +112,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (rd != null && File(rd).isDirectory) {
             setup.value = Setup.Ready
             rescan()
+            resolveSaveRoot()
             if (!prefs.biosSearched) searchBios(first = true) else runBiosImport()
         } else startRomSearch(cancellable = false)
     }
@@ -138,6 +164,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!f.isDirectory || f.listFiles() == null) { status.value = "CAN'T READ THAT FOLDER"; setup.value = Setup.NotFound(FolderSearch.Kind.ROMS, prefs.romDir != null); return }
         prefs.romDir = path; romDir.value = path
         rescan()
+        resolveSaveRoot()
         if (!prefs.biosSearched) searchBios(first = true) else setup.value = Setup.Ready
     }
 
@@ -162,6 +189,113 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun skipBios() { searchJob?.cancel(); prefs.biosSearched = true; setup.value = Setup.Ready }
+
+    // ---- save-data folder: discovery, selection, migration ----
+
+    /** Automatic: runs on every start once the ROM folder is known (and when the folder vanished). */
+    fun resolveSaveRoot() {
+        saveJob?.cancel()
+        val ctx: Context = getApplication()
+        saveJob = viewModelScope.launch {
+            saveStatus.value = "SEARCHING"
+            val persisted = withContext(Dispatchers.IO) { SaveRoot.persisted(ctx)?.let(::File)?.takeIf { it.isDirectory }?.let(SaveDiscovery::describe) }
+            val dec = withContext(Dispatchers.IO) { SaveDiscovery.decide(persisted, SaveDiscovery.search(roots())) }
+            when (dec) {
+                is SaveDiscovery.Decision.Keep -> { saveOthers.value = dec.others; useSaveRoot(persisted!!.path) }
+                is SaveDiscovery.Decision.Use -> { saveOthers.value = dec.others; useSaveRoot(dec.candidate.path) }
+                is SaveDiscovery.Decision.Choose -> {
+                    saveOthers.value = emptyList()
+                    if (persisted != null) useSaveRoot(persisted.path) // keep working while the user decides
+                    setup.first { it is Setup.Ready }
+                    setup.value = Setup.ChooseSave(dec.candidates, cancellable = persisted != null)
+                }
+                SaveDiscovery.Decision.Create -> createSaveRoot()
+            }
+        }
+    }
+
+    private suspend fun createSaveRoot() {
+        val ctx: Context = getApplication()
+        val rd = romDir.value ?: prefs.romDir
+        val target = rd?.let { File(it, SaveRoot.FOLDER_NAME) }
+        if (target != null && withContext(Dispatchers.IO) { SaveRoot.ensureLayout(target) }) useSaveRoot(target.path)
+        else useFallbackRoot("Could not create $target - using app storage until it can be created")
+    }
+
+    private suspend fun useFallbackRoot(why: String) {
+        val ctx: Context = getApplication()
+        withContext(Dispatchers.IO) { SaveRoot.clear(ctx); SaveRoot.ensureLayout(SaveRoot.fallbackRoot(ctx)) }
+        saveWarning.value = why.uppercase()
+        saveResolved = true
+        refreshSaveInfo()
+        migrateSaves()
+    }
+
+    private suspend fun useSaveRoot(path: String) {
+        val ctx: Context = getApplication()
+        val ok = withContext(Dispatchers.IO) { SaveRoot.set(ctx, File(path)) }
+        if (!ok) { useFallbackRoot("Could not use $path - using app storage"); return }
+        saveWarning.value = null
+        saveResolved = true
+        refreshSaveInfo()
+        migrateSaves()
+    }
+
+    private suspend fun refreshSaveInfo() {
+        val ctx: Context = getApplication()
+        val i = withContext(Dispatchers.IO) { SaveDiscovery.describe(SaveRoot.current(ctx)) }
+        saveInfo.value = i
+        saveStatus.value = if (saveWarning.value != null) "USING APP STORAGE" else "READY"
+    }
+
+    /** Manual SEARCH AGAIN from Settings: always lets the user choose when more than one folder exists. */
+    fun searchSaveAgain() {
+        saveJob?.cancel()
+        val ctx: Context = getApplication()
+        saveJob = viewModelScope.launch {
+            saveStatus.value = "SEARCHING"
+            val (cands, cur) = withContext(Dispatchers.IO) {
+                val cur = SaveRoot.persisted(ctx)?.let(::File)?.takeIf { it.isDirectory }?.let(SaveDiscovery::describe)
+                (SaveDiscovery.search(roots()) + listOfNotNull(cur)).distinctBy { it.path } to cur
+            }
+            when {
+                cands.isEmpty() -> createSaveRoot()
+                cands.size == 1 -> { useSaveRoot(cands[0].path); saveStatus.value = if (cur?.path == cands[0].path) "NO OTHER FOLDER FOUND" else "READY" }
+                else -> { setup.first { it is Setup.Ready }; setup.value = Setup.ChooseSave(SaveDiscovery.order(cands), cancellable = cur != null) ; saveStatus.value = "READY" }
+            }
+        }
+    }
+
+    fun chooseSave(path: String) {
+        saveJob?.cancel()
+        setup.value = Setup.Ready
+        saveJob = viewModelScope.launch { useSaveRoot(path) }
+    }
+
+    fun pickSave(uri: Uri) {
+        val p = SafPathUtils.realPathFromDocumentUri(uri)
+        if (p == null || !File(p).isDirectory) { saveStatus.value = "CAN'T READ THAT FOLDER"; return }
+        chooseSave(SaveDiscovery.resolvePicked(File(p)).path)
+    }
+
+    /** Move older app-private save data into the root (idempotent; also refreshes the game-key table the cores read). */
+    private fun migrateSaves() {
+        val ctx: Context = getApplication()
+        viewModelScope.launch(Dispatchers.IO) {
+            migrateMutex.withLock {
+                runCatching {
+                    val keys = SaveRoot.refreshGameKeys(ctx, dao.all().map { g ->
+                        val p = g.realPath ?: g.uri
+                        SaveRoot.KeyInput(p, g.isDir, g.sizeBytes) { SaveRoot.quickHash(File(p)) }
+                    })
+                    val rep = SaveMigration.run(ctx, SaveRoot.current(ctx), keys.entries.associate { SaveRoot.legacyHash(it.key) to it.value })
+                    refreshSaveInfo()
+                    if (rep.changed || rep.failed > 0) saveStatus.value = (if (rep.failed > 0) "MIGRATION: ${rep.failed} FAILED, " else "MIGRATED ") +
+                        "${rep.moved + rep.conflicts} FILES" + if (rep.conflicts > 0) " (${rep.conflicts} CONFLICTS KEPT)" else ""
+                }
+            }
+        }
+    }
 
     fun cancelSetup() { searchJob?.cancel(); setup.value = Setup.Ready }
 
@@ -192,6 +326,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 if (res.trustworthy) prefs.detectVersion = SystemDetector.VERSION
+                if (saveResolved) migrateSaves()
                 status.value = if (res.trustworthy) "${res.games.size} GAMES" else "FOLDER EMPTY OR UNREADABLE"
             } catch (t: Throwable) {
                 status.value = "SCAN FAILED"
@@ -222,7 +357,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // Real path: cores get the path alone (a null uri makes them use it). Only a cache copy keeps a uri fallback.
                 val req = LaunchRequest(romPath = r.path, romUri = if (r.kind == "real") null else g.uri, system = sys,
                     subCoreId = choice.sub?.id)
-                val intent = RomCoreCrashGuard.stamp(core.launchIntent(ctx, req), core.id, g.title)
+                // The save folder must be decided before the core starts (a first-ever launch can race the discovery).
+                withTimeoutOrNull(8000) { saveJob?.join() }
+                val gameKey = withContext(Dispatchers.IO) { SaveRoot.gameKey(ctx, g.realPath ?: g.uri) }
+                val intent = SaveRoot.stamp(ctx, RomCoreCrashGuard.stamp(core.launchIntent(ctx, req), core.id, g.title), gameKey)
                 crashNotice.value = null
                 withContext(Dispatchers.IO) { dao.markPlayed(g.id, java.lang.System.currentTimeMillis()) }
                 ctx.startActivity(intent)

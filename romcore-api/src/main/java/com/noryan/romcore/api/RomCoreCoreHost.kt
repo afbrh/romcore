@@ -29,6 +29,7 @@ object RomCoreCoreHost {
      */
     @JvmStatic @JvmOverloads
     fun install(activity: Activity, session: CoreSession, system: System, options: UiOptions = UiOptions()): Hooks {
+        com.noryan.romcore.api.save.SaveRoot.adopt(activity.intent) // portable save root + game key from the launch Intent
         InputRouter.keepScreenOn(activity)
         return Hooks(activity, session, system, options)
     }

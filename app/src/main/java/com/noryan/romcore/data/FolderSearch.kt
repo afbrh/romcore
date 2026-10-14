@@ -138,6 +138,27 @@ object FolderSearch {
         }
     }
 
+    /**
+     * Generic depth-bounded walk (same skip rules as the ROM/BIOS searches) returning every directory whose name satisfies
+     * [matches]. A match is never entered. Used for the portable save-data folder.
+     */
+    fun findDirs(roots: List<File>, isCancelled: () -> Boolean = { false }, matches: (String) -> Boolean): List<File> {
+        val found = LinkedHashMap<String, File>()
+        fun go(dir: File, depth: Int) {
+            if (depth >= MAX_DEPTH || isCancelled()) return
+            val kids = dir.listFiles { f -> f.isDirectory } ?: return
+            kids.sortBy { it.name.lowercase(Locale.ROOT) }
+            for (k in kids) {
+                val lower = k.name.lowercase(Locale.ROOT)
+                if (matches(k.name)) { found.putIfAbsent(canon(k), k); continue }
+                if (lower.startsWith(".") || lower in SEARCH_SKIP) continue
+                go(k, depth + 1)
+            }
+        }
+        for (root in roots.distinctBy { canon(it) }) if (root.isDirectory) go(root, 0)
+        return found.values.toList()
+    }
+
     private fun canon(f: File) = runCatching { f.canonicalPath }.getOrDefault(f.path)
 
     /** (recognisable game files below [dir], whether the budget cut counting short). Skips the same dirs the scanner skips. */
