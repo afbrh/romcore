@@ -138,3 +138,23 @@ Behaviour:
 threads (re-picked every 4 s), `Surface.setFrameRate(60, FIXED_SOURCE)` on every SurfaceView in the Activity, and GameManager
 game state. Default target is 60 fps; call `hooks.setTargetFps(30)` for a 30 fps core/game. For A/B tests create
 `<externalFilesDir>/perf_hints_off` (all), `perf_hints_adpf_off` or `perf_hints_framerate_off`. Log tag `RomCorePerf`.
+
+## Crash handling (automatic, no per-core code)
+
+Goal: when a core process dies unexpectedly (native SIGSEGV/SIGABRT, lmkd, ANR kill, `kill -9`) the user lands on the RomCore
+list, the game does NOT restart by itself, and the list shows an inline, dismissible notice
+(`GAME CLOSED UNEXPECTEDLY: <title> (<core>)` + the system's exit reason). Clean Close Game shows nothing.
+
+Mechanism (`com.noryan.romcore.api.crash`, wired from `RomCoreApp.onCreate` in every process; manifests are NOT used for this,
+no `stateNotNeeded` / `excludeFromRecents` / `noHistory` change is needed or reliable):
+1. The shell stamps every game Intent with a unique `romcore.launchId` (+ `romcore.core`, `romcore.title`), `RomCoreCrashGuard.stamp`.
+2. In a core process, before a stamped Activity's `onCreate` the guard writes `files/romcore_running/run.<process>`
+   (launchId, pid, core, title). On `onPause` with `isFinishing` (Close Game / finish) it deletes the marker and writes the
+   tombstone `done.<launchId>`.
+3. If Android re-creates the crashed Activity from its original Intent (same launchId, new pid, or the launch is tombstoned),
+   the guard starts the shell (`romcore.crashed` extra), finishes the task and kills the fresh process before any emulator code runs.
+4. The shell scans on every resume (`RomCoreCrashGuard.scan`): a marker whose pid/process is gone is reported once
+   (notice + `ApplicationExitInfo` reason + `files/romcore_crash.log` + logcat tag `RomCoreCrash`), its launch is tombstoned and the
+   process's started Services are stopped (Eden's `ForegroundService` is START_STICKY and would otherwise resurrect an empty `:eden`).
+5. A core process that starts without any stamped Activity within 5 s (sticky-service resurrection) stops its services and exits.
+Pure logic + unit tests: `CrashLogic.kt`, `CrashLogicTest`. Debug aid: `adb shell run-as com.noryan.romcore cat files/romcore_crash.log`.

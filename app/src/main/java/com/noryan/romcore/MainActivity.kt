@@ -54,7 +54,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onNewIntent(intent: android.content.Intent) { super.onNewIntent(intent); applyDebugRoots(intent) }
+    override fun onNewIntent(intent: android.content.Intent) { super.onNewIntent(intent); applyDebugRoots(intent); vm.checkCrashes() }
+
+    override fun onResume() { super.onResume(); vm.checkCrashes() }
 
     /** Debug builds only: `--es romcore.debug.roots /a:/b` restricts the folder search to those roots (test hook). */
     private fun applyDebugRoots(i: android.content.Intent?) {

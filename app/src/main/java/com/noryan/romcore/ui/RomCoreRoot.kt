@@ -126,6 +126,13 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
             val n by vm.scanProgress.collectAsStateWithLifecycle()
             if (scanning) Text("SCANNING $n", Modifier.align(Alignment.CenterEnd), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         }
+        val notice by vm.crashNotice.collectAsStateWithLifecycle()
+        notice?.let { (title, hint) ->
+            Column {
+                FocusLine(title, onClick = vm::dismissCrashNotice, style = MaterialTheme.typography.titleSmall)
+                Text(hint, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
                 0 -> GamesTab(vm)

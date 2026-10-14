@@ -13,6 +13,8 @@ import com.noryan.romcore.api.CoreDescriptor
 import com.noryan.romcore.api.CoreRegistry
 import com.noryan.romcore.api.LaunchRequest
 import com.noryan.romcore.api.System
+import com.noryan.romcore.api.crash.CrashText
+import com.noryan.romcore.api.crash.RomCoreCrashGuard
 import com.noryan.romcore.data.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -47,6 +49,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Quiet inline BIOS import results ("PS2 BIOS: IMPORTED ...") and a one-line note for the BIOS search. */
     val biosLines = MutableStateFlow<List<String>>(emptyList())
     val biosNote = MutableStateFlow("")
+    /** Inline "GAME CLOSED UNEXPECTEDLY" notice on the list (title line, hint line); null = none. Dismissed with A. */
+    val crashNotice = MutableStateFlow<Pair<String, String>?>(null)
     /** Bumped when per-system overrides change so the UI re-reads prefs. */
     val prefsTick = MutableStateFlow(0)
 
@@ -59,6 +63,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     init { if (accessGranted.value) begin() }
 
     /** Called on every resume: the All files switch is flipped in a system screen outside the app. */
+    /** Called on every resume / new intent: report core processes that died without a clean Close Game. */
+    fun checkCrashes() {
+        val ctx: Context = getApplication()
+        viewModelScope.launch {
+            val reports = withContext(Dispatchers.IO) { runCatching { RomCoreCrashGuard.scan(ctx) }.getOrDefault(emptyList()) }
+            val r = reports.firstOrNull() ?: return@launch
+            crashNotice.value = CrashText.title(r.marker) to CrashText.hint(r.reason)
+        }
+    }
+
+    fun dismissCrashNotice() { crashNotice.value = null }
+
     fun refreshAccess() {
         val g = Environment.isExternalStorageManager()
         if (g == accessGranted.value) return
@@ -206,7 +222,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // Real path: cores get the path alone (a null uri makes them use it). Only a cache copy keeps a uri fallback.
                 val req = LaunchRequest(romPath = r.path, romUri = if (r.kind == "real") null else g.uri, system = sys,
                     subCoreId = choice.sub?.id)
-                val intent = core.launchIntent(ctx, req)
+                val intent = RomCoreCrashGuard.stamp(core.launchIntent(ctx, req), core.id, g.title)
+                crashNotice.value = null
                 withContext(Dispatchers.IO) { dao.markPlayed(g.id, java.lang.System.currentTimeMillis()) }
                 ctx.startActivity(intent)
             } catch (t: Throwable) {

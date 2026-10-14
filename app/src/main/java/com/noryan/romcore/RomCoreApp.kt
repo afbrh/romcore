@@ -19,6 +19,7 @@ class RomCoreApp : RomCoreHiltApplication() {
 
     override fun onCreate() {
         super.onCreate() // WatermelonDS' Hilt/native init for :melonds must run first
+        com.noryan.romcore.api.crash.RomCoreCrashGuard.install(this) // core processes: no silent relaunch after a crash
         if (!isMainProcess()) return
         CoreBootstrap.registerAll()
         db = Room.databaseBuilder(this, AppDatabase::class.java, "romcore.db").fallbackToDestructiveMigration(true).build()
