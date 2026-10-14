@@ -10,3 +10,4 @@
   https://docs.mesa3d.org/license.html. The driver is loaded at runtime by libadrenotools (BSD-2-Clause, bundled in Eden).
 * It is enforced on every launch (EdenDriver.kt). To force the stock driver create
   /sdcard/Android/data/com.noryan.romcore/files/romcore_stock_driver.
+* Vibration is permanently off (Eden's vibrator classes are stubbed in eden-src; config forced off). Asynchronous shaders are forced on every launch; create <externalFilesDir>/romcore_sync_shaders to force synchronous compilation.

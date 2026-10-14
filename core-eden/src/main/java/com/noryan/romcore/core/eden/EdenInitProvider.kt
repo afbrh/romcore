@@ -34,6 +34,7 @@ class EdenInitProvider : ContentProvider() {
             BooleanSetting.SHOW_INPUT_OVERLAY.setBoolean(false)
             // Every launch: keep driver_path in step with the installed driver so Eden's onLaunchGame never swaps it.
             StringSetting.DRIVER_PATH.setString(driver.zipPath ?: "")
+            enforceRomCoreSettings()
             NativeConfig.saveGlobalConfig()
         } catch (t: Throwable) {
             Log.e(TAG, "Eden embedding init failed", t)
@@ -53,6 +54,28 @@ class EdenInitProvider : ContentProvider() {
             override fun onActivitySaveInstanceState(a: Activity, o: Bundle) {}
         })
         return true
+    }
+
+    /**
+     * Enforced on EVERY launch right after the config is loaded and before any game/engine start (the in-memory values
+     * are what the emulation core reads, and saveGlobalConfig persists them to config.ini):
+     *  - vibration/rumble permanently off (the Java/native vibration paths are also stubbed out in eden-src);
+     *  - asynchronous shader/pipeline compilation on, driver pipeline cache on.
+     *  use_asynchronous_gpu_emulation is deliberately left at the user/default value.
+     */
+    private fun enforceRomCoreSettings() {
+        fun b(key: String, v: Boolean) = try { NativeConfig.setBoolean(key, v) } catch (t: Throwable) { Log.w(TAG, "setting $key failed", t) }
+        b("vibration_enabled", false)
+        b("enable_accurate_vibrations", false)
+        // Escape hatch / A-B testing: create <externalFilesDir>/romcore_sync_shaders to force synchronous shader compilation.
+        val syncFlag = context?.getExternalFilesDir(null)?.let { java.io.File(it, "romcore_sync_shaders").exists() } == true
+        b("use_asynchronous_shaders", !syncFlag)
+        b("use_vulkan_driver_pipeline_cache", true)
+        try {
+            val players = NativeConfig.getInputSettings(true)
+            for (p in players) { p.vibrationEnabled = false; p.vibrationStrength = 0; p.useSystemVibrator = false }
+            NativeConfig.setInputSettings(players, true)
+        } catch (t: Throwable) { Log.w(TAG, "player vibration settings failed", t) }
     }
 
     /** YuzuApplication.createNotificationChannels() is private and only runs from its own onCreate; Eden's
