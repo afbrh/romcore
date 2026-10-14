@@ -78,7 +78,9 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
         // Native bring-up (Sys extraction on first run) off the UI thread.
         Thread({
             try {
-                DolphinRuntime.ensureInitialized(this)
+                val disc = readDisc(launchPath, romPath)
+                DolphinRuntime.ensureInitialized(this, disc)
+                DolphinRuntime.prepareGame(this, disc)
             } catch (t: Throwable) {
                 hooks.error("Dolphin failed to start", t.message ?: t.toString(), true)
                 return@Thread
@@ -96,6 +98,15 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
             maybeBoot()
         }, "dolphin-init").start()
     }
+
+    /** First bytes of the disc image (plain path, else the SAF content:// Uri) -> game ID + revision. */
+    private fun readDisc(launchPath: String, romPath: String): SunshineFps.Disc? = try {
+        val buf = ByteArray(SunshineFps.HEADER_BYTES)
+        val ins = if (java.io.File(romPath).canRead()) java.io.File(romPath).inputStream()
+        else contentResolver.openInputStream(android.net.Uri.parse(launchPath))
+        val n = ins?.use { it.readNBytes(buf, 0, buf.size) } ?: 0
+        SunshineFps.parseDisc(buf.copyOf(n))
+    } catch (_: Throwable) { null }
 
     // ---- surface -> boot ---------------------------------------------------------------------------------------
     override fun surfaceCreated(h: SurfaceHolder) {}

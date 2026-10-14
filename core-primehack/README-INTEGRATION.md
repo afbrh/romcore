@@ -83,3 +83,11 @@ one more launch). Measure with: `adb shell cat /sys/kernel/debug/kgsl/proc/<pid>
   is called by `ShaderCacheKeeper` on menu open (pause), `onPause`, and every 60 s (cheap fflush only).
 * `NativeLibrary.GetShaderCacheEntries()` = entries restored from disk this run; logcat tags `RomCoreShader` / `RomCoreUi`.
 * Never bundle game-derived caches in the repo/APK (commercial-game derived, GPU/driver specific): they are built locally.
+
+## Super Mario Sunshine 60 fps + widescreen on this core (and the Sys-extraction bug that blocked it)
+`PrimeHackConfig.apply` enables `$60FPS` and `$Widescreen` via `SunshineFps` (same logic as :core-dolphin: EnableCheats + bare code
+names in `[Gecko_Enabled]`; Dolphin strips the `[creator]` suffix from code names). Root cause of "60 fps never unlocked on PrimeHack":
+`DirectoryInitialization.extractSysDirectory` used a non-recursive `mkdir()` for `<files>/primehack/Sys`; on a fresh install
+`<files>/primehack` did not exist yet, so NOTHING was extracted (no `GameSettings/*.ini`, so the Gecko code bodies did not exist),
+and the revision was stored anyway so it was never retried. Fixed in primehack-romcore-src (`mkdirs()` + re-extract when
+`Sys/GameSettings` is missing; patch 0008), which also restores every other Sys default (per-game INIs, GraphicMods) for the Prime games.

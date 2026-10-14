@@ -79,7 +79,7 @@ class PrimeHackActivity : EmulationActivity() {
         system = disc?.second
             ?: intent.getStringExtra(EXTRA_SYSTEM)?.let { runCatching { System.valueOf(it) }.getOrNull() }
             ?: System.GAMECUBE
-        PrimeHackConfig.apply(this, disc?.first, system)
+        PrimeHackConfig.apply(this, disc?.first, system, SunshineFps.parseDisc(header))
         runCatching { NativeLibrary.ReloadConfig() }   // re-read the INI layers just written (belt and braces)
 
         // Prefer a plain file path (Dolphin reads it directly); otherwise the SAF content:// Uri (Dolphin's file layer

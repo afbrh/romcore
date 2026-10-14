@@ -23,7 +23,7 @@ object PrimeHackPrefs {
 object PrimeHackConfig {
     fun configDir(): File = File(DirectoryInitialization.getUserDirectory(), "Config").also { it.mkdirs() }
 
-    fun apply(ctx: Context, gameId: String?, system: System) {
+    fun apply(ctx: Context, gameId: String?, system: System, disc: SunshineFps.Disc? = null) {
         val cfg = configDir()
         val dolphin = File(cfg, "Dolphin.ini")
         val gfx = File(cfg, "GFX.ini")
@@ -50,16 +50,29 @@ object PrimeHackConfig {
         }
         // Wii games that are not Prime still use the Wiimote/Nunchuk scheme above; GC games use GCPad1.
 
-        // Super Mario Sunshine: widescreen + 60fps Gecko codes (carried over from the RomRunner integration).
-        if (gameId != null && gameId.startsWith("GMS")) {
-            PrimeHackProfiles.setValue(dolphin, "Core", "EnableCheats", "True")
-            val gs = File(DirectoryInitialization.getUserDirectory(), "GameSettings").also { it.mkdirs() }
-            val ini = File(gs, "$gameId.ini")
-            enableGeckoCodes(ini, listOf("Widescreen", "60FPS"))
-            PrimeHackProfiles.setValue(ini, "Video_Settings", "AspectRatio", "1")
-            PrimeHackProfiles.setValue(ini, "Video_Settings", "wideScreenHack", "True")
+        // Super Mario Sunshine: 60 fps (+ widescreen) Gecko codes. Names are resolved from the engine's own game INIs: they carry
+        // an author suffix ("$60FPS [gamemasterplc]") and a bare "$60FPS" in [Gecko_Enabled] matches nothing (that was the bug).
+        if (SunshineFps.isSunshine(gameId) && disc != null) {
+            val userDir = DirectoryInitialization.getUserDirectory()
+            SunshineFps.enableEarly(File(userDir), disc)
+            val sys = File(ctx.filesDir, "primehack/Sys")
+            val names = SunshineFps.prepare(File(userDir), sys, disc)
+            val ini = File(File(userDir, "GameSettings"), "$gameId.ini")
+            // Widescreen code (name "Widescreen [..]" / "16:9 Widescreen"): keep it paired with the matching render settings.
+            val ws = iniNamesWidescreen(sys, disc)
+            if (ws.isNotEmpty()) {
+                ini.writeText(SunshineFps.enableInIni(ini.readText(), ws))
+                PrimeHackProfiles.setValue(ini, "Video_Settings", "AspectRatio", "1")
+                PrimeHackProfiles.setValue(ini, "Video_Settings", "wideScreenHack", "True")
+            }
+            android.util.Log.i("RomCorePrimeHack", "$gameId r${disc.revision}: Gecko codes enabled ${names + ws}")
         }
     }
+
+    private fun iniNamesWidescreen(sys: File, d: SunshineFps.Disc): List<String> =
+        SunshineFps.iniNames(d).flatMap { n ->
+            File(File(sys, "GameSettings"), n).takeIf { it.isFile }?.let { SunshineFps.geckoNames(it.readText()) } ?: emptyList()
+        }.filter { Regex("^(16:9 )?Widescreen", RegexOption.IGNORE_CASE).containsMatchIn(it) }.distinct()
 
     /**
      * Memory-critical video keys, written on EVERY launch.
@@ -88,21 +101,5 @@ object PrimeHackConfig {
         // Portable save data: memory cards / Wii NAND / SD image live under <saveRoot>/primehack (rewritten every launch, here
         // because UICommon::Init reads Dolphin.ini once at native init - a value written later applies one launch late).
         runCatching { PrimeHackSaveData.applyIni(ctx, dir) }
-    }
-
-    private fun enableGeckoCodes(file: File, names: List<String>) {
-        val lines = (if (file.exists()) file.readText() else "").lines().toMutableList()
-        var s = lines.indexOfFirst { it.trim() == "[Gecko_Enabled]" }
-        if (s == -1) {
-            if (lines.isNotEmpty() && lines.last().isNotBlank()) lines.add("")
-            lines.add("[Gecko_Enabled]"); s = lines.size - 1
-        }
-        var e = lines.size
-        for (i in s + 1 until lines.size) if (lines[i].trim().startsWith("[")) { e = i; break }
-        val have = (s + 1 until e).map { lines[it].trim().removePrefix("$") }.toSet()
-        var at = e
-        for (n in names) if (n !in have) { lines.add(at++, "$$n") }
-        file.parentFile?.mkdirs()
-        file.writeText(lines.joinToString("\n"))
     }
 }

@@ -1,0 +1,41 @@
+From 0006307c1806f8615532b67886bdce955eb2d3ef Mon Sep 17 00:00:00 2001
+From: Ry <ry@Rys-MacBook-Pro.local>
+Date: Wed, 14 Oct 2026 12:35:38 -0500
+Subject: [PATCH] RomCore: fix Sys extraction on fresh install (mkdirs;
+ re-extract when Sys/GameSettings missing) - GameSettings INIs/Gecko codes
+ were never installed
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ .../core/primehack/jni/utils/DirectoryInitialization.java | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/utils/DirectoryInitialization.java b/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/utils/DirectoryInitialization.java
+index 7657e51190..222c2cf450 100644
+--- a/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/utils/DirectoryInitialization.java
++++ b/Source/Android/app/src/main/java/com/noryan/romcore/core/primehack/jni/utils/DirectoryInitialization.java
+@@ -159,7 +159,11 @@ public final class DirectoryInitialization
+ 
+     SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+     String revision = NativeLibrary.GetGitRevision();
+-    if (!preferences.getString("primehack.sysDirectoryVersion", "").equals(revision))
++    // RomCore: also re-extract when the Sys tree is missing/incomplete. On a fresh install <files>/primehack did not
++    // exist yet, so the old non-recursive mkdir() of Sys failed, NOTHING was extracted (no GameSettings/*.ini, so no
++    // Gecko codes such as Super Mario Sunshine's 60 fps), yet the revision was stored and never retried.
++    if (!preferences.getString("primehack.sysDirectoryVersion", "").equals(revision) ||
++        !new File(sysDirectory, "GameSettings").isDirectory())
+     {
+       // There is no extracted Sys directory, or there is a Sys directory from another
+       // version of Dolphin that might contain outdated files. Let's (re-)extract Sys.
+@@ -302,7 +306,7 @@ public final class DirectoryInitialization
+       {
+         if (!createdFolder)
+         {
+-          if (!outputFolder.mkdir())
++          if (!outputFolder.mkdirs() && !outputFolder.isDirectory())
+           {
+             Log.error("[DirectoryInitialization] Failed to create folder " +
+                     outputFolder.getAbsolutePath());
+-- 
+2.54.0 (Apple Git-157)
+

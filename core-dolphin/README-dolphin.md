@@ -67,3 +67,13 @@ No BIOS, keys, firmware or ROMs are included. Dolphin does NOT need a BIOS for m
 Same scheme as :core-primehack (see its README-INTEGRATION.md, "Shader cache persistence"): cache dir `<externalFiles>/dolphin/Cache`
 (was `externalCacheDir/dolphin`, wipeable), `ShaderCacheKeeper` flushes via `NativeLibrary.FlushShaderCaches` on menu-open/onPause/close and
 every 60 s; `RomCoreShader` logcat lines report "Shader cache: N entries". ShaderCompilationMode stays 0.
+
+## Super Mario Sunshine 60 fps (`SunshineFps.kt`)
+Sunshine is a 30 fps game; the community `$60FPS [gamemasterplc]` Gecko code (shipped in `Sys/GameSettings/GMSE01.ini`, also
+GMSP01 and GMSJ01r0/r1) doubles it. Dolphin runs it only if BOTH `[Core] EnableCheats = True` (Dolphin.ini) and the code is listed
+in `[Gecko_Enabled]` of the per-game INI. Dolphin cuts a code name at the `[` of its "[creator]" suffix, so the enable line is the
+bare `$60FPS` (`$60FPS [gamemasterplc]` matches nothing). `DolphinDefaults` enabled no codes, so the Dolphin core ran 30.
+Every launch, `DolphinActivity` reads the disc header (ID + revision), `DolphinRuntime.ensureInitialized` writes EnableCheats BEFORE
+native init, and after Sys/ is extracted and before boot `prepare()` writes `<user>/GameSettings/<ID>.ini` (names resolved from the
+engine's own INIs). Widescreen is NOT enabled on this core (4:3 pillarbox as before). Measured on the Thor: 59.8 fps (was 30.0),
+CPU_thread 33-40%, GPU busy ~16%, kgsl 229 MB. Logcat tag `RomCoreDolphin` prints `Gecko codes enabled [60FPS]`.

@@ -16,7 +16,7 @@ internal object DolphinRuntime {
     @Volatile private var initialized = false
 
     @Synchronized
-    fun ensureInitialized(ctx: Context) {
+    fun ensureInitialized(ctx: Context, disc: SunshineFps.Disc? = null) {
         if (initialized) return
         val app = ctx.applicationContext
         DolphinApplication.initialize(app)
@@ -27,7 +27,17 @@ internal object DolphinRuntime {
             WiimoteAdapter.manager = it
         }
         DolphinDefaults.apply(DirectoryInitialization.getUserDirectoryPath(app), app) // also points the engine at <root>/dolphin (save data)
+        // Per-game: EnableCheats must be in Dolphin.ini before native init reads it (late config applies one launch late).
+        SunshineFps.enableEarly(DirectoryInitialization.getUserDirectoryPath(app), disc)
         DirectoryInitialization.initializeBlocking(app)
         initialized = true
+    }
+
+    /** After init (Sys/ exists), before the game boots: per-game INI with the Gecko codes (Super Mario Sunshine 60 fps). */
+    fun prepareGame(ctx: Context, disc: SunshineFps.Disc?) {
+        val app = ctx.applicationContext
+        val names = SunshineFps.prepare(DirectoryInitialization.getUserDirectoryPath(app),
+            java.io.File(app.filesDir, "dolphin/Sys"), disc)
+        if (names.isNotEmpty()) android.util.Log.i("RomCoreDolphin", "${disc?.id} r${disc?.revision}: Gecko codes enabled $names")
     }
 }
