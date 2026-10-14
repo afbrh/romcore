@@ -37,6 +37,7 @@ import com.noryan.romcore.data.CoreSetup
 import com.noryan.romcore.data.GameEntity
 import com.noryan.romcore.ui.components.FocusLine
 import com.noryan.romcore.ui.components.PixelIconButton
+import com.noryan.romcore.ui.components.PlainTextButton
 import com.noryan.romcore.ui.components.PixelIcons
 import com.noryan.romcore.ui.components.TabButton
 import com.noryan.romcore.data.CollectionRules
@@ -200,7 +201,7 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
                         }
                     }
                 }
-                PixelIconButton(PixelIcons.PLUS, selected = newOpen, description = "New collection", modifier = Modifier.focusRequester(plusFocus)) { tabOpts = null; vm.newCollection() }
+                PlainTextButton("+", selected = newOpen, description = "New collection", modifier = Modifier.focusRequester(plusFocus)) { tabOpts = null; vm.newCollection() }
             }
             // Composed after the tab strip so the first focus (and the first D-pad press) lands on a tab; LEFT from the first tab reaches it.
             PixelIconButton(PixelIcons.GEAR, selected = settingsOpen, description = "Settings", modifier = Modifier.align(Alignment.CenterStart).focusRequester(gearFocus)) { vm.toggleSettings() }

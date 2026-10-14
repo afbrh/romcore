@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -165,5 +166,26 @@ fun PixelIconButton(icon: List<String>, selected: Boolean, description: String, 
                 if (c == '#') drawRect(ink, Offset(ox + x * cell, oy + y * cell), Size(cell, cell))
             } }
         }
+    }
+}
+
+/**
+ * A plain text control with no plate or border (the "+" next to the tabs). Normal tab-label text size; the text turns
+ * orange on controller focus (or while [selected]) so focus stays visible without a border. Keeps a 40 dp touch target.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun PlainTextButton(text: String, selected: Boolean, description: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val src = remember { MutableInteractionSource() }
+    val focused by src.collectIsFocusedAsState()
+    val ink = if (selected || focused) Color(0xFFFF6B4A) else Color(0xFFE6E6EA)
+    Box(
+        modifier = modifier
+            .defaultMinSize(minWidth = 40.dp, minHeight = 40.dp)
+            .semantics { contentDescription = description; role = Role.Button }
+            .combinedClickable(interactionSource = src, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, style = MaterialTheme.typography.titleMedium, color = ink, maxLines = 1, softWrap = false)
     }
 }
