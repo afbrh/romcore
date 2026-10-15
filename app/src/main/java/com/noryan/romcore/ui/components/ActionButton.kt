@@ -139,26 +139,24 @@ object PixelIcons {
 }
 
 /**
- * A square TabButton-style button holding a pixel icon (the settings gear, the new-collection plus): near-black plate and
- * faint border when idle, orange plate when [selected], brighter border on controller focus.
+ * A pixel icon with no plate or border (the settings gear). The glyph is drawn at the tab-label font size so it reads as
+ * part of the text line; a 40 dp touch target is kept. Off-white when idle, orange on controller focus or while [selected].
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun PixelIconButton(icon: List<String>, selected: Boolean, description: String, modifier: Modifier = Modifier, size: Dp = 40.dp, onClick: () -> Unit) {
+fun PixelIconButton(icon: List<String>, selected: Boolean, description: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val src = remember { MutableInteractionSource() }
     val focused by src.collectIsFocusedAsState()
-    val ink = if (selected) Color(0xFF14080A) else if (focused) Color(0xFFFF6B4A) else Color(0xFFE6E6EA)
+    val ink = if (selected || focused) Color(0xFFFF6B4A) else Color(0xFFE6E6EA)
+    val glyph = with(androidx.compose.ui.platform.LocalDensity.current) { MaterialTheme.typography.titleMedium.fontSize.toDp() }
     Box(
         modifier = modifier
-            .size(size)
-            .clip(RoundedCornerShape(8.dp))
-            .background(tabPlate(selected))
-            .border(BorderStroke(if (focused) 3.dp else 2.dp, tabBorder(selected, focused)), RoundedCornerShape(8.dp))
+            .defaultMinSize(minWidth = 40.dp, minHeight = 40.dp)
             .semantics { contentDescription = description; role = Role.Button }
             .combinedClickable(interactionSource = src, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(size * 0.6f)) {
+        Canvas(Modifier.size(glyph)) {
             val n = icon.size
             val cell = kotlin.math.floor(this.size.minDimension / n).coerceAtLeast(1f)
             val ox = kotlin.math.floor((this.size.width - cell * n) / 2f); val oy = kotlin.math.floor((this.size.height - cell * n) / 2f)

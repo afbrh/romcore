@@ -121,6 +121,7 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
     val scanning by vm.scanning.collectAsStateWithLifecycle()
     val n by vm.scanProgress.collectAsStateWithLifecycle()
     val cols = collections.orEmpty()
+    val gameCount by vm.games.collectAsStateWithLifecycle()
     // A saved collection tab is only trusted once the DB has answered; a deleted collection falls back to GAMES (never written back here).
     val tab = if (collections == null) saved else CollectionRules.resolveTab(saved, cols)
     var tabOpts by remember { mutableStateOf<TabOptions?>(null) }
@@ -183,16 +184,18 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
         }
     ) {
         Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-            // Centered strip: GAMES + one tab per collection (scrolls when there are many; focus scrolls it into view), then a pinned +.
-            Row(Modifier.align(Alignment.Center).padding(horizontal = if (scanning) 150.dp else 56.dp),
+            // Left-aligned strip: [GAMES] [+] [collection tabs...] (the strip scrolls when there are many; focus scrolls it into view).
+            // The settings gear sits at the right edge. Visual left-to-right order matches the L1/R1 cycle (GAMES, then collections).
+            Row(Modifier.align(Alignment.CenterStart).padding(end = if (scanning) 200.dp else 56.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val newOpen = editor != null && editor?.collectionId == null
                 val showSel = !settingsOpen && !newOpen
+                TabButton("GAMES (${gameCount.size})", selected = showSel && tab == CollectionRules.GAMES_TAB, modifier = Modifier.focusRequester(focusOf(CollectionRules.GAMES_TAB)).widthIn(min = 130.dp)) {
+                    tabOpts = null; vm.selectTab(CollectionRules.GAMES_TAB)
+                }
+                PlainTextButton("+", selected = newOpen, description = "New collection", modifier = Modifier.focusRequester(plusFocus)) { tabOpts = null; vm.newCollection() }
                 Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TabButton("GAMES", selected = showSel && tab == CollectionRules.GAMES_TAB, modifier = Modifier.focusRequester(focusOf(CollectionRules.GAMES_TAB)).widthIn(min = 130.dp)) {
-                        tabOpts = null; vm.selectTab(CollectionRules.GAMES_TAB)
-                    }
                     cols.forEach { c ->
                         TabButton(CollectionRules.tabLabel(c.name), selected = showSel && tab == c.id,
                             modifier = Modifier.focusRequester(focusOf(c.id)).widthIn(min = 90.dp, max = 200.dp),
@@ -201,11 +204,10 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
                         }
                     }
                 }
-                PlainTextButton("+", selected = newOpen, description = "New collection", modifier = Modifier.focusRequester(plusFocus)) { tabOpts = null; vm.newCollection() }
             }
-            // Composed after the tab strip so the first focus (and the first D-pad press) lands on a tab; LEFT from the first tab reaches it.
-            PixelIconButton(PixelIcons.GEAR, selected = settingsOpen, description = "Settings", modifier = Modifier.align(Alignment.CenterStart).focusRequester(gearFocus)) { vm.toggleSettings() }
-            if (scanning) Text("SCANNING $n", Modifier.align(Alignment.CenterEnd), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            // Composed after the tab strip so the first focus (and the first D-pad press) lands on a tab; RIGHT from the last tab reaches it.
+            PixelIconButton(PixelIcons.GEAR, selected = settingsOpen, description = "Settings", modifier = Modifier.align(Alignment.CenterEnd).offset(x = 7.dp).focusRequester(gearFocus)) { vm.toggleSettings() }
+            if (scanning) Text("SCANNING $n", Modifier.align(Alignment.CenterEnd).padding(end = 56.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         }
         tabOpts?.let { o -> cols.firstOrNull { it.id == o.id }?.let { c -> CollectionOptions(vm, c, o.mode, { tabOpts = o.copy(mode = it) }, { tabOpts = null }) } }
         val notice by vm.crashNotice.collectAsStateWithLifecycle()
@@ -358,8 +360,7 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
         }
     }
     LazyColumn(Modifier.fillMaxSize()) {
-        item { Section("ROM FOLDER") }
-        item { FocusLine(romDir?.substringAfterLast('/') ?: "-", right = "${games.size} GAMES", onClick = { toggle("folder") }, onAlt = { toggle("folder") }) }
+        item { FocusLine("ROM FOLDER", right = romDir?.substringAfterLast('/') ?: "-", onClick = { toggle("folder") }, onAlt = { toggle("folder") }) }
         if (open == "folder") {
             item { Note(romDir ?: "No folder chosen") }
             item { FocusLine("SEARCH AGAIN", right = "AUTO-FIND", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.startRomSearch() } }
@@ -368,8 +369,7 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
             item { Note("RomCore opens games by real path (All files access is ${if (allFiles) "on" else "OFF - press A on ALL FILES ACCESS below"}). Folders starting with . or _ and emulator data folders are not scanned.") }
             if (!allFiles) item { FocusLine("ALL FILES ACCESS", right = "OFF (TAP)", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { openAllFilesAccess(ctx) } }
         }
-        item { Section("BIOS FOLDER") }
-        item { FocusLine(biosDir?.substringAfterLast('/') ?: "NONE", right = if (biosDir == null) "OPTIONAL" else null, onClick = { toggle("bios") }, onAlt = { toggle("bios") }) }
+        item { FocusLine("BIOS FOLDER", right = biosDir?.substringAfterLast('/') ?: "NONE   OPTIONAL", onClick = { toggle("bios") }, onAlt = { toggle("bios") }) }
         if (open == "bios") {
             item { Note(biosDir ?: "No BIOS folder chosen. Games that need one will say so.") }
             item { FocusLine("SEARCH AGAIN", right = "AUTO-FIND", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.searchBios(first = false) } }
@@ -379,10 +379,10 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
             biosLines.forEach { l -> item { Note(l) } }
             item { Note("Copies PS2 BIOS, Switch prod.keys + firmware and PS1 and other console BIOS into the cores. Your files are only read; newer copies are never overwritten.") }
         }
-        item { Section("SAVE DATA FOLDER") }
         item {
-            FocusLine(if (saveWarning != null) "APP STORAGE (WARNING)" else saveInfo?.path?.substringAfterLast('/') ?: "-",
-                right = saveInfo?.let { com.noryan.romcore.api.save.SaveRoot.sizeLabel(it.bytes) }, onClick = { toggle("save") }, onAlt = { toggle("save") })
+            val saveName = if (saveWarning != null) "APP STORAGE (WARNING)" else saveInfo?.path?.substringAfterLast('/') ?: "-"
+            val saveSize = saveInfo?.let { com.noryan.romcore.api.save.SaveRoot.sizeLabel(it.bytes) }
+            FocusLine("SAVE DATA FOLDER", right = if (saveSize != null) "$saveName   $saveSize" else saveName, onClick = { toggle("save") }, onAlt = { toggle("save") })
         }
         if (saveWarning != null) item { Note("WARNING: $saveWarning") }
         if (open == "save") {
