@@ -94,6 +94,20 @@ class OtherMTest {
         assertTrue(o.one && o.two && o.plus && o.left && o.up && !o.a && !o.b && !o.right)
     }
 
+    @Test fun wiiBIsOnR1SoItCanBeHeldWhileMovingAndXIsAnAlternate() {
+        val p = profile()
+        p.button(Pad.R1, true); p.axis(Pad.LS_LEFT, 1.0)
+        var o = p.out()
+        assertTrue(o.b && o.left)
+        assertTrue(!o.one)                       // R1 no longer shoots; Y shoots
+        p.button(Pad.R1, false); p.button(Pad.X, true)
+        o = p.out()
+        assertTrue(o.b)                          // X stays an alternate B
+        p.button(Pad.X, false); p.button(Pad.Y, true)
+        o = p.out()
+        assertTrue(o.one && !o.b)
+    }
+
     @Test fun iniSidewaysOnlyForOtherMAndRestoredAfter() {
         val dir = kotlin.io.path.createTempDirectory("otherm").toFile()
         val ini = File(File(dir, "Config"), "WiimoteNew.ini")
