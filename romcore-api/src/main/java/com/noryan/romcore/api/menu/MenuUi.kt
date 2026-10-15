@@ -86,6 +86,7 @@ private fun RowItem(model: MenuModel, row: MenuRowModel, focused: Boolean, click
                 BasicText(if (row.action == MenuAction.CHANGE_CONTROLLER_MAPPING) "Controller Mapping" else MenuModel.title(row.action),
                     Modifier.weight(1f), style = style(if (model.isDisabled(row.action)) Dim else if (row.action == MenuAction.CLOSE_GAME) MenuStyle.Danger else Color.White), maxLines = 2)
                 if (model.isDisabled(row.action)) BasicText("N/A", style = style(Dim))
+                else if (row.action == MenuAction.SAVE_STATE || row.action == MenuAction.LOAD_STATE) {}   // plain actions, no arrow
                 else if (row.action != MenuAction.CLOSE_GAME || open) BasicText(if (open) "v" else ">", style = style(Dim))
             }
         }
