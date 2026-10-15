@@ -65,7 +65,7 @@ class MenuModel(
                 MenuAction.CLOSE_GAME -> { add(MenuRowModel.Confirm(true)); add(MenuRowModel.Confirm(false)) }
                 MenuAction.CHANGE_CONTROLLER_MAPPING -> { mapping.pads.forEach { add(MenuRowModel.Bind(it)) }; add(MenuRowModel.Reset) }
                 MenuAction.SET_HOTKEYS -> { hotkeys.actions.forEach { add(MenuRowModel.Hot(it)) }; add(MenuRowModel.Reset) }
-                MenuAction.SAVE_STATE, MenuAction.LOAD_STATE -> {}   // single state: acts directly, no slot list
+                MenuAction.SAVE_STATE, MenuAction.LOAD_STATE, MenuAction.FAST_FORWARD -> {}   // single state: acts directly, no slot list
             }
         }
     }
@@ -260,6 +260,7 @@ class MenuModel(
             MenuAction.SAVE_STATE -> "Save State"
             MenuAction.LOAD_STATE -> "Load State"
             MenuAction.SET_HOTKEYS -> "Set Hotkeys"
+            MenuAction.FAST_FORWARD -> "Fast Forward (hold)"
         }
     }
 }

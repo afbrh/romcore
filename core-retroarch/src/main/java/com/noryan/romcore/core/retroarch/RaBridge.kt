@@ -14,12 +14,18 @@ internal object RaBridge {
     /** Flush battery saves (SRAM/RTC) to disk now. */
     const val OP_FLUSH = 6
 
+    /** Hold-to-run fast forward at a hard 5.0x ratio (arg 1 on, 0 off). Needs the op-7 native patch; false on old builds. */
+    const val OP_FAST_FORWARD = 7
+
     @JvmStatic external fun nativeButton(retroId: Int, pressed: Boolean)
     /** stick 0=left 1=right, axis 0=x 1=y, value -32767..32767 (libretro convention: -y is up). */
     @JvmStatic external fun nativeAxis(stick: Int, axis: Int, value: Int)
     @JvmStatic external fun nativeReleaseAll()
     /** Runs [op] on the RetroArch thread; blocks until done or [timeoutMs]. 1 = success. */
     @JvmStatic external fun nativeRequest(op: Int, arg: Int, path: String?, timeoutMs: Int): Int
+
+    fun requestArg(op: Int, arg: Int, timeoutMs: Int = 500): Boolean =
+        try { nativeRequest(op, arg, null, timeoutMs) == 1 } catch (_: UnsatisfiedLinkError) { false }
 
     fun request(op: Int, path: String? = null, timeoutMs: Int = 2500): Boolean =
         try { nativeRequest(op, 0, path, timeoutMs) == 1 } catch (_: UnsatisfiedLinkError) { false }

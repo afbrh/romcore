@@ -1,0 +1,47 @@
+diff --git a/platforms/android/app/src/main/java/com/twilitrealm/dusk/DuskActivity.java b/platforms/android/app/src/main/java/com/twilitrealm/dusk/DuskActivity.java
+index 0b072effa6..e839eecf90 100644
+--- a/platforms/android/app/src/main/java/com/twilitrealm/dusk/DuskActivity.java
++++ b/platforms/android/app/src/main/java/com/twilitrealm/dusk/DuskActivity.java
+@@ -42,6 +42,7 @@ public class DuskActivity extends BorealisActivity {
+     public static native void nativeRomCoreAxis(int sdlAxis, int value);
+     public static native void nativeRomCoreReleaseAll();
+     public static native void nativeRomCoreSetPaused(boolean paused);
++    public static native boolean nativeRomCoreSetFastForward(boolean on);
+ 
+     /**
+      * Native -> host events. kind 0 = first frames presented, 1 = notice(a), 2 = fatal error(a = title, b = message).
+diff --git a/src/dusk/romcore_embed.cpp b/src/dusk/romcore_embed.cpp
+index bf55ad2397..d6b5bf76bf 100644
+--- a/src/dusk/romcore_embed.cpp
++++ b/src/dusk/romcore_embed.cpp
+@@ -212,6 +212,30 @@ JNIEXPORT void JNICALL Java_dev_twilitrealm_dusk_DuskActivity_nativeRomCoreSetPa
+     aurora_set_host_paused(paused != JNI_FALSE);
+ }
+ 
++// Hold-to-run Fast Forward: scales the game clock (aurora timescale; the sim runs up to 5x30 ticks/s) while the
++// frame limiter stays ON (we never touch turboMode), so presentation stays capped at video.maxFrameRate and the
++// speed is hard-capped at kFastForwardScale. Idempotent; off restores the exact previous scale.
++JNIEXPORT jboolean JNICALL Java_dev_twilitrealm_dusk_DuskActivity_nativeRomCoreSetFastForward(
++    JNIEnv*, jclass, jboolean on) {
++    static constexpr float kFastForwardScale = 5.0f;
++    static std::mutex m;
++    static bool active = false;
++    static float previous = 1.0f;
++    std::lock_guard lock(m);
++    if (on != JNI_FALSE) {
++        if (!active) {
++            previous = aurora_get_timescale();
++            if (previous <= 0.0f || previous > 1.0f) previous = 1.0f;
++            active = true;
++        }
++        aurora_set_timescale(kFastForwardScale);
++    } else if (active) {
++        aurora_set_timescale(previous);
++        active = false;
++    }
++    return JNI_TRUE;
++}
++
+ }  // extern "C"
+ 
+ #else  // !__ANDROID__

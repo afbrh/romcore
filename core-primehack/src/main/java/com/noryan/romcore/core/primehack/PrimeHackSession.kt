@@ -5,11 +5,14 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
+import com.noryan.romcore.api.FastForwardSupport
 import com.noryan.romcore.api.Pad
 import com.noryan.romcore.api.menu.CoreSessionBase
 import com.noryan.romcore.core.primehack.jni.NativeLibrary
 import com.noryan.romcore.core.primehack.jni.activities.EmulationActivity
 import com.noryan.romcore.core.primehack.jni.features.input.model.RomCoreInput
+import com.noryan.romcore.core.primehack.jni.features.settings.model.NativeConfig
+import com.noryan.romcore.core.primehack.jni.features.settings.model.Settings
 import java.io.File
 
 /**
@@ -21,10 +24,33 @@ class PrimeHackSession(
     context: Context,
     romPath: String,
     private val activity: Activity,
-) : CoreSessionBase(context, "primehack", romPath) {
+) : CoreSessionBase(context, "primehack", romPath), FastForwardSupport {
 
     @Volatile var paused = false
         private set
+
+
+    // ---- fast forward (hold) ---------------------------------------------------------------------------------
+    /**
+     * Hold-to-run Fast Forward via Dolphin's EmulationSpeed, written to the in-memory CurrentRun config layer (never
+     * saved; highest priority). Dolphin's CoreTiming/Mixer pick it up through the CPU-thread config callback, so no
+     * native setter is needed; the Mixer time-stretches audio. Capped at MAX_MULTIPLIER x. Release deletes the
+     * CurrentRun key so the normal value (base/game config, 1.0 unless the user changed it) applies exactly again.
+     */
+    @Synchronized
+    override fun setFastForward(on: Boolean): Boolean = try {
+        val file = Settings.FILE_DOLPHIN; val sec = Settings.SECTION_INI_CORE; val key = "EmulationSpeed"
+        if (on) {
+            if (!NativeLibrary.IsRunning()) false
+            else {
+                NativeConfig.setFloat(NativeConfig.LAYER_CURRENT, file, sec, key, FastForwardSupport.MAX_MULTIPLIER.toFloat())
+                true
+            }
+        } else {
+            NativeConfig.deleteKey(NativeConfig.LAYER_CURRENT, file, sec, key)
+            true
+        }
+    } catch (_: Throwable) { false }
 
     override fun pause() {
         EmulationActivity.hasUserPausedEmulation = true   // stops Dolphin's fragment un-pausing on resume while the menu is up

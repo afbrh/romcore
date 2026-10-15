@@ -111,7 +111,11 @@ class MenuRouterIntegrationTest {
         val b = RouterHotkeyBackend(router)
         assertEquals("Open Menu", b.title(MenuAction.SET_HOTKEYS))
         assertEquals("BACK", b.describe(MenuAction.SET_HOTKEYS))
-        assertEquals("Unset", b.describe(MenuAction.SAVE_STATE))
+        assertEquals("R1 + L3", b.describe(MenuAction.SAVE_STATE))
+        assertEquals("L1 + L3", b.describe(MenuAction.LOAD_STATE))
+        assertEquals("R2 + L3 / L2 + L3", b.describe(MenuAction.FAST_FORWARD))
+        b.clear(MenuAction.SAVE_STATE)
+        assertEquals("Unset", b.describe(MenuAction.SAVE_STATE))      // a cleared hotkey stays cleared
         b.clear(MenuAction.SET_HOTKEYS)
         assertEquals("BACK", b.describe(MenuAction.SET_HOTKEYS))   // menu can never be locked out
         b.resetToDefaults()

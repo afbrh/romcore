@@ -85,13 +85,33 @@ object RomCoreCoreHost {
 
         private fun onHotkey(ev: HotkeyEvent) {
             when (ev) {
-                HotkeyEvent.ToggleMenu -> menu.toggle()
+                HotkeyEvent.ToggleMenu -> { setFastForward(false); menu.toggle() }
                 is HotkeyEvent.Run -> if (!menu.isOpen) runAction(ev.action)
+                is HotkeyEvent.Release -> setFastForward(false)
+            }
+        }
+
+        @Volatile private var fastForwarding = false
+        private var ffNoticeShown = false
+
+        /** Hold-to-run fast forward (always <= [FastForwardSupport.MAX_MULTIPLIER]x). No-op when already in that state. */
+        private fun setFastForward(on: Boolean) {
+            if (on == fastForwarding) return
+            val ff = session as? FastForwardSupport
+            if (ff == null) {
+                if (on && !ffNoticeShown) { ffNoticeShown = true; toast("Fast forward isn't available for this game") }
+                return
+            }
+            fastForwarding = on
+            worker.execute {
+                val ok = runCatching { ff.setFastForward(on) }.getOrDefault(false)
+                if (on && !ok) { fastForwarding = false; if (!ffNoticeShown) { ffNoticeShown = true; toast("Fast forward isn't available for this game") } }
             }
         }
 
         private fun runAction(a: MenuAction) {
             when (a) {
+                MenuAction.FAST_FORWARD -> setFastForward(true)
                 MenuAction.CLOSE_GAME -> session.close()
                 MenuAction.SAVE_STATE -> worker.execute {
                     val ok = runCatching { session.saveState(QUICK_SLOT) }.getOrDefault(false)

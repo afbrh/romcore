@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.sp
 
 object MenuStyle {
     val PanelWidth = 300.dp
+    /** Bottom-sheet menu: full width up to this. */
+    val SheetMaxWidth = 296.dp
     val Background = Color(0xFF000000)
     val Danger = Color(0xFFFF6B6B)
     val FontSize = 15.sp

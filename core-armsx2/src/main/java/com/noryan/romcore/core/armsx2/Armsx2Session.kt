@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import com.armsx2.EmuState
 import com.armsx2.runtime.MainActivityRuntime
+import com.noryan.romcore.api.FastForwardSupport
 import com.noryan.romcore.api.Pad
 import com.noryan.romcore.api.PsFace
 import com.noryan.romcore.api.menu.SlotInfo
@@ -20,7 +21,7 @@ import java.io.File
  * Save states are PCSX2's own slot states (`<data>/sstates/<serial> (<crc>).NN.p2s`, zip with screenshot), slots 1..10, which
  * is exactly the 10 slots the shared menu shows. save/load are blocking and are called off the main thread by the menu.
  */
-internal class Armsx2Session(private val activity: Armsx2Activity) : CoreSession, StateSlotProvider {
+internal class Armsx2Session(private val activity: Armsx2Activity) : CoreSession, StateSlotProvider, FastForwardSupport {
     private val main = Handler(Looper.getMainLooper())
 
     // ---- pause / resume ----------------------------------------------------------------------------------------------
@@ -31,6 +32,24 @@ internal class Armsx2Session(private val activity: Armsx2Activity) : CoreSession
     }
 
     override fun resume() = MainActivityRuntime.resume() // also clears userHeldPause
+
+    // ---- hold-to-run fast forward ------------------------------------------------------------------------------------
+    // Turbo limiter with TurboScalar pinned to 5.0 (never Unlimited); release returns to the user's base limiter
+    // (Nominal, or Unlimited if they turned the frame limit off in ARMSX2's own overlay). Both calls queue onto the CPU thread.
+    @Volatile private var ffOn = false
+    @Synchronized override fun setFastForward(on: Boolean): Boolean {
+        if (!vmUp()) return false
+        return runCatching {
+            if (on) {
+                NativeApp.setTurboScalar(FastForwardSupport.MAX_MULTIPLIER.toFloat())
+                NativeApp.speedhackLimitermode(1)
+            } else {
+                NativeApp.speedhackLimitermode(if (com.armsx2.ui.InGameOverlay.frameLimitOn.value) 0 else 3)
+            }
+            ffOn = on
+            true
+        }.getOrDefault(false)
+    }
 
     // ---- states ------------------------------------------------------------------------------------------------------
     override fun saveState(slot: Int): Boolean {

@@ -2,11 +2,14 @@ package com.noryan.romcore.core.dolphin
 
 import android.content.Context
 import android.os.SystemClock
+import com.noryan.romcore.api.FastForwardSupport
 import com.noryan.romcore.api.Pad
 import com.noryan.romcore.api.menu.CoreSessionBase
 import com.noryan.romcore.core.dolphin.jni.NativeLibrary
 import com.noryan.romcore.core.dolphin.jni.features.input.model.InputOverrider
 import com.noryan.romcore.core.dolphin.jni.features.input.model.InputOverrider.ControlId
+import com.noryan.romcore.core.dolphin.jni.features.settings.model.NativeConfig
+import com.noryan.romcore.core.dolphin.jni.features.settings.model.Settings
 import java.io.File
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -24,9 +27,32 @@ class DolphinSession(
     context: Context,
     romPath: String,
     private val onClose: () -> Unit,
-) : CoreSessionBase(context.applicationContext, "dolphin", romPath) {
+) : CoreSessionBase(context.applicationContext, "dolphin", romPath), FastForwardSupport {
 
     private val resumeFile: File get() = File(stateDir, "resume")
+
+
+    // ---- fast forward (hold) ---------------------------------------------------------------------------------
+    /**
+     * Hold-to-run Fast Forward via Dolphin's EmulationSpeed, written to the in-memory CurrentRun config layer (never
+     * saved; highest priority). Dolphin's CoreTiming/Mixer pick it up through the CPU-thread config callback, so no
+     * native setter is needed; the Mixer time-stretches audio. Capped at MAX_MULTIPLIER x. Release deletes the
+     * CurrentRun key so the normal value (base/game config, 1.0 unless the user changed it) applies exactly again.
+     */
+    @Synchronized
+    override fun setFastForward(on: Boolean): Boolean = try {
+        val file = Settings.FILE_DOLPHIN; val sec = Settings.SECTION_INI_CORE; val key = "EmulationSpeed"
+        if (on) {
+            if (!NativeLibrary.IsRunning()) false
+            else {
+                NativeConfig.setFloat(NativeConfig.LAYER_CURRENT, file, sec, key, FastForwardSupport.MAX_MULTIPLIER.toFloat())
+                true
+            }
+        } else {
+            NativeConfig.deleteKey(NativeConfig.LAYER_CURRENT, file, sec, key)
+            true
+        }
+    } catch (_: Throwable) { false }
 
     // ---- lifecycle -------------------------------------------------------------------------------------------
     override fun pause() {

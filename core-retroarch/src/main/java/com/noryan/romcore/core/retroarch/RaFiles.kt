@@ -102,7 +102,8 @@ internal object RaFiles {
             // ---- timing ----
             "rewind_enable" to "false",
             "run_ahead_enabled" to "false",
-            "fastforward_ratio" to "1.0",
+            "fastforward_ratio" to "5.0", // hard cap if RetroArch's own fast-forward is ever triggered; 0 would mean uncapped
+            "audio_fastforward_mute" to "true",
         )
         cfg.putAll(CrtShader.configKeys(shadersDir))
         cfg.putAll(spec.cfg)

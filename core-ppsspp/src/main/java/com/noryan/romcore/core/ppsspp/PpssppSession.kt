@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.MotionEvent
+import com.noryan.romcore.api.FastForwardSupport
 import com.noryan.romcore.api.Pad
 import com.noryan.romcore.api.PsFace
 import com.noryan.romcore.api.menu.CoreSessionBase
@@ -19,7 +20,7 @@ import java.util.EnumMap
  * PsFace rule (Pad.A=Circle, B=Cross, X=Triangle, Y=Square) is applied here by emitting the keycode of that PSP button.
  */
 class PpssppSession(private val activity: Activity, romPath: String) :
-    CoreSessionBase(activity.applicationContext as Context, "ppsspp", romPath) {
+    CoreSessionBase(activity.applicationContext as Context, "ppsspp", romPath), FastForwardSupport {
 
     private val dev = NativeApp.DEVICE_ID_PAD_0
     private val axes = EnumMap<Pad, Float>(Pad::class.java)
@@ -28,6 +29,11 @@ class PpssppSession(private val activity: Activity, romPath: String) :
 
     override fun pause() { paused = true; NativeApp.romcorePause(true) }
     override fun resume() { paused = false; NativeApp.romcorePause(false) }
+    /** Hold FF: frame limiter = 5x the game's frame rate (native romcoreFastForward, patch 0003); 1 restores normal. */
+    override fun setFastForward(on: Boolean): Boolean = runCatching {
+        NativeApp.romcoreFastForward(if (on) FastForwardSupport.MAX_MULTIPLIER else 1); true
+    }.getOrDefault(false)
+
     override fun close() { activity.runOnUiThread { activity.finish() } }
 
     override fun writeState(slot: Int, file: File): Boolean = runState(true, file)

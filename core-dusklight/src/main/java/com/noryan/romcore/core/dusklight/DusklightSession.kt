@@ -4,6 +4,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Process
 import com.noryan.romcore.api.CoreSession
+import com.noryan.romcore.api.FastForwardSupport
 import com.noryan.romcore.api.Pad
 import com.noryan.romcore.api.menu.SlotInfo
 import com.noryan.romcore.api.menu.StateSlotProvider
@@ -18,7 +19,7 @@ import dev.twilitrealm.dusk.DuskActivity
  *                   Activity and end the process like the other cores.
  *  - input        : canonical pads -> an SDL virtual gamepad ([DusklightInput]).
  */
-internal class DusklightSession(private val activity: DusklightActivity) : CoreSession, StateSlotProvider, StateSupport {
+internal class DusklightSession(private val activity: DusklightActivity) : CoreSession, StateSlotProvider, StateSupport, FastForwardSupport {
     override val stateUnavailableReason: String = DusklightCore.STATE_UNAVAILABLE_REASON
     override fun slotInfo(slot: Int) = SlotInfo(slot, false)
 
@@ -31,6 +32,11 @@ internal class DusklightSession(private val activity: DusklightActivity) : CoreS
     // ---- pause / resume ------------------------------------------------------------------------------------------------
     override fun pause() { call { DuskActivity.nativeRomCoreSetPaused(true) } }
     override fun resume() { call { DuskActivity.nativeRomCoreSetPaused(false) } }
+
+    // ---- fast forward (hold): native game-clock timescale 5x, frame limiter stays on (see romcore_embed.cpp) ----------------
+    override fun setFastForward(on: Boolean): Boolean = try {
+        DuskActivity.nativeRomCoreSetFastForward(on)
+    } catch (_: UnsatisfiedLinkError) { !on }   // native not loaded yet: releasing is a no-op success, engaging is refused
 
     // ---- states: not supported ---------------------------------------------------------------------------------------------
     override fun saveState(slot: Int): Boolean { activity.notice(stateUnavailableReason); return false }

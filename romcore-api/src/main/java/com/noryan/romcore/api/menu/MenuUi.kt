@@ -1,7 +1,21 @@
 package com.noryan.romcore.api.menu
 
 import android.text.format.DateFormat
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +42,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -57,61 +72,84 @@ private fun MenuPanelContent(model: MenuModel) {
     val rows = model.rows
     val listState = rememberLazyListState()
     LaunchedEffect(model.cursor, rows.size) { listState.animateScrollToItem((model.cursor - 2).coerceAtLeast(0)) }
-    Row(Modifier.fillMaxHeight().width(MenuStyle.PanelWidth).background(MenuStyle.Background)) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = MenuStyle.PanelPaddingHorizontal, vertical = MenuStyle.PanelPaddingVertical),
-        ) {
-            itemsIndexed(rows) { i, row ->
-                @Suppress("UNUSED_EXPRESSION") model.revision
-                RowItem(model, row, i == model.cursor, Modifier.clickable { model.select(i) })
-            }
-            if (model.status.isNotEmpty() || model.stateUnavailableReason != null) item {
-                BasicText(model.status.ifEmpty { model.stateUnavailableReason.orEmpty() }, Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-                    style = TextStyle(color = Dim, fontFamily = Silkscreen, fontSize = 11.sp))
+    // Composition restarts on every open (RomCoreMenuContent returns early while closed), so the slide plays each time.
+    val shown = remember { MutableTransitionState(false).apply { targetState = true } }
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        AnimatedVisibility(shown, enter = slideInVertically(tween(180)) { it } + fadeIn(tween(120)), exit = fadeOut(tween(80))) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.widthIn(max = MenuStyle.SheetMaxWidth).fillMaxWidth().heightIn(max = maxHeight * 0.85f)
+                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).background(MenuStyle.Background)
+                    .border(BorderStroke(2.dp, Plate), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                itemsIndexed(rows) { i, row ->
+                    @Suppress("UNUSED_EXPRESSION") model.revision
+                    RowItem(model, row, i == model.cursor, Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { model.select(i) })
+                }
+                if (model.status.isNotEmpty() || model.stateUnavailableReason != null) item {
+                    BasicText(model.status.ifEmpty { model.stateUnavailableReason.orEmpty() }, Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                        style = TextStyle(color = Dim, fontFamily = Silkscreen, fontSize = 11.sp))
+                }
             }
         }
     }
 }
+
+private fun style(color: Color, size: androidx.compose.ui.unit.TextUnit = MenuStyle.FontSize) =
+    TextStyle(color = color, fontFamily = Silkscreen, fontSize = size)
+
+/** Home-screen "Games" button look: dark plate + grey border; focused = orange plate, dark label. */
+private fun Modifier.button(focused: Boolean, indent: Boolean = false): Modifier {
+    val shape = RoundedCornerShape(8.dp)
+    return this.padding(start = if (indent) 12.dp else 0.dp).fillMaxWidth().clip(shape)
+        .background(if (focused) Accent else Plate0)
+        .border(BorderStroke(if (focused) 3.dp else 2.dp, if (focused) Color.White else Plate), shape)
+}
+private val Accent = Color(0xFFFF6B4A)
+private val Plate0 = Color(0xFF0B0B0E)
+private val Plate = Color(0xFF2A2A31)
+private val OnAccent = Color(0xFF14080A)
 
 @Composable
 private fun RowItem(model: MenuModel, row: MenuRowModel, focused: Boolean, click: Modifier) {
-    val bg = if (focused) Modifier.background(Focus) else Modifier
     when (row) {
         is MenuRowModel.Top -> {
             val open = model.expanded == row.action
-            Row(click.then(bg).fillMaxWidth().padding(MenuStyle.RowPaddingHorizontal, MenuStyle.RowPaddingVertical),
-                horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            val disabled = model.isDisabled(row.action)
+            val label = if (focused) OnAccent else if (disabled) Dim else if (row.action == MenuAction.CLOSE_GAME) MenuStyle.Danger else Color(0xFFE6E6EA)
+            Box(click.button(focused).padding(MenuStyle.RowPaddingHorizontal, 12.dp)) {
                 BasicText(if (row.action == MenuAction.CHANGE_CONTROLLER_MAPPING) "Controller Mapping" else MenuModel.title(row.action),
-                    Modifier.weight(1f), style = style(if (model.isDisabled(row.action)) Dim else if (row.action == MenuAction.CLOSE_GAME) MenuStyle.Danger else Color.White), maxLines = 2)
-                if (model.isDisabled(row.action)) BasicText("N/A", style = style(Dim))
-                else if (row.action == MenuAction.SAVE_STATE || row.action == MenuAction.LOAD_STATE) {}   // plain actions, no arrow
-                else if (row.action != MenuAction.CLOSE_GAME || open) BasicText(if (open) "v" else ">", style = style(Dim))
+                    Modifier.align(Alignment.Center), style = style(label).copy(textAlign = TextAlign.Center), maxLines = 2)
+                val tail = if (disabled) "N/A"
+                    else if (row.action == MenuAction.SAVE_STATE || row.action == MenuAction.LOAD_STATE) ""   // plain actions, no arrow
+                    else if (row.action != MenuAction.CLOSE_GAME || open) (if (open) "v" else ">") else ""
+                if (tail.isNotEmpty()) BasicText(tail, Modifier.align(Alignment.CenterEnd), style = style(if (focused) OnAccent else Dim))
             }
         }
-        is MenuRowModel.Confirm -> Sub(click, bg, if (row.yes) "Yes, close game" else "Cancel", "", if (row.yes) MenuStyle.Danger else Color.White)
-        is MenuRowModel.Slot -> SlotRow(model, row.slot, click, bg)
+        is MenuRowModel.Confirm -> Sub(click, focused, if (row.yes) "Yes, close game" else "Cancel", "", if (row.yes) MenuStyle.Danger else Color(0xFFE6E6EA))
+        is MenuRowModel.Slot -> SlotRow(model, row.slot, click, if (focused) Modifier.background(Accent) else Modifier)
         is MenuRowModel.Bind -> {
             val cap = model.capturingPad == row.pad
-            Sub(click, bg, model.padLabel(row.pad), if (cap) "PRESS..." else model.mapping.describe(row.pad), Color.White)
+            Sub(click, focused, model.padLabel(row.pad), if (cap) "PRESS..." else model.mapping.describe(row.pad), Color(0xFFE6E6EA))
         }
         is MenuRowModel.Hot -> {
             val cap = model.capturingHotkey == row.action
-            Sub(click, bg, model.hotkeys.title(row.action) ?: MenuModel.title(row.action).replace("Change Controller Mapping", "Mapping"),
-                if (cap) "HOLD..." else model.hotkeys.describe(row.action), Color.White)
+            Sub(click, focused, model.hotkeys.title(row.action) ?: MenuModel.title(row.action).replace("Change Controller Mapping", "Mapping"),
+                if (cap) "HOLD..." else model.hotkeys.describe(row.action), Color(0xFFE6E6EA))
         }
-        MenuRowModel.Reset -> Sub(click, bg, "Reset defaults", "", MenuStyle.Danger)
-        MenuRowModel.ClearHotkey -> Sub(click, bg, "Clear", "", Color.White)
+        MenuRowModel.Reset -> Sub(click, focused, "Reset defaults", "", MenuStyle.Danger)
+        MenuRowModel.ClearHotkey -> Sub(click, focused, "Clear", "", Color(0xFFE6E6EA))
     }
 }
 
 @Composable
-private fun Sub(click: Modifier, bg: Modifier, label: String, value: String, color: Color) {
-    Row(click.then(bg).fillMaxWidth().padding(start = 28.dp, end = MenuStyle.RowPaddingHorizontal, top = 10.dp, bottom = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        BasicText(label, Modifier.weight(1f), style = style(color, 12.sp), maxLines = 1)
-        if (value.isNotEmpty()) BasicText(value, style = style(Dim, 10.sp), maxLines = 1)
+private fun Sub(click: Modifier, focused: Boolean, label: String, value: String, color: Color) {
+    Row(click.button(focused, indent = true).padding(horizontal = MenuStyle.RowPaddingHorizontal, vertical = 9.dp),
+        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        BasicText(label, style = style(if (focused) OnAccent else color, 12.sp).copy(textAlign = TextAlign.Center), maxLines = 1)
+        if (value.isNotEmpty()) { Box(Modifier.width(10.dp)); BasicText(value, style = style(if (focused) OnAccent else Dim, 10.sp), maxLines = 1) }
     }
 }
 
@@ -134,5 +172,3 @@ private fun SlotRow(model: MenuModel, slot: Int, click: Modifier, bg: Modifier) 
     }
 }
 
-private fun style(color: Color, size: androidx.compose.ui.unit.TextUnit = MenuStyle.FontSize) =
-    TextStyle(color = color, fontFamily = Silkscreen, fontSize = size)

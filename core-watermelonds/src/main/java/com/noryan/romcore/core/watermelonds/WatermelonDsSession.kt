@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import com.noryan.romcore.api.FastForwardSupport
 import com.noryan.romcore.api.Pad
 import com.noryan.romcore.api.menu.CoreSessionBase
 import me.magnum.melonds.MelonEmulator
@@ -20,9 +21,20 @@ class WatermelonDsSession(
     context: Context,
     romPath: String,
     private val activity: EmulatorActivity,
-) : CoreSessionBase(context, WatermelonDsCore.id, romPath) {
+) : CoreSessionBase(context, WatermelonDsCore.id, romPath), FastForwardSupport {
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var paused = false
+
+    /**
+     * melonDS' own fast-forward (setFastForwardEnabled) runs at the "fast_forward_speed_multiplier" preference, whose
+     * stock default (-1) means UNCAPPED. [pinFastForwardCap] pins it to 5x at process start, so the native frame
+     * limiter (and audio speed hint) top out at 5 x 60 fps. Idempotent; false restores the normal frame limit.
+     */
+    override fun setFastForward(on: Boolean): Boolean = try {
+        if (on) pinFastForwardCap(context.applicationContext)
+        MelonEmulator.setFastForwardEnabled(on)
+        true
+    } catch (_: Throwable) { false }
 
     override fun pause() { paused = true; runCatching { MelonEmulator.pauseEmulation() } }
     override fun resume() { paused = false; runCatching { MelonEmulator.resumeEmulation() } }
@@ -92,5 +104,17 @@ class WatermelonDsSession(
         if (stickDir[idx] == on) return
         stickDir[idx] = on
         if (on) MelonEmulator.onInputDown(input) else MelonEmulator.onInputUp(input)
+    }
+
+    companion object {
+        /** Forces the stock fast-forward multiplier preference to [FastForwardSupport.MAX_MULTIPLIER] (never uncapped). */
+        fun pinFastForwardCap(ctx: Context) {
+            runCatching {
+                val p = ctx.getSharedPreferences(ctx.packageName + "_preferences", Context.MODE_PRIVATE) // same file as PreferenceManager's default
+                val want = FastForwardSupport.MAX_MULTIPLIER.toString()
+                if (p.getString("fast_forward_speed_multiplier", null) != want)
+                    p.edit().putString("fast_forward_speed_multiplier", want).apply()
+            }
+        }
     }
 }

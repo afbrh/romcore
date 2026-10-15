@@ -66,13 +66,14 @@ class RouterMappingBackend(private val router: InputRouter, private val scope: S
  */
 class RouterHotkeyBackend(private val router: InputRouter) : HotkeyBackend {
     private val store get() = router.hotkeyStore
-    override val actions = listOf(MenuAction.SET_HOTKEYS, MenuAction.SAVE_STATE, MenuAction.LOAD_STATE, MenuAction.CLOSE_GAME)
+    override val actions = listOf(MenuAction.SET_HOTKEYS, MenuAction.SAVE_STATE, MenuAction.LOAD_STATE, MenuAction.FAST_FORWARD, MenuAction.CLOSE_GAME)
 
     private fun map(a: MenuAction): HotkeyAction? = when (a) {
         MenuAction.SET_HOTKEYS -> HotkeyAction.OPEN_MENU
         MenuAction.SAVE_STATE -> HotkeyAction.SAVE_STATE
         MenuAction.LOAD_STATE -> HotkeyAction.LOAD_STATE
         MenuAction.CLOSE_GAME -> HotkeyAction.CLOSE_GAME
+        MenuAction.FAST_FORWARD -> HotkeyAction.FAST_FORWARD
         else -> null
     }
 

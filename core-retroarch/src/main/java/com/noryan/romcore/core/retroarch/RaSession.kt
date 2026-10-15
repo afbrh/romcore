@@ -1,6 +1,7 @@
 package com.noryan.romcore.core.retroarch
 
 import android.content.Context
+import com.noryan.romcore.api.FastForwardSupport
 import com.noryan.romcore.api.Pad
 import com.noryan.romcore.api.System
 import com.noryan.romcore.api.menu.CoreSessionBase
@@ -16,7 +17,7 @@ internal class RaSession(
     romKey: String,
     private val system: System,
     private val onClose: () -> Unit,
-) : CoreSessionBase(context, "retroarch", romKey) {
+) : CoreSessionBase(context, "retroarch", romKey), FastForwardSupport {
 
     // direction magnitudes 0..1
     private val stick = FloatArray(8) // LS_UP, LS_DOWN, LS_LEFT, LS_RIGHT, RS_UP, RS_DOWN, RS_LEFT, RS_RIGHT
@@ -48,6 +49,21 @@ internal class RaSession(
         if (ready) RaBridge.request(RaBridge.OP_FLUSH, null, 1000)
     } }
     override fun resume() { paused = false; pauser.execute { RaBridge.request(RaBridge.OP_RESUME, null, 1500) } }
+
+    /**
+     * RetroArch's own fast-motion override, driven from the bridge (op 7) on the RetroArch thread: ratio 5.0 (never 0,
+     * which would be uncapped). Audio is muted while it runs (audio_fastforward_mute) so there is no crackle.
+     * Idempotent; off restores the configured fastforward_ratio / normal pacing.
+     */
+    @Volatile private var ffOn = false
+    override fun setFastForward(on: Boolean): Boolean {
+        if (!on && !ffOn) return true
+        if (on && !ready) return false
+        val ok = RaBridge.requestArg(RaBridge.OP_FAST_FORWARD, if (on) 1 else 0)
+        if (ok) ffOn = on
+        else if (!on) ffOn = false // a failed release must not leave us believing we are still fast
+        return ok
+    }
 
     override fun saveState(slot: Int): Boolean {
         val f = statePath(slot)

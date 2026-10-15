@@ -29,6 +29,7 @@ internal object WatermelonDsHost {
     /** Called from [RomCoreHiltApplication.onCreate] after the Hilt component exists. */
     fun onProcessCreate(app: Application) {
         runCatching { MelonDSApplication.initializeForEmbedding(app) }.onFailure { Log.e(TAG, "WatermelonDS embedding init failed", it) }
+        WatermelonDsSession.pinFastForwardCap(app)
         // Manifest-declared startup initializers were removed (main process must not need Hilt); run them here.
         runCatching {
             val init = AppInitializer.getInstance(app)

@@ -6,7 +6,9 @@ import java.util.EnumSet
 
 /** Things a hotkey combo can trigger. OPEN_MENU toggles the in-game menu; the rest map to [MenuAction]. */
 enum class HotkeyAction(val menuAction: MenuAction?) {
-    OPEN_MENU(null), SAVE_STATE(MenuAction.SAVE_STATE), LOAD_STATE(MenuAction.LOAD_STATE), CLOSE_GAME(MenuAction.CLOSE_GAME)
+    OPEN_MENU(null), SAVE_STATE(MenuAction.SAVE_STATE), LOAD_STATE(MenuAction.LOAD_STATE), CLOSE_GAME(MenuAction.CLOSE_GAME),
+    /** Hold-to-run: [HotkeyEvent.Run] on press, [HotkeyEvent.Release] when the combo is let go. */
+    FAST_FORWARD(MenuAction.FAST_FORWARD)
 }
 
 sealed interface HotkeyEvent {
@@ -14,6 +16,8 @@ sealed interface HotkeyEvent {
     data object ToggleMenu : HotkeyEvent
     /** Run a menu action directly (quick save / quick load / close) without opening the menu. */
     data class Run(val action: MenuAction) : HotkeyEvent
+    /** A hold action's combo was released (currently only [MenuAction.FAST_FORWARD]). */
+    data class Release(val action: MenuAction) : HotkeyEvent
 }
 
 fun interface HotkeyListener { fun onHotkey(event: HotkeyEvent) }
@@ -30,7 +34,10 @@ data class HotkeyConfig(val combos: Map<HotkeyAction, List<Set<Pad>>>) {
         /** Back opens the menu; the other actions are optional and unbound by default. SELECT+START does NOT open it. */
         val DEFAULT = HotkeyConfig(mapOf(
             HotkeyAction.OPEN_MENU to listOf(BACK_ONLY),
-            HotkeyAction.SAVE_STATE to emptyList(), HotkeyAction.LOAD_STATE to emptyList(), HotkeyAction.CLOSE_GAME to emptyList(),
+            HotkeyAction.SAVE_STATE to listOf(setOf(Pad.L3, Pad.R1)),
+            HotkeyAction.LOAD_STATE to listOf(setOf(Pad.L3, Pad.L1)),
+            HotkeyAction.CLOSE_GAME to emptyList(),
+            HotkeyAction.FAST_FORWARD to listOf(setOf(Pad.L3, Pad.R2), setOf(Pad.L3, Pad.L2)),
         ))
         /**
          * Stored-config migration: an Open Menu list equal to the old default (HOME | SELECT+START) becomes the new
@@ -63,16 +70,25 @@ class HotkeyStore(private val kv: KeyValueStore) {
             }
         }
         m[HotkeyAction.OPEN_MENU] = HotkeyConfig.normalizeOpenMenu(m[HotkeyAction.OPEN_MENU].orEmpty())
+        // One-time: configs saved while Save/Load/Fast Forward had no default hold them as "unset"; give those the new defaults.
+        if (kv.get(DEFAULTS_KEY) == null) {
+            for (a in listOf(HotkeyAction.SAVE_STATE, HotkeyAction.LOAD_STATE, HotkeyAction.FAST_FORWARD))
+                if (m[a].isNullOrEmpty()) m[a] = HotkeyConfig.DEFAULT.combos.getValue(a)
+            val migrated = HotkeyConfig(m)
+            save(migrated)
+            return migrated
+        }
         return HotkeyConfig(m)
     }
 
     fun save(c: HotkeyConfig) {
         kv.put(KEY, c.combos.entries.joinToString(";") { (a, l) -> "${a.name}=" + l.joinToString("|") { s -> s.sortedBy { it.ordinal }.joinToString("+") { it.name } } })
+        kv.put(DEFAULTS_KEY, "1")   // from now on an empty list means the user cleared it
         revision++
     }
 
     fun reset() { kv.remove(KEY); revision++ }
-    private companion object { const val KEY = "hotkeys" }
+    private companion object { const val KEY = "hotkeys"; const val DEFAULTS_KEY = "hotkeys_defaults_v2" }
 }
 
 class HotkeyResult(val event: HotkeyEvent?, val swallow: Boolean, val toRelease: Set<Pad>) {
@@ -88,13 +104,16 @@ class HotkeyManager(config: HotkeyConfig = HotkeyConfig.DEFAULT) {
     var config: HotkeyConfig = config
     private val held = EnumSet.noneOf(Pad::class.java)
     private val swallowed = EnumSet.noneOf(Pad::class.java)
+    /** Combo of a currently running hold action (fast forward), if any. */
+    private var holdCombo: Set<Pad>? = null
 
-    fun reset() { held.clear(); swallowed.clear() }
+    fun reset() { held.clear(); swallowed.clear(); holdCombo = null }
 
     fun onPad(pad: Pad, pressed: Boolean): HotkeyResult {
         if (!pressed) {
             val was = held.remove(pad)
             val sw = swallowed.remove(pad)
+            holdCombo?.let { if (pad in it) { holdCombo = null; return HotkeyResult(HotkeyEvent.Release(MenuAction.FAST_FORWARD), true, emptySet()) } }
             return if (was && sw) HotkeyResult(null, true, emptySet()) else HotkeyResult.NONE
         }
         if (!held.add(pad)) return HotkeyResult(null, pad in swallowed, emptySet())
@@ -104,6 +123,7 @@ class HotkeyManager(config: HotkeyConfig = HotkeyConfig.DEFAULT) {
         }
         val (action, combo) = best ?: return HotkeyResult.NONE
         swallowed.addAll(combo)
+        if (action == HotkeyAction.FAST_FORWARD) holdCombo = combo
         val ev = action.menuAction?.let { HotkeyEvent.Run(it) } ?: HotkeyEvent.ToggleMenu
         return HotkeyResult(ev, true, combo - pad)
     }

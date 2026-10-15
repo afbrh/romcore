@@ -4,6 +4,8 @@ import android.os.Handler
 import android.os.Looper
 import com.noryan.romcore.api.ui.RomCoreToast as Toast
 import com.noryan.romcore.api.CoreSession
+import com.noryan.romcore.api.FastForwardSupport
+import org.yuzu.yuzu_emu.utils.NativeConfig
 import com.noryan.romcore.api.Pad
 import com.noryan.romcore.api.menu.SlotInfo
 import com.noryan.romcore.api.menu.StateSlotProvider
@@ -18,7 +20,7 @@ import org.yuzu.yuzu_emu.features.input.model.NativeButton
  * "overlay" controller on port 0, so it works whether or not a physical pad is attached and independent of the
  * touch overlay being visible.
  */
-class EdenSession(private val context: android.content.Context) : CoreSession, StateSlotProvider, StateSupport {
+class EdenSession(private val context: android.content.Context) : CoreSession, StateSlotProvider, StateSupport, FastForwardSupport {
     override val stateUnavailableReason: String = EdenCore.STATE_UNAVAILABLE_REASON
     /** Slots never exist: Eden has no save states. */
     override fun slotInfo(slot: Int) = SlotInfo(slot, false)
@@ -28,6 +30,42 @@ class EdenSession(private val context: android.content.Context) : CoreSession, S
 
     override fun pause() { if (NativeLibrary.isRunning() && !NativeLibrary.isPaused()) NativeLibrary.pauseEmulation() }
     override fun resume() { if (NativeLibrary.isPaused()) NativeLibrary.unpauseEmulation() }
+
+    // Saved normal-speed state, valid while fast forward is on.
+    private var ffOn = false
+    private var savedTurboLimit = 0
+    private var savedUseLimit = true
+    private var savedSlow = false
+
+    /**
+     * Hold-to-run fast forward via Eden's native Turbo speed mode (Settings::SetSpeedMode, which the core timing /
+     * speed limiter read live). turbo_speed_limit is forced to 500% (5x = MAX_MULTIPLIER, never unlimited) while held;
+     * on release the previous mode, turbo_speed_limit and use_speed_limit are restored exactly.
+     */
+    @Synchronized
+    override fun setFastForward(on: Boolean): Boolean {
+        return try {
+            if (on) {
+                if (ffOn) return true
+                if (!NativeLibrary.isRunning()) return false
+                savedTurboLimit = NativeConfig.getUnsignedShort("turbo_speed_limit", false)
+                savedUseLimit = NativeConfig.getBoolean("use_speed_limit", false)
+                savedSlow = NativeLibrary.isSlowMode()
+                if (savedTurboLimit < 0) return false
+                NativeConfig.setUnsignedShort("turbo_speed_limit", FastForwardSupport.MAX_MULTIPLIER * 100)
+                NativeLibrary.setTurboSpeedLimit(true)
+                ffOn = true
+            } else {
+                if (!ffOn) return true
+                ffOn = false
+                NativeLibrary.setTurboSpeedLimit(false) // back to Standard mode
+                if (savedSlow) NativeLibrary.setSlowSpeedLimit(true)
+                NativeConfig.setUnsignedShort("turbo_speed_limit", savedTurboLimit)
+                NativeConfig.setBoolean("use_speed_limit", savedUseLimit)
+            }
+            true
+        } catch (t: Throwable) { android.util.Log.w("EdenSession", "fast forward failed", t); false }
+    }
 
     /** Unsupported: see [EdenCore.STATE_UNAVAILABLE_REASON]. Never pretends to succeed. */
     override fun saveState(slot: Int): Boolean { notifyUnavailable(); return false }

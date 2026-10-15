@@ -20,7 +20,8 @@ enum class Pad { A, B, X, Y, L1, R1, L2, R2, L3, R3, START, SELECT, DPAD_UP, DPA
     BACK }
 
 /** Actions the in-game menu / hotkeys can trigger. */
-enum class MenuAction { CLOSE_GAME, CHANGE_CONTROLLER_MAPPING, SAVE_STATE, LOAD_STATE, SET_HOTKEYS }
+/** FAST_FORWARD is hotkey-only (hold); it never appears as a menu row. */
+enum class MenuAction { CLOSE_GAME, CHANGE_CONTROLLER_MAPPING, SAVE_STATE, LOAD_STATE, SET_HOTKEYS, FAST_FORWARD }
 
 /** What a core must implement so the shared in-game menu works identically everywhere. */
 interface CoreSession {
@@ -32,6 +33,17 @@ interface CoreSession {
     /** Deliver a canonical button event (already remapped by InputProfile + system-family rules). */
     fun injectButton(pad: Pad, pressed: Boolean)
     fun injectAxis(pad: Pad, value: Float)
+}
+
+/**
+ * Optional: a core that can run faster than real time. The Fast Forward hotkey is HOLD-to-run: [setFastForward] (true)
+ * on press, (false) on release (also whenever the menu opens or the game pauses). The speed is ALWAYS capped at
+ * [MAX_MULTIPLIER] x the game's normal speed. Return false when this game/core cannot (the host then shows a notice).
+ * May be called from a worker thread; must be idempotent; must restore the normal speed exactly on `false`.
+ */
+interface FastForwardSupport {
+    fun setFastForward(on: Boolean): Boolean
+    companion object { const val MAX_MULTIPLIER = 5 }
 }
 
 /** Static description of an embedded core, registered with CoreRegistry. */

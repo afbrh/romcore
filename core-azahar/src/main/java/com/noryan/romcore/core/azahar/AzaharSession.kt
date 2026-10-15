@@ -3,6 +3,7 @@ package com.noryan.romcore.core.azahar
 import android.app.Activity
 import android.os.SystemClock
 import com.noryan.romcore.api.CoreSession
+import com.noryan.romcore.api.FastForwardSupport
 import com.noryan.romcore.api.Pad
 import com.noryan.romcore.api.menu.SlotInfo
 import com.noryan.romcore.api.menu.StateSlotProvider
@@ -18,10 +19,20 @@ import org.citra.citra_emu.NativeLibrary.ButtonType as B
  * save/load signals while running, so a paused session is briefly un-paused for the operation. These two methods
  * block (<= ~4 s); the menu already calls them off the main thread.
  */
-class AzaharSession(private val activity: Activity) : CoreSession, StateSlotProvider {
+class AzaharSession(private val activity: Activity) : CoreSession, StateSlotProvider, FastForwardSupport {
     @Volatile var paused = false
         private set
     private val stick = FloatArray(4) // lx, ly, rx, ry; screen convention (down positive) as Azahar expects
+
+    /**
+     * Azahar's temporary frame limit (the "turbo" mechanism), in percent of full speed: 500 = 5x, the hard cap.
+     * disableTemporaryFrameLimit restores the user's normal limit exactly. Both are plain native flag writes.
+     */
+    override fun setFastForward(on: Boolean): Boolean = try {
+        if (on) NativeLibrary.setTemporaryFrameLimit(FastForwardSupport.MAX_MULTIPLIER * 100.0)
+        else NativeLibrary.disableTemporaryFrameLimit()
+        true
+    } catch (_: Throwable) { false }
 
     override fun pause() { paused = true; NativeLibrary.pauseEmulation() }
     override fun resume() { paused = false; NativeLibrary.unPauseEmulation() }
