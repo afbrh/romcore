@@ -59,9 +59,7 @@ class MenuRouterIntegrationTest {
         assertEquals(0, model.cursor)
         tap(Pad.DPAD_DOWN); tap(Pad.DPAD_DOWN)
         assertEquals(2, model.cursor)
-        tap(Pad.A)                                         // expands Save State
-        assertEquals(MenuAction.SAVE_STATE, model.expanded)
-        tap(Pad.B)                                         // collapse
+        tap(Pad.A)                                         // Save State saves directly, no slot list
         assertNull(model.expanded)
         tap(Pad.B)                                         // close
         assertFalse(model.isOpen)

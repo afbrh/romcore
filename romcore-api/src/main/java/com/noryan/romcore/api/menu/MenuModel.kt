@@ -63,9 +63,9 @@ class MenuModel(
             add(MenuRowModel.Top(a))
             if (a == expanded) when (a) {
                 MenuAction.CLOSE_GAME -> { add(MenuRowModel.Confirm(true)); add(MenuRowModel.Confirm(false)) }
-                MenuAction.SAVE_STATE, MenuAction.LOAD_STATE -> for (i in 1..slots) add(MenuRowModel.Slot(i))
                 MenuAction.CHANGE_CONTROLLER_MAPPING -> { mapping.pads.forEach { add(MenuRowModel.Bind(it)) }; add(MenuRowModel.Reset) }
                 MenuAction.SET_HOTKEYS -> { hotkeys.actions.forEach { add(MenuRowModel.Hot(it)) }; add(MenuRowModel.Reset) }
+                MenuAction.SAVE_STATE, MenuAction.LOAD_STATE -> {}   // single state: acts directly, no slot list
             }
         }
     }
@@ -122,12 +122,13 @@ class MenuModel(
     private fun activate(row: MenuRowModel) {
         when (row) {
             is MenuRowModel.Top -> if (isDisabled(row.action)) status = stateUnavailableReason.orEmpty()
+            else if (row.action == MenuAction.SAVE_STATE || row.action == MenuAction.LOAD_STATE) doState(row.action == MenuAction.SAVE_STATE)
             else if (expanded == row.action) collapse() else {
                 expanded = row.action; status = ""
                 cursor = TOP.indexOf(row.action) + 1
             }
             is MenuRowModel.Confirm -> if (row.yes) { status = "Closing..."; val s = session; close(); s.close() } else collapse()
-            is MenuRowModel.Slot -> doSlot(row.slot)
+            is MenuRowModel.Slot -> doState(expanded == MenuAction.SAVE_STATE, row.slot)
             is MenuRowModel.Bind -> {
                 val pad = row.pad
                 capturingPad = pad; status = "Press a button for ${pad.name}"; armTimeout()
@@ -147,15 +148,15 @@ class MenuModel(
         }
     }
 
-    private fun doSlot(slot: Int) {
-        val saving = expanded == MenuAction.SAVE_STATE
-        status = if (saving) "Saving slot $slot..." else "Loading slot $slot..."
+    /** There is a single save state: Save/Load State act directly on the one slot. */
+    private fun doState(saving: Boolean, slot: Int = com.noryan.romcore.api.RomCoreCoreHost.QUICK_SLOT) {
+        status = if (saving) "Saving..." else "Loading..."
         worker.execute {
             val ok = runCatching { if (saving) session.saveState(slot) else session.loadState(slot) }.getOrDefault(false)
             main.post {
                 revision++
                 if (ok && !saving) { close() }
-                else status = when { ok -> "Saved slot $slot"; saving -> "Save failed"; else -> "Load failed (empty slot?)" }
+                else status = when { ok -> "State saved"; saving -> "Save failed"; else -> "No saved state" }
             }
         }
     }
