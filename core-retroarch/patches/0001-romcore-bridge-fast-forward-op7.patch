@@ -1,0 +1,34 @@
+diff --git a/romcore_bridge.c b/romcore_bridge.c
+index 4d95d75..6b860b9 100644
+--- a/romcore_bridge.c
++++ b/romcore_bridge.c
+@@ -18,7 +18,7 @@ static atomic_int   rc_axes[2][2];            /* [stick L/R][x/y] in -0x7fff..0x
+ 
+ static pthread_mutex_t rc_mutex = PTHREAD_MUTEX_INITIALIZER;
+ static pthread_cond_t  rc_cond  = PTHREAD_COND_INITIALIZER;
+-static int rc_op      = 0;   /* 0 none, 1 save, 2 load, 3 pause, 4 resume, 5 quit */
++static int rc_op      = 0;   /* 0 none, 1 save, 2 load, 3 pause, 4 resume, 5 quit, 6 flush, 7 fast-forward */
+ static int rc_arg     = 0;
+ static char rc_path[PATH_MAX_LENGTH];
+ static int rc_pending = 0;
+@@ -148,6 +148,20 @@ static void romcore_exec(int op, int arg, const char *path, int *res)
+          command_event(CMD_EVENT_QUIT, NULL);
+          *res = 1;
+          break;
++      case 7: /* hold-to-run fast forward: arg 1 = on at a hard 5.0x ratio (never 0 == uncapped), 0 = back to normal */
++      {
++         runloop_state_t *rl = runloop_state_get_ptr();
++         if (rl)
++         {
++            rl->fastmotion_override.next.fastforward   = (arg != 0);
++            rl->fastmotion_override.next.ratio         = (arg != 0) ? 5.0f : 0.0f;
++            rl->fastmotion_override.next.notification  = false;
++            rl->fastmotion_override.next.inhibit_toggle = false;
++            rl->fastmotion_override.pending            = true;
++            *res = 1;
++         }
++         break;
++      }
+       case 6: /* flush battery saves (SRAM/RTC) to disk now */
+          command_event(CMD_EVENT_SAVE_FILES, NULL);
+          *res = 1;
