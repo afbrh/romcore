@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -18,6 +20,15 @@ android {
         ndk { abiFilters += "arm64-v8a" }
         missingDimensionStrategy("edenVersion", "legacy")
     }
+    // Release signing: key + passwords live outside the repo (~/.romcore-signing.properties); without it the release build is unsigned.
+    val signingProps = Properties()
+    File(System.getProperty("user.home"), ".romcore-signing.properties").takeIf { it.exists() }?.inputStream()?.use { signingProps.load(it) }
+    signingConfigs {
+        if (signingProps.isNotEmpty()) create("release") {
+            storeFile = file(signingProps.getProperty("storeFile")); storePassword = signingProps.getProperty("storePassword")
+            keyAlias = signingProps.getProperty("keyAlias"); keyPassword = signingProps.getProperty("keyPassword")
+        }
+    }
     buildTypes {
         // R8 is ON in debug too: ARMSX2's Settings class fails bytecode verification un-shrunk (VerifyError).
         getByName("debug") {
@@ -25,6 +36,7 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         getByName("release") {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
@@ -33,6 +45,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    lint { checkReleaseBuilds = false }   // lintVital trips over core-dolphin's asset staging task wiring
     buildFeatures { compose = true; buildConfig = true }
     packaging {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }

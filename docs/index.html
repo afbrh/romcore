@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RomCore</title>
+<meta name="description" content="RomCore: one Android app that plays your retro and modern console games with the emulator built in.">
+<style>
+  :root { --bg:#000; --plate:#0b0b0e; --line:#2a2a31; --accent:#ff6b4a; --text:#e6e6ea; --dim:#8a8a93; }
+  @media (prefers-color-scheme: light) { :root { --bg:#fff; --plate:#f3f3f5; --line:#d6d6dc; --text:#17171a; --dim:#5d5d66; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  main { max-width:640px; margin:0 auto; padding:56px 16px 48px; }
+  h1 { font-size:2.4rem; letter-spacing:.12em; margin:0 0 6px; text-transform:uppercase; }
+  .tag { color:var(--dim); margin:0 0 32px; }
+  .dl { display:block; text-align:center; background:var(--accent); color:#14080a; text-decoration:none; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:18px; border-radius:8px; border:3px solid var(--accent); }
+  .dl:focus-visible { outline:3px solid var(--text); outline-offset:3px; }
+  .meta { color:var(--dim); font-size:.82rem; margin:10px 0 36px; text-align:center; word-break:break-all; }
+  h2 { font-size:.95rem; letter-spacing:.14em; text-transform:uppercase; margin:32px 0 10px; color:var(--accent); }
+  .card { background:var(--plate); border:2px solid var(--line); border-radius:8px; padding:6px 16px; }
+  ul, ol { padding-left:1.2em; } li { margin:6px 0; }
+  p { margin:8px 0; } a { color:var(--accent); }
+  footer { color:var(--dim); font-size:.8rem; margin-top:40px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>RomCore</h1>
+  <p class="tag">Your games, one app. Every emulator built in.</p>
+
+  <a class="dl" href="https://github.com/afbrh/romcore/releases/latest/download/romcore.apk">Download for Android</a>
+  <p class="meta">Version 0.1.0 &middot; arm64 &middot; Android 11 or newer &middot; 229&nbsp;MB<br>
+    SHA-256: 2370c1f8256439ef2a3817d2540f5dd8175cbf99721b4050bd2d77c2f4ded962</p>
+
+  <h2>What it plays</h2>
+  <div class="card"><ul>
+    <li>NES, SNES, Game Boy / Color / Advance, Genesis and more (libretro cores)</li>
+    <li>Nintendo DS, 3DS, GameCube, Wii and Wii U</li>
+    <li>Nintendo Switch</li>
+    <li>PlayStation 2 and PSP</li>
+    <li>Twilight Princess (GameCube) through the Dusklight port</li>
+  </ul></div>
+
+  <h2>Install</h2>
+  <div class="card"><ol>
+    <li>Download the file above on your Android device.</li>
+    <li>Open it. If Android asks, allow installs from your browser.</li>
+    <li>Open RomCore and grant "All files access" when it asks. It uses this to find your ROM and BIOS folders.</li>
+  </ol></div>
+  <p>You bring your own games and BIOS files. RomCore does not include any.</p>
+
+  <h2>Source</h2>
+  <p>RomCore is free software under the GPLv3. <a href="https://github.com/afbrh/romcore">Source code on GitHub</a>.</p>
+
+  <footer>Not affiliated with Nintendo, Sony or any console maker.</footer>
+</main>
+</body>
+</html>
