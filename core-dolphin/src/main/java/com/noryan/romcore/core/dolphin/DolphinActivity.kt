@@ -79,6 +79,7 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
         Thread({
             try {
                 val disc = readDisc(launchPath, romPath)
+                session.gameId = disc?.id
                 DolphinRuntime.ensureInitialized(this, disc)
                 DolphinRuntime.prepareGame(this, disc)
             } catch (t: Throwable) {
@@ -105,7 +106,10 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
         val ins = if (java.io.File(romPath).canRead()) java.io.File(romPath).inputStream()
         else contentResolver.openInputStream(android.net.Uri.parse(launchPath))
         val n = ins?.use { it.readNBytes(buf, 0, buf.size) } ?: 0
-        SunshineFps.parseDisc(buf.copyOf(n))
+        buf.copyOf(n).let { h ->
+            // parseDisc is GameCube-only (GC magic); Wii discs (Other M, ...) are identified by romcore-api's DiscId.
+            SunshineFps.parseDisc(h) ?: com.noryan.romcore.api.DiscId.fromHeader(h)?.let { SunshineFps.Disc(it.gameId, 0) }
+        }
     } catch (_: Throwable) { null }
 
     // ---- surface -> boot ---------------------------------------------------------------------------------------

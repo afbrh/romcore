@@ -77,3 +77,12 @@ Every launch, `DolphinActivity` reads the disc header (ID + revision), `DolphinR
 native init, and after Sys/ is extracted and before boot `prepare()` writes `<user>/GameSettings/<ID>.ini` (names resolved from the
 engine's own INIs). Widescreen is NOT enabled on this core (4:3 pillarbox as before). Measured on the Thor: 59.8 fps (was 30.0),
 CPU_thread 33-40%, GPU busy ~16%, kgsl 229 MB. Logcat tag `RomCoreDolphin` prints `Gecko codes enabled [60FPS]`.
+
+## Metroid: Other M (R3O*) gamepad profile (`OtherM.kt`, `OTHER_M_CONTROLS.md`)
+Applied only when the disc ID (read from the header by `DiscId`, works for RVZ/WBFS/ISO/CISO) starts with `R3O`. Wii Remote held SIDEWAYS
+(D-pad + 1/2) in third person; `L1` (hold) / `R3` (toggle) = POINT: the emulated remote switches to the normal pointing grip with the IR pointer
+visible and driven by the right stick (absolute, radial deadzone, `otherm_pointer_sens` pref in `romcore_dolphin`); `L2` = Concentration (remote
+up + A). Needs three native override controls added to `InputOverrider` (`WIIMOTE_IR_HIDE`, `WIIMOTE_FORCE_SIDEWAYS`, `WIIMOTE_FORCE_UPRIGHT`;
+patch `patches/0005-...`). `WiimoteNew.ini` (Sideways=True, Extension=None) is written before native init and undone for other games.
+No device motion is ever used: the Android defaults that bind the emulated accelerometer/gyro to `Android/0/Device Sensors` are cleared on every
+launch for ALL Wii games (`DolphinDefaults.ENFORCED`). Logcat tag `RomCoreOtherM` prints the emulated remote state on every change.

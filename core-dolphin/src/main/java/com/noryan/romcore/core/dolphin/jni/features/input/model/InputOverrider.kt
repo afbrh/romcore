@@ -78,5 +78,10 @@ object InputOverrider {
         const val CLASSIC_LEFT_STICK_Y = 53
         const val CLASSIC_RIGHT_STICK_X = 54
         const val CLASSIC_RIGHT_STICK_Y = 55
+
+        // RomCore native additions (dolphin-src InputOverrider.h)
+        const val WIIMOTE_IR_HIDE = 56        // >0.5: pointer hidden, the game sees no IR dots
+        const val WIIMOTE_FORCE_SIDEWAYS = 57 // 1 = NES grip, 0 = normal (pointing) grip
+        const val WIIMOTE_FORCE_UPRIGHT = 58  // 1 = remote pointing at the ceiling (Concentration)
     }
 }

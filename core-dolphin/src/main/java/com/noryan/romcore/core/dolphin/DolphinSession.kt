@@ -83,15 +83,25 @@ class DolphinSession(
     // ---- input -----------------------------------------------------------------------------------------------------
     @Volatile private var ready = false
     private var wii = false
-    private val held = DoubleArray(ControlId.CLASSIC_RIGHT_STICK_Y + 1)
+    private val held = DoubleArray(ControlId.WIIMOTE_FORCE_UPRIGHT + 1)
     private val dirs = DoubleArray(8) // LS up/down/left/right, RS up/down/left/right
 
     /** Called (UI thread) once the game booted and the emulated controllers exist. */
+    /** 6-char disc ID of the launched game (set by the Activity before boot); Other M switches to its own pad profile. */
+    @Volatile var gameId: String? = null
+    private var otherM: OtherM.Profile? = null
+    private var lastOtherM: OtherM.Out? = null
+
     fun onGameReady() {
         if (ready) return
         wii = NativeLibrary.IsEmulatingWii()
+        if (wii && OtherM.matches(gameId)) {
+            otherM = OtherM.Profile(sensitivity = otherMSensitivity())
+            android.util.Log.i("RomCoreOtherM", "Other M profile active (${gameId}): sideways remote, IR hidden until POINT")
+        }
         if (wii) InputOverrider.registerWii(PORT) else InputOverrider.registerGameCube(PORT)
         ready = true
+        if (otherM != null) { applyOtherM(); return }
         for (c in held.indices) if (held[c] != 0.0 && isOurControl(c)) InputOverrider.setControlState(PORT, c, held[c])
     }
 
@@ -104,7 +114,37 @@ class DolphinSession(
         if (ready) InputOverrider.setControlState(PORT, c, v)
     }
 
+    private fun otherMSensitivity(): Double = runCatching {
+        context.getSharedPreferences("romcore_dolphin", Context.MODE_PRIVATE).getFloat("otherm_pointer_sens", 1.0f).toDouble()
+    }.getOrDefault(1.0)
+
+    /** Writes the Other M remote state (buttons, D-pad, pointer, grip) to the overrider; logs every change (debug evidence). */
+    private fun applyOtherM() {
+        val p = otherM ?: return
+        val o = p.out()
+        if (o == lastOtherM) return
+        val prev = lastOtherM
+        lastOtherM = o
+        fun b(v: Boolean) = if (v) 1.0 else 0.0
+        put(ControlId.WIIMOTE_ONE_BUTTON, b(o.one)); put(ControlId.WIIMOTE_TWO_BUTTON, b(o.two))
+        put(ControlId.WIIMOTE_A_BUTTON, b(o.a)); put(ControlId.WIIMOTE_B_BUTTON, b(o.b))
+        put(ControlId.WIIMOTE_PLUS_BUTTON, b(o.plus)); put(ControlId.WIIMOTE_MINUS_BUTTON, b(o.minus))
+        put(ControlId.WIIMOTE_HOME_BUTTON, b(o.home))
+        put(ControlId.WIIMOTE_DPAD_UP, b(o.up)); put(ControlId.WIIMOTE_DPAD_DOWN, b(o.down))
+        put(ControlId.WIIMOTE_DPAD_LEFT, b(o.left)); put(ControlId.WIIMOTE_DPAD_RIGHT, b(o.right))
+        put(ControlId.WIIMOTE_IR_HIDE, b(o.irHidden))
+        put(ControlId.WIIMOTE_IR_X, o.irX); put(ControlId.WIIMOTE_IR_Y, o.irY)
+        put(ControlId.WIIMOTE_FORCE_SIDEWAYS, b(o.grip == OtherM.Grip.SIDEWAYS))
+        put(ControlId.WIIMOTE_FORCE_UPRIGHT, b(o.grip == OtherM.Grip.UP))
+        if (prev == null || prev.copy(irX = 0.0, irY = 0.0) != o.copy(irX = 0.0, irY = 0.0)) {
+            android.util.Log.i("RomCoreOtherM", "remote: 1=${o.one} 2=${o.two} A=${o.a} B=${o.b} +=${o.plus} -=${o.minus} " +
+                "dpad=${if (o.up) "U" else ""}${if (o.down) "D" else ""}${if (o.left) "L" else ""}${if (o.right) "R" else ""} " +
+                "grip=${o.grip} ir=${if (o.irHidden) "hidden" else "visible"}")
+        }
+    }
+
     override fun injectButton(pad: Pad, pressed: Boolean) {
+        if (otherM != null) { otherM!!.button(pad, pressed); if (ready) applyOtherM(); return }
         val v = if (pressed) 1.0 else 0.0
         if (!wii) when (pad) {
             Pad.A -> put(ControlId.GCPAD_A_BUTTON, v)
@@ -140,6 +180,7 @@ class DolphinSession(
 
     override fun injectAxis(pad: Pad, value: Float) {
         val v = value.toDouble().coerceIn(0.0, 1.0)
+        if (otherM != null) { otherM!!.axis(pad, v); if (ready) applyOtherM(); return }
         when (pad) {
             Pad.L2 -> if (!wii) put(ControlId.GCPAD_L_ANALOG, v)
             Pad.R2 -> if (!wii) put(ControlId.GCPAD_R_ANALOG, v)

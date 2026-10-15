@@ -29,6 +29,7 @@ internal object DolphinRuntime {
         DolphinDefaults.apply(DirectoryInitialization.getUserDirectoryPath(app), app) // also points the engine at <root>/dolphin (save data)
         // Per-game: EnableCheats must be in Dolphin.ini before native init reads it (late config applies one launch late).
         SunshineFps.enableEarly(DirectoryInitialization.getUserDirectoryPath(app), disc)
+        OtherM.prepareEarly(DirectoryInitialization.getUserDirectoryPath(app), disc?.id) // sideways remote INI, before init
         DirectoryInitialization.initializeBlocking(app)
         initialized = true
     }

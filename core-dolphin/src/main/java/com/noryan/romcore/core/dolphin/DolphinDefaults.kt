@@ -38,6 +38,16 @@ internal object DolphinDefaults {
             "Interface" to mapOf("OnScreenDisplayMessages" to "False", "ConfirmStop" to "False", "UsePanicHandlers" to "False"),
             "Android" to mapOf("ShowInputOverlay" to "False"),
         ),
+        // No device motion, ever: Dolphin's Android defaults bind the emulated Wii Remote accelerometer/gyro to the handheld's
+        // "Device Sensors"; unbinding them leaves the neutral rest pose (gravity) instead of live gyro/accelerometer data.
+        "WiimoteNew.ini" to mapOf(
+            "Wiimote1" to mapOf(
+                "IMUAccelerometer/Up" to "", "IMUAccelerometer/Down" to "", "IMUAccelerometer/Left" to "",
+                "IMUAccelerometer/Right" to "", "IMUAccelerometer/Forward" to "", "IMUAccelerometer/Backward" to "",
+                "IMUGyroscope/Pitch Up" to "", "IMUGyroscope/Pitch Down" to "", "IMUGyroscope/Roll Left" to "",
+                "IMUGyroscope/Roll Right" to "", "IMUGyroscope/Yaw Left" to "", "IMUGyroscope/Yaw Right" to "",
+            ),
+        ),
         "GFX.ini" to mapOf(
             "Settings" to mapOf(
                 "ShowFPS" to "False", "ShowVPS" to "False", "ShowSpeed" to "False", "ShowSpeedColors" to "False",
