@@ -73,3 +73,13 @@ Notes
 
 Logcat tag `RomCoreOtherM` logs "Other M profile active (<id>)" and every change of the emulated remote
 (`1= 2= A= B= += -= dpad= grip= ir=`), which proves the mapping reaches the Wii Remote override layer.
+
+## 5. Test status on the AYN Thor (R3OE01, RVZ)
+Reached real third-person gameplay (prologue training room: Charge Beam tutorial, Morph Ball + Normal Bomb tutorials, corridor with wall-jump
+section). Verified with injected pad input: boot screens ("hold remote horizontal / remove extensions" = sideways+no-extension accepted), Options menu
+(D-pad/1), cutscene skipping (+ / A), movement left/right/up/down with stick, jump (B), charge/shoot (Y), morph ball (A) + bomb (Y), RomCore menu,
+save/load state. POINT/Concentration: the emulated remote state switches correctly (logcat `RomCoreOtherM`: `grip=POINTING ir=visible`, `grip=UP A=true`),
+but the training room never offers Search View so the in-game first-person switch itself was NOT observed (the prologue only teaches it later:
+missiles at the Space Pirate target). The pointing grip was tried as sideways, upright and flat variants; none changed the training view, consistent with
+Search View being gated by the tutorial. Re-test at the first missile prompt. Measured 60.1 fps (SurfaceFlinger latency, 126 frames), max frame gap 33 ms,
+CPU thread ~40%, process RES ~0.94 GB.
