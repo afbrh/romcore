@@ -20,6 +20,12 @@
   .card { background:var(--plate); border:2px solid var(--line); border-radius:8px; padding:6px 16px; }
   ul, ol { padding-left:1.2em; } li { margin:6px 0; }
   p { margin:8px 0; } a { color:var(--accent); }
+  .hrow { display:flex; align-items:center; gap:10px; }
+  .info { width:22px; height:22px; border-radius:50%; border:2px solid var(--line); background:var(--plate); color:var(--text); font:700 .8rem/1 inherit; font-family:inherit; cursor:pointer; padding:0; text-transform:none; letter-spacing:0; }
+  .info:hover, .info[aria-expanded="true"] { border-color:var(--accent); color:var(--accent); }
+  .info:focus-visible { outline:3px solid var(--text); outline-offset:2px; }
+  .blurb { margin:0 0 10px; font-size:.9rem; color:var(--dim); }
+  .blurb[hidden] { display:none; }
   footer { color:var(--dim); font-size:.8rem; margin-top:40px; }
 </style>
 </head>
@@ -41,7 +47,13 @@
     <li>Twilight Princess (GameCube) through the Dusklight port</li>
   </ul></div>
 
-  <h2>Supported devices</h2>
+  <h2 class="hrow">Supported devices
+    <button class="info" type="button" aria-label="About supported devices" aria-expanded="false" aria-controls="dev-info">i</button>
+  </h2>
+  <div class="card blurb" id="dev-info" hidden>
+    <p>"Supported" means the devices I build and tune RomCore for. Performance settings, the controller layout and the interface are all designed and tested on them first.</p>
+    <p>RomCore may run on other Android devices, but I don't test on them, so speed, controls and layout can vary and I can't promise fixes. More devices will be added as I get to test them.</p>
+  </div>
   <div class="card"><ul>
     <li>AYN Thor</li>
   </ul></div>
@@ -59,5 +71,9 @@
 
   <footer>Not affiliated with Nintendo, Sony or any console maker.</footer>
 </main>
+<script>
+  var b = document.querySelector('.info'), p = document.getElementById('dev-info');
+  b.addEventListener('click', function () { var open = p.hidden; p.hidden = !open; b.setAttribute('aria-expanded', open); });
+</script>
 </body>
 </html>
