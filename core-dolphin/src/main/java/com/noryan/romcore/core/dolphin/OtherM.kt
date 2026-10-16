@@ -85,14 +85,14 @@ object OtherM {
 
         fun out(): Out {
             val concentrate = Pad.L2 in held
-            val point = !concentrate && (Pad.L1 in held || pointToggle)
+            val point = !concentrate && pointToggle
             val (ix, iy) = Pointer.map(rsv[3] - rsv[2], rsv[0] - rsv[1], sensitivity)
             fun h(p: Pad) = p in held
             return Out(
                 // Y (left) = 1 shoot+charge ; B (bottom) = 2 jump ; A (right) / R2 = Wii A ; R1 (hold) / X (top) = Wii B (R1 keeps the right thumb free)
                 one = h(Pad.Y), two = h(Pad.B),
                 a = h(Pad.A) || h(Pad.R2) || concentrate,   // L2 = hold Concentration: remote up + A held
-                b = h(Pad.R1) || h(Pad.L1) || h(Pad.X),   // L1 = point + B together (experiment; backup in scratchpad/bak)
+                b = h(Pad.R1) || h(Pad.L1) || h(Pad.X),   // L1 / R1 (hold) / X = Wii B; L1 is ONLY B (pointing is the R3 toggle)
                 plus = h(Pad.START), minus = h(Pad.SELECT), home = false,
                 up = ls.up || h(Pad.DPAD_UP), down = ls.down || h(Pad.DPAD_DOWN),
                 left = ls.left || h(Pad.DPAD_LEFT), right = ls.right || h(Pad.DPAD_RIGHT),

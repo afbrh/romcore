@@ -62,14 +62,11 @@ class OtherMTest {
         assertTrue(o.irHidden); assertEquals(OtherM.Grip.SIDEWAYS, o.grip); assertEquals(0.0, o.irX, 0.0)
     }
 
-    @Test fun pointHoldShowsPointerAndNormalGrip() {
+    @Test fun l1IsOnlyBAndDoesNotPoint() {
         val p = profile()
-        p.button(Pad.L1, true); p.axis(Pad.RS_LEFT, 1.0); p.axis(Pad.RS_UP, 1.0)
-        var o = p.out()
-        assertFalse(o.irHidden); assertEquals(OtherM.Grip.POINTING, o.grip)
-        assertTrue(o.irX < 0 && o.irY > 0)
-        p.button(Pad.L1, false)
-        o = p.out(); assertTrue(o.irHidden); assertEquals(OtherM.Grip.SIDEWAYS, o.grip)
+        p.button(Pad.L1, true)
+        val o = p.out()
+        assertTrue(o.b); assertTrue(o.irHidden); assertEquals(OtherM.Grip.SIDEWAYS, o.grip)
     }
 
     @Test fun r3TogglesPoint() {

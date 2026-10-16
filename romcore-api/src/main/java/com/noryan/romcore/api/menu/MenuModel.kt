@@ -42,6 +42,8 @@ class MenuModel(
     var isOpen by mutableStateOf(false); private set
     var expanded by mutableStateOf<MenuAction?>(null); private set
     var cursor by mutableStateOf(0); private set
+    /** Which of the side-by-side pair (0 = Load, 1 = Save) the cursor last sat on, so UP/DOWN return to it. */
+    private var lastPair = 0
     var status by mutableStateOf(""); private set
     var capturingPad by mutableStateOf<Pad?>(null); private set
     var capturingHotkey by mutableStateOf<MenuAction?>(null); private set
@@ -72,7 +74,7 @@ class MenuModel(
 
     fun open() {
         if (isOpen) return
-        isOpen = true; expanded = null; cursor = 0; status = ""; capturingPad = null; capturingHotkey = null
+        isOpen = true; expanded = null; cursor = 0; lastPair = 0; status = ""; capturingPad = null; capturingHotkey = null
         gate.setMenuOpen(true)
         session.pause(); wasPausedByUs = true
     }
@@ -109,9 +111,13 @@ class MenuModel(
         if (capturing) { if (n == MenuNav.BACK) cancelCapture(); return }
         val list = rows
         when (n) {
-            MenuNav.UP -> cursor = if (cursor <= 0) list.lastIndex else cursor - 1
-            MenuNav.DOWN -> cursor = if (cursor >= list.lastIndex) 0 else cursor + 1
-            MenuNav.LEFT, MenuNav.RIGHT -> {}
+            // The first PAIR rows share a line, so UP/DOWN treat them as one row and LEFT/RIGHT switch between them.
+            MenuNav.UP -> { if (cursor < PAIR) lastPair = cursor
+                cursor = when { cursor < PAIR -> list.lastIndex; cursor == PAIR -> lastPair; else -> cursor - 1 } }
+            MenuNav.DOWN -> { if (cursor < PAIR) lastPair = cursor
+                cursor = when { cursor < PAIR -> PAIR.coerceAtMost(list.lastIndex); cursor >= list.lastIndex -> lastPair; else -> cursor + 1 } }
+            MenuNav.LEFT -> if (cursor < PAIR) { cursor = 0; lastPair = 0 }
+            MenuNav.RIGHT -> if (cursor < PAIR) { cursor = 1; lastPair = 1 }
             MenuNav.BACK -> if (expanded != null) collapse() else close()
             MenuNav.SELECT -> list.getOrNull(cursor)?.let { activate(it) }
         }
@@ -253,7 +259,9 @@ class MenuModel(
         const val CAPTURE_TIMEOUT_MS = 12_000L
         private const val REPEAT_DELAY_MS = 350L
         private const val REPEAT_MS = 90L
-        val TOP = listOf(MenuAction.CLOSE_GAME, MenuAction.CHANGE_CONTROLLER_MAPPING, MenuAction.SAVE_STATE, MenuAction.LOAD_STATE, MenuAction.SET_HOTKEYS)
+        /** Row order. The first two ([PAIR]) are drawn side by side on one line: Load State (left), Save State (right). */
+        val TOP = listOf(MenuAction.LOAD_STATE, MenuAction.SAVE_STATE, MenuAction.CHANGE_CONTROLLER_MAPPING, MenuAction.SET_HOTKEYS, MenuAction.CLOSE_GAME)
+        const val PAIR = 2
         fun title(a: MenuAction) = when (a) {
             MenuAction.CLOSE_GAME -> "Close Game"
             MenuAction.CHANGE_CONTROLLER_MAPPING -> "Change Controller Mapping"

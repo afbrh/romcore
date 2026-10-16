@@ -58,9 +58,9 @@ Notes
 | B (bottom) | 2 (jump) | Jump on the bottom button (SNES Metroid habit) |
 | Y (left) | 1 (shoot, hold = charge) | Shoot on the left face button |
 | A (right) / R2 | A (morph ball; first person: fire / hold = lock-on, release = missile) | Right thumb button / right trigger |
-| R1 (hold) / X (top) | B (first person: hold + D-pad/left stick = look around, examine) | B is on the right SHOULDER so it can be held with the index finger while the left stick moves and the right thumb stays on the face buttons / pointer stick (X is kept as an alternate B) |
+| L1 / R1 (hold) / X (top) | B (first person: hold + D-pad/left stick = look around, examine) | B is on the right SHOULDER so it can be held with the index finger while the left stick moves and the right thumb stays on the face buttons / pointer stick (X is kept as an alternate B) |
 | START / SELECT | + / - | |
-| L1 (hold) or R3 (toggle) | **POINT**: grip switches to the normal pointing grip, IR visible; releasing hides the IR and returns sideways | first person. L1 also presses B while held, so one finger enters first person and enables look-around (R3 toggles pointing without B) |
+| R3 (click, toggle) | **POINT**: grip switches to the normal pointing grip, IR visible; click again to hide the IR and return sideways | first person (L1 is only B: it no longer points) |
 | Right stick (while POINT) | IR pointer, absolute: deflection = pointer position (radial deadzone 10%, rescaled, sensitivity pref `otherm_pointer_sens`, default 1.0) | look / aim / lock-on |
 | L2 (hold) | **Concentration**: remote pointing up + A held | refill missiles/energy while standing still |
 | BACK | RomCore menu | |

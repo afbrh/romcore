@@ -29,7 +29,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -71,22 +71,35 @@ fun RomCoreMenuContent(model: MenuModel, modifier: Modifier = Modifier) {
 private fun MenuPanelContent(model: MenuModel) {
     val rows = model.rows
     val listState = rememberLazyListState()
-    LaunchedEffect(model.cursor, rows.size) { listState.animateScrollToItem((model.cursor - 2).coerceAtLeast(0)) }
+    LaunchedEffect(model.cursor, rows.size) { listState.animateScrollToItem(((if (model.cursor >= 2) model.cursor - 1 else 0) - 2).coerceAtLeast(0)) }
     // Composition restarts on every open (RomCoreMenuContent returns early while closed), so the slide plays each time.
     val shown = remember { MutableTransitionState(false).apply { targetState = true } }
-    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         AnimatedVisibility(shown, enter = slideInVertically(tween(180)) { it } + fadeIn(tween(120)), exit = fadeOut(tween(80))) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.widthIn(max = MenuStyle.SheetMaxWidth).fillMaxWidth().heightIn(max = maxHeight * 0.85f)
-                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).background(MenuStyle.Background)
-                    .border(BorderStroke(2.dp, Plate), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                    .clip(RoundedCornerShape(16.dp)).background(MenuStyle.Background)
+                    .border(BorderStroke(2.dp, Plate), RoundedCornerShape(16.dp)),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                itemsIndexed(rows) { i, row ->
+                // Row 1 (Save State) is drawn on row 0's line, so it gets no item of its own.
+                items(rows.indices.filter { it != 1 || rows.size < 2 }.toList()) { i ->
+                    val row = rows[i]
                     @Suppress("UNUSED_EXPRESSION") model.revision
-                    RowItem(model, row, i == model.cursor, Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { model.select(i) })
+                    val click = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { model.select(i) }
+                    when {
+                        i == 0 && rows.size > 1 && row is MenuRowModel.Top && rows[1] is MenuRowModel.Top -> {
+                            // Load State and Save State share one line (their own rows 0 and 1), half the width each.
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Box(Modifier.weight(1f)) { RowItem(model, row, model.cursor == 0, click) }
+                                Box(Modifier.weight(1f)) { RowItem(model, rows[1], model.cursor == 1,
+                                    Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { model.select(1) }) }
+                            }
+                        }
+                        else -> RowItem(model, row, i == model.cursor, click)
+                    }
                 }
                 if (model.status.isNotEmpty() || model.stateUnavailableReason != null) item {
                     BasicText(model.status.ifEmpty { model.stateUnavailableReason.orEmpty() }, Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
@@ -119,9 +132,10 @@ private fun RowItem(model: MenuModel, row: MenuRowModel, focused: Boolean, click
             val open = model.expanded == row.action
             val disabled = model.isDisabled(row.action)
             val label = if (focused) OnAccent else if (disabled) Dim else if (row.action == MenuAction.CLOSE_GAME) MenuStyle.Danger else Color(0xFFE6E6EA)
-            Box(click.button(focused).padding(MenuStyle.RowPaddingHorizontal, 12.dp)) {
+            val pair = row.action == MenuAction.LOAD_STATE || row.action == MenuAction.SAVE_STATE
+            Box(click.button(focused).padding(if (pair) 6.dp else MenuStyle.RowPaddingHorizontal, 12.dp)) {
                 BasicText(if (row.action == MenuAction.CHANGE_CONTROLLER_MAPPING) "Controller Mapping" else MenuModel.title(row.action),
-                    Modifier.align(Alignment.Center), style = style(label).copy(textAlign = TextAlign.Center), maxLines = 2)
+                    Modifier.align(Alignment.Center), style = style(label, if (pair) 13.sp else MenuStyle.FontSize).copy(textAlign = TextAlign.Center), maxLines = 2)
                 val tail = if (disabled) "N/A"
                     else if (row.action == MenuAction.SAVE_STATE || row.action == MenuAction.LOAD_STATE) ""   // plain actions, no arrow
                     else if (row.action != MenuAction.CLOSE_GAME || open) (if (open) "v" else ">") else ""
