@@ -25,6 +25,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.noryan.romcore.BuildConfig
 import com.noryan.romcore.CoreBootstrap
 import com.noryan.romcore.MainViewModel
 import com.noryan.romcore.R
@@ -328,6 +329,29 @@ private fun LazyListScope.systemsItems(vm: MainViewModel, games: List<GameEntity
     }
 }
 
+/** True while RomCore is the device's chosen home app; re-read on every resume (the choice is made in a system screen). */
+@Composable
+private fun rememberIsHomeApp(): androidx.compose.runtime.State<Boolean> {
+    val ctx = LocalContext.current
+    val st = remember { mutableStateOf(isHomeApp(ctx)) }
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val ob = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) st.value = isHomeApp(ctx) }
+        owner.lifecycle.addObserver(ob); onDispose { owner.lifecycle.removeObserver(ob) }
+    }
+    return st
+}
+
+private fun isHomeApp(ctx: android.content.Context): Boolean {
+    val home = android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_HOME)
+    return ctx.packageManager.resolveActivity(home, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == ctx.packageName
+}
+
+private fun openHomeAppSettings(ctx: android.content.Context) {
+    runCatching { ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_HOME_SETTINGS)) }
+        .onFailure { runCatching { ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) } }
+}
+
 @Composable
 private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> Unit, pickSave: () -> Unit) {
     val ctx = LocalContext.current
@@ -350,6 +374,7 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
     var importFor by remember { mutableStateOf<CoreSetup.Item?>(null) }
     var importMsg by remember { mutableStateOf<String?>(null) }
     var setupTick by remember { mutableIntStateOf(0) }
+    val apps = remember { launchableApps(ctx) }   // re-read each time Settings opens
     val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val item = importFor
         if (uri != null && item != null) {
@@ -393,6 +418,11 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
             saveOthers.forEach { o -> item(key = "so:${o.path}") { FocusLine("USE ${o.path}", right = com.noryan.romcore.api.save.SaveRoot.sizeLabel(o.bytes), indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.chooseSave(o.path) } } }
             item { Note("All game saves and save states of every emulator live in this one folder (named ${com.noryan.romcore.api.save.SaveRoot.FOLDER_NAME}). Copy it to another device's ROMs folder and RomCore finds it by itself. Shader caches, configs, keys and BIOS are not stored there.") }
         }
+        item {
+            val isHome by rememberIsHomeApp()
+            FocusLine("HOME SCREEN", right = if (isHome) "ROMCORE" else "OFF   OPEN TO CHANGE", onClick = { openHomeAppSettings(ctx) })
+        }
+        item { Note("Make RomCore the launcher: choose it as the Home app, and the Home button brings you back here.") }
         item { Section("SYSTEMS") }
         item { FocusLine("CORE PER SYSTEM", right = if (open == "systems") "OPEN" else null, onClick = { toggle("systems") }, onAlt = { toggle("systems") }) }
         if (open == "systems") systemsItems(vm, games, tick, openSystem) { openSystem = it }
@@ -421,7 +451,32 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
             if (open == "missing") item { Note(CoreBootstrap.missing.joinToString(", ") { CoreBootstrap.friendlyName(it) }) }
         }
         item { Section("ABOUT") }
-        item { Note("RomCore 0.1.0 - GPLv3. Embedded emulator cores keep their own licenses.") }
+        item { Note("RomCore ${BuildConfig.VERSION_NAME} - GPLv3. Embedded emulator cores keep their own licenses.") }
+        // Every installed app that has a launcher icon, so RomCore still works as the device's home screen.
+        item { Section("APPS (${apps.size})") }
+        if (apps.isEmpty()) item { Note("No other apps found.") }
+        items(apps, key = { it.component.flattenToString() }) { a ->
+            FocusLine(a.label, onClick = { launchApp(ctx, a) })
+        }
+    }
+}
+
+private class LaunchableApp(val label: String, val component: android.content.ComponentName)
+
+/** Launcher-visible apps other than RomCore, A-Z. Needs the LAUNCHER <queries> entry in the manifest (Android 11+ package visibility). */
+private fun launchableApps(ctx: android.content.Context): List<LaunchableApp> {
+    val pm = ctx.packageManager
+    val main = android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+    return pm.queryIntentActivities(main, 0)
+        .filter { it.activityInfo.packageName != ctx.packageName }
+        .map { LaunchableApp(it.loadLabel(pm).toString(), android.content.ComponentName(it.activityInfo.packageName, it.activityInfo.name)) }
+        .sortedBy { it.label.lowercase() }
+}
+
+private fun launchApp(ctx: android.content.Context, a: LaunchableApp) {
+    runCatching {
+        ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+            .setComponent(a.component).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
     }
 }
 

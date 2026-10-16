@@ -54,7 +54,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onNewIntent(intent: android.content.Intent) { super.onNewIntent(intent); applyDebugRoots(intent); vm.checkCrashes() }
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent); applyDebugRoots(intent); vm.checkCrashes()
+        // Home pressed while RomCore is the home app: come back to the plain games list, not a half-open Settings/editor.
+        if (intent.hasCategory(android.content.Intent.CATEGORY_HOME)) vm.showHome()
+    }
 
     override fun onResume() { super.onResume(); vm.checkCrashes() }
 

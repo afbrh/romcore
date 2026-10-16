@@ -354,6 +354,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // ---- collections ----
     fun selectTab(id: Long) { selectedTab.value = id; prefs.selectedTab = id; settingsOpen.value = false }
     fun toggleSettings() { settingsOpen.value = !settingsOpen.value }
+    /** The Home button while RomCore is the home app: back to the games list. */
+    fun showHome() { settingsOpen.value = false; editor.value = null }
 
     private fun names(except: Long? = null) = collections.value.orEmpty().filter { it.id != except }.map { it.name }
 
