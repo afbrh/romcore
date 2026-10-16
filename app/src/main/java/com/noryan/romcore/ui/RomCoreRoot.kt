@@ -128,7 +128,7 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
     val tabFocus = remember { HashMap<Long, FocusRequester>() }
     val focusSeen = remember { mutableStateOf(false) }
     fun focusOf(id: Long) = tabFocus.getOrPut(id) { FocusRequester() }
-    // Start on the selected tab (not the gear, which is first in focus order). Focus can only be taken once the window has it.
+    // Start on the selected tab (the first focus lands on a tab). Focus can only be taken once the window has it.
     val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     LaunchedEffect(windowFocused, collections != null) {
         if (windowFocused && collections != null && !focusSeen.value) {
@@ -136,8 +136,7 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
             runCatching { focusOf(tab).requestFocus() }
         }
     }
-    // Focus follows the screen that just closed: Settings -> gear; the editor -> the tab it produced (or the + after a cancel).
-    val gearFocus = remember { FocusRequester() }
+    // Focus follows the screen that just closed: Settings -> the selected tab; the editor -> the tab it produced (or the + after a cancel).
     val plusFocus = remember { FocusRequester() }
     var closedSettings by remember { mutableStateOf(false) }
     var closedEditor by remember { mutableStateOf(false) }
@@ -145,7 +144,7 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
     var sawEditor by remember { mutableStateOf(false) }
     LaunchedEffect(settingsOpen) { if (settingsOpen) sawSettings = true else if (sawSettings) { sawSettings = false; closedSettings = true } }
     LaunchedEffect(editor != null) { if (editor != null) sawEditor = true else if (sawEditor) { sawEditor = false; closedEditor = true } }
-    LaunchedEffect(closedSettings) { if (closedSettings) { closedSettings = false; runCatching { gearFocus.requestFocus() } } }
+    LaunchedEffect(closedSettings) { if (closedSettings) { closedSettings = false; runCatching { focusOf(tab).requestFocus() } } }
     LaunchedEffect(closedEditor, tab, cols) {
         if (closedEditor) {
             if (tab != CollectionRules.GAMES_TAB) { closedEditor = false; runCatching { focusOf(tab).requestFocus() } }
@@ -162,7 +161,8 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
         val o = tabOpts
         if (o != null && (editor != null || cols.none { it.id == o.id })) tabOpts = null
     }
-    BackHandler(enabled = editor != null || settingsOpen || tabOpts != null) {
+    // BACK is the Settings key, like it summons the in-game menu: it opens Settings from the home screen and closes it again.
+    BackHandler {
         when {
             editor != null -> vm.cancelEditor()
             tabOpts != null -> tabOpts = null
@@ -183,16 +183,18 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
             } else false
         }
     ) {
-        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-            // Left-aligned strip: [GAMES] [+] [collection tabs...] (the strip scrolls when there are many; focus scrolls it into view).
-            // The settings gear sits at the right edge. Visual left-to-right order matches the L1/R1 cycle (GAMES, then collections).
-            Row(Modifier.align(Alignment.CenterStart).padding(end = if (scanning) 200.dp else 56.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val newOpen = editor != null && editor?.collectionId == null
-                val showSel = !settingsOpen && !newOpen
-                TabButton("GAMES (${gameCount.size})", selected = showSel && tab == CollectionRules.GAMES_TAB, modifier = Modifier.focusRequester(focusOf(CollectionRules.GAMES_TAB)).widthIn(min = 130.dp)) {
-                    tabOpts = null; vm.selectTab(CollectionRules.GAMES_TAB)
-                }
+        // GAMES is centered on the screen: equal-weight regions on either side. Left holds the scan counter; right holds [+] and the
+        // collection tabs (they scroll when there are many; focus scrolls them into view). Visual order matches the L1/R1 cycle.
+        val newOpen = editor != null && editor?.collectionId == null
+        val showSel = !settingsOpen && !newOpen
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                if (scanning) Text("SCANNING $n", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
+            TabButton("GAMES (${gameCount.size})", selected = showSel && tab == CollectionRules.GAMES_TAB, modifier = Modifier.focusRequester(focusOf(CollectionRules.GAMES_TAB)).widthIn(min = 130.dp)) {
+                tabOpts = null; vm.selectTab(CollectionRules.GAMES_TAB)
+            }
+            Row(Modifier.weight(1f).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PlainTextButton("+", selected = newOpen, description = "New collection", modifier = Modifier.focusRequester(plusFocus)) { tabOpts = null; vm.newCollection() }
                 Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -205,9 +207,6 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
                     }
                 }
             }
-            // Composed after the tab strip so the first focus (and the first D-pad press) lands on a tab; RIGHT from the last tab reaches it.
-            PixelIconButton(PixelIcons.GEAR, selected = settingsOpen, description = "Settings", modifier = Modifier.align(Alignment.CenterEnd).offset(x = 7.dp).focusRequester(gearFocus)) { vm.toggleSettings() }
-            if (scanning) Text("SCANNING $n", Modifier.align(Alignment.CenterEnd).padding(end = 56.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         }
         tabOpts?.let { o -> cols.firstOrNull { it.id == o.id }?.let { c -> CollectionOptions(vm, c, o.mode, { tabOpts = o.copy(mode = it) }, { tabOpts = null }) } }
         val notice by vm.crashNotice.collectAsStateWithLifecycle()
@@ -228,7 +227,7 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
         val hint = when {
             editor != null -> "A TOGGLE    B CANCEL"
             settingsOpen -> "A SELECT    B BACK    X OPTIONS"
-            else -> "L1/R1 TABS    A SELECT    X OPTIONS"
+            else -> "L1/R1 TABS    A SELECT    X OPTIONS    BACK SETTINGS"
         }
         Text(hint, Modifier.fillMaxWidth().padding(8.dp), style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
@@ -251,7 +250,7 @@ private fun GameList(vm: MainViewModel, collectionId: Long?) {
     val cols = collections.orEmpty()
     if (collectionId == null && games.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(if (scanning) "SCANNING..." else "NO GAMES FOUND\nCheck the ROM folder in SETTINGS (gear, top left).", textAlign = TextAlign.Center,
+            Text(if (scanning) "SCANNING..." else "NO GAMES FOUND\nPress BACK to open SETTINGS and check the ROM folder.", textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
@@ -266,8 +265,8 @@ private fun GameList(vm: MainViewModel, collectionId: Long?) {
             val core = remember(g, tick, all.size, g.coreOverride) { vm.coreFor(g) }
             Column {
                 FocusLine(
-                    (if (g.favorite) "* " else "") + g.title,
-                    right = (sys?.let(::systemLabel) ?: g.system) + if (core == null) " (NO CORE)" else "",
+                    (if (g.favorite) "* " else "") + g.title + if (core == null) " (NO CORE)" else "",
+                    center = true,
                     dim = core == null,
                     onAlt = { expanded = if (expanded == g.id) null else g.id; addOpen = null },
                     onClick = { vm.launch(ctx, g) }
