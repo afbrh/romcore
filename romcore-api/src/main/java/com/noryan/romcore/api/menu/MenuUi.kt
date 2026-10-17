@@ -85,14 +85,14 @@ private fun MenuPanelContent(model: MenuModel) {
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // Row 1 (Save State) is drawn on row 0's line, so it gets no item of its own.
+                // Row 1 (Load State) is drawn on row 0's line, so it gets no item of its own.
                 items(rows.indices.filter { it != 1 || rows.size < 2 }.toList()) { i ->
                     val row = rows[i]
                     @Suppress("UNUSED_EXPRESSION") model.revision
                     val click = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { model.select(i) }
                     when {
                         i == 0 && rows.size > 1 && row is MenuRowModel.Top && rows[1] is MenuRowModel.Top -> {
-                            // Load State and Save State share one line (their own rows 0 and 1), half the width each.
+                            // Save State and Load State share one line (their own rows 0 and 1), half the width each.
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Box(Modifier.weight(1f)) { RowItem(model, row, model.cursor == 0, click) }
                                 Box(Modifier.weight(1f)) { RowItem(model, rows[1], model.cursor == 1,

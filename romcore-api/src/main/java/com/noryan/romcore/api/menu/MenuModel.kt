@@ -42,7 +42,7 @@ class MenuModel(
     var isOpen by mutableStateOf(false); private set
     var expanded by mutableStateOf<MenuAction?>(null); private set
     var cursor by mutableStateOf(0); private set
-    /** Which of the side-by-side pair (0 = Load, 1 = Save) the cursor last sat on, so UP/DOWN return to it. */
+    /** Which of the side-by-side pair (0 = Save, 1 = Load) the cursor last sat on, so UP/DOWN return to it. */
     private var lastPair = 0
     var status by mutableStateOf(""); private set
     var capturingPad by mutableStateOf<Pad?>(null); private set
@@ -259,8 +259,8 @@ class MenuModel(
         const val CAPTURE_TIMEOUT_MS = 12_000L
         private const val REPEAT_DELAY_MS = 350L
         private const val REPEAT_MS = 90L
-        /** Row order. The first two ([PAIR]) are drawn side by side on one line: Load State (left), Save State (right). */
-        val TOP = listOf(MenuAction.LOAD_STATE, MenuAction.SAVE_STATE, MenuAction.CHANGE_CONTROLLER_MAPPING, MenuAction.SET_HOTKEYS, MenuAction.CLOSE_GAME)
+        /** Row order. The first two ([PAIR]) are drawn side by side on one line: Save State (left), Load State (right). */
+        val TOP = listOf(MenuAction.SAVE_STATE, MenuAction.LOAD_STATE, MenuAction.CHANGE_CONTROLLER_MAPPING, MenuAction.SET_HOTKEYS, MenuAction.CLOSE_GAME)
         const val PAIR = 2
         fun title(a: MenuAction) = when (a) {
             MenuAction.CLOSE_GAME -> "Close Game"
