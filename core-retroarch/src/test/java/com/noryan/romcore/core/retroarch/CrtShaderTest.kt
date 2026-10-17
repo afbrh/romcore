@@ -100,4 +100,29 @@ class CrtShaderTest {
         assertTrue(define("BRIGHTNESS_COMP") in 1.0..1.2)
         assertTrue(define("LINE_FADE_PX") < define("LINE_FULL_PX"))
     }
+
+    @Test fun gbaGamesGetTheLcdLookByGameSystemNotByCore() {
+        val mgba = CoreSpec_MGBA()
+        assertEquals(CrtShader.Look.GBA_LCD, CrtShader.lookFor(mgba, System.GBA))
+        // mGBA also runs GB / GBC: those games stay unfiltered
+        assertNull(CrtShader.lookFor(mgba, System.GB))
+        assertNull(CrtShader.lookFor(mgba, System.GBC))
+        assertEquals(CrtShader.Look.CRT, CrtShader.lookFor(RetroArchCore.specFor(System.NES, "nes", null)!!, System.NES))
+        assertEquals(CrtShader.Look.CRT, CrtShader.lookFor(RetroArchCore.specFor(System.SNES, "sfc", null)!!, System.SNES))
+        assertNull(CrtShader.lookFor(RetroArchCore.specFor(System.N64, "z64", null)!!, System.N64))
+    }
+
+    @Test fun gbaShaderAssetsExistAndAreWellFormed() {
+        val lcd = File(assets, CrtShader.GBA_SHADER_FILE).readText()
+        val preset = File(assets, CrtShader.GBA_PRESET_FILE).readText()
+        assertTrue(preset.contains("shader0 = ${CrtShader.GBA_SHADER_FILE}"))
+        assertTrue(lcd.contains("#if defined(VERTEX)") && lcd.contains("#elif defined(FRAGMENT)") && lcd.trimEnd().endsWith("#endif"))
+        // RetroArch scans the WHOLE file text for the version directive (comments included) and then breaks the shader: the
+        // GBA shader silently failed to load on the device because a comment mentioned it.
+        val directive = "#" + "version"
+        for (n in listOf(CrtShader.SHADER_FILE, CrtShader.GBA_SHADER_FILE)) assertFalse("$n must not contain the version directive text anywhere", File(assets, n).readText().contains(directive))
+        assertEquals("retro_gba_filter", CrtShader.GBA_PREF_KEY)
+    }
+
+    private fun CoreSpec_MGBA() = CoreTable.ALL.first { it.id == "mgba" }
 }

@@ -83,5 +83,7 @@ object InputOverrider {
         const val WIIMOTE_IR_HIDE = 56        // >0.5: pointer hidden, the game sees no IR dots
         const val WIIMOTE_FORCE_SIDEWAYS = 57 // 1 = NES grip, 0 = normal (pointing) grip
         const val WIIMOTE_FORCE_UPRIGHT = 58  // 1 = remote pointing at the ceiling (Concentration)
+        const val WIIMOTE_SHAKE = 59          // >0.5: Wii Remote shake gesture held on (all axes)
+        const val NUNCHUK_SHAKE = 60          // >0.5: Nunchuk shake gesture held on (all axes)
     }
 }

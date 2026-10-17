@@ -412,7 +412,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setGameCore(g: GameEntity, id: String?) { viewModelScope.launch(Dispatchers.IO) { dao.setCore(g.id, id) } }
     fun toggleFavorite(g: GameEntity) { viewModelScope.launch(Dispatchers.IO) { dao.setFavorite(g.id, !g.favorite) } }
-    fun setSystemCore(s: System, id: String?) { prefs.setSystemCore(s, id); prefsTick.value++ }
 
     fun coreFor(g: GameEntity): CoreChoice? = CoreRouter.choose(g, prefs)
 

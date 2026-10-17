@@ -123,10 +123,15 @@ object RomCoreCrashGuard {
         if (dead.isEmpty()) return emptyList()
         dead.forEach { stopServices(ctx, it.process) } // no sticky resurrection of the dead process
         val exits = runCatching { am.getHistoricalProcessExitReasons(ctx.packageName, 0, 30) }.getOrDefault(emptyList())
-        return dead.sortedByDescending { it.startedAt }.map { m ->
+        return dead.sortedByDescending { it.startedAt }.mapNotNull { m ->
             val info = exits.firstOrNull { it.pid == m.pid }
             val reason = info?.let { describe(it) }
             store.consume(m)
+            // The user ended it themselves (swiped it away / force-stopped it / the app was reinstalled): not a crash, no banner.
+            if (info != null && CrashText.isUserInitiated(info.reason)) {
+                Log.i(TAG, "game closed by the user, not a crash: core=${m.core} title='${m.title}' pid=${m.pid} exit=${info.reason} desc='${info.description}'")
+                return@mapNotNull null
+            }
             Log.w(TAG, "game died unexpectedly: core=${m.core} process=${m.process} pid=${m.pid} title='${m.title}' exit=${info?.reason} status=${info?.status} desc='${info?.description}'")
             runCatching {
                 File(ctx.filesDir, "romcore_crash.log").also { if (it.length() > 64_000) it.delete() }

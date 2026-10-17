@@ -36,16 +36,21 @@ import com.noryan.romcore.data.CoreRows
 import com.noryan.romcore.data.FolderSearch
 import com.noryan.romcore.data.CoreSetup
 import com.noryan.romcore.data.GameEntity
+import com.noryan.romcore.ui.components.ExpandBox
 import com.noryan.romcore.ui.components.FocusLine
+import com.noryan.romcore.ui.components.LocalButtonLook
+import com.noryan.romcore.ui.components.OptionButton
 import com.noryan.romcore.ui.components.PixelIconButton
 import com.noryan.romcore.ui.components.PlainTextButton
 import com.noryan.romcore.ui.components.PixelIcons
+import com.noryan.romcore.ui.components.SubMenu
 import com.noryan.romcore.ui.components.TabButton
 import com.noryan.romcore.data.CollectionRules
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 
 fun systemLabel(s: System): String = when (s) {
     System.NES -> "NES"; System.SNES -> "SNES"; System.N64 -> "N64"; System.GB -> "GameBoy"; System.GBC -> "GameBoy Color"
@@ -184,15 +189,14 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
             } else false
         }
     ) {
-        // GAMES is centered on the screen: equal-weight regions on either side. Left holds the scan counter; right holds [+] and the
-        // collection tabs (they scroll when there are many; focus scrolls them into view). Visual order matches the L1/R1 cycle.
+        // Top bar, all left-aligned: the key hint, then [GAMES] [+] and the collection tabs (they scroll when there are many; focus
+        // scrolls them into view). Visual order matches the L1/R1 cycle. X on any tab opens Settings; a long press on a collection
+        // tab (touch) still opens that collection's own options.
         val newOpen = editor != null && editor?.collectionId == null
         val showSel = !settingsOpen && !newOpen
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                if (scanning) Text("SCANNING $n", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            }
-            TabButton("GAMES (${gameCount.size})", selected = showSel && tab == CollectionRules.GAMES_TAB, modifier = Modifier.focusRequester(focusOf(CollectionRules.GAMES_TAB)).widthIn(min = 130.dp)) {
+            TabButton("GAMES (${gameCount.size})", selected = showSel && tab == CollectionRules.GAMES_TAB, modifier = Modifier.focusRequester(focusOf(CollectionRules.GAMES_TAB)).widthIn(min = 130.dp),
+                onAlt = { tabOpts = null; vm.toggleSettings() }) {
                 tabOpts = null; vm.selectTab(CollectionRules.GAMES_TAB)
             }
             Row(Modifier.weight(1f).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -202,12 +206,19 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
                     cols.forEach { c ->
                         TabButton(CollectionRules.tabLabel(c.name), selected = showSel && tab == c.id,
                             modifier = Modifier.focusRequester(focusOf(c.id)).widthIn(min = 90.dp, max = 200.dp),
-                            onAlt = { tabOpts = if (tabOpts?.id == c.id) null else TabOptions(c.id, TabOptions.Mode.MENU) }) {
+                            onAlt = { tabOpts = null; vm.toggleSettings() },
+                            onLongPress = { tabOpts = if (tabOpts?.id == c.id) null else TabOptions(c.id, TabOptions.Mode.MENU) }) {
                             tabOpts = null; vm.selectTab(c.id)
                         }
                     }
                 }
             }
+            val keyHint = when { editor != null -> "A TOGGLE    B CANCEL"; settingsOpen -> "A SELECT    B BACK"; else -> "A SELECT    X OPTIONS" }
+            val battery = rememberBatteryPercent()
+            // Right side of the top bar: scan counter, the keys for this screen, then the battery level in the corner.
+            if (scanning) Text("SCANNING $n", Modifier.padding(end = 18.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, maxLines = 1, softWrap = false)
+            Text(keyHint, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
+            if (battery != null) Text("$battery%", Modifier.padding(start = 18.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, softWrap = false)
         }
         tabOpts?.let { o -> cols.firstOrNull { it.id == o.id }?.let { c -> CollectionOptions(vm, c, o.mode, { tabOpts = o.copy(mode = it) }, { tabOpts = null }) } }
         val notice by vm.crashNotice.collectAsStateWithLifecycle()
@@ -225,17 +236,12 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
                 else -> GameList(vm, tab)
             }
         }
-        val hint = when {
-            editor != null -> "A TOGGLE    B CANCEL"
-            settingsOpen -> "A SELECT    B BACK    X OPTIONS"
-            else -> "L1/R1 TABS    A SELECT    X OPTIONS    BACK SETTINGS"
-        }
-        Text(hint, Modifier.fillMaxWidth().padding(8.dp), style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+
     }
 }
 
 /** The game list: the whole library ([collectionId] == null) or one collection's games. Same rows, launch and X options. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun GameList(vm: MainViewModel, collectionId: Long?) {
     val ctx = LocalContext.current
@@ -247,6 +253,7 @@ private fun GameList(vm: MainViewModel, collectionId: Long?) {
     val launching by vm.launching.collectAsStateWithLifecycle()
     var expanded by remember(collectionId) { mutableStateOf<Long?>(null) }
     var addOpen by remember(collectionId) { mutableStateOf<Long?>(null) }
+    var coreOpen by remember(collectionId) { mutableStateOf<Long?>(null) }
     val games = if (collectionId == null) all else CollectionRules.gamesOf(all, members[collectionId].orEmpty())
     val cols = collections.orEmpty()
     if (collectionId == null && games.isEmpty()) {
@@ -256,6 +263,8 @@ private fun GameList(vm: MainViewModel, collectionId: Long?) {
         }
         return
     }
+    // Pull the list down (touch) to rescan the ROM folder; the spinner shows while the scan runs.
+    PullToRefreshBox(isRefreshing = scanning, onRefresh = { vm.rescan() }, modifier = Modifier.fillMaxSize()) {
     LazyColumn(Modifier.fillMaxSize()) {
         if (launching) item { Text("PREPARING ROM...", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium) }
         if (collectionId != null && games.isEmpty()) item(key = "empty") {
@@ -267,66 +276,70 @@ private fun GameList(vm: MainViewModel, collectionId: Long?) {
             Column {
                 FocusLine(
                     (if (g.favorite) "* " else "") + g.title + if (core == null) " (NO CORE)" else "",
-                    center = true,
                     dim = core == null,
-                    onAlt = { expanded = if (expanded == g.id) null else g.id; addOpen = null },
+                    onAlt = { expanded = if (expanded == g.id) null else g.id; addOpen = null; coreOpen = null },
                     onClick = { vm.launch(ctx, g) }
                 )
                 if (expanded == g.id) {
                     val cands = sys?.let { CoreRouter.candidatesFor(it, g.gameId) }.orEmpty()
-                    FocusLine("PLAY", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.launch(ctx, g) }
-                    FocusLine("FAVORITE", right = if (g.favorite) "ON" else "OFF", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.toggleFavorite(g) }
-                    if (collectionId != null)
-                        FocusLine("REMOVE FROM COLLECTION", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.setMember(collectionId, g.id, false); expanded = null }
-                    if (cols.isNotEmpty()) {
-                        FocusLine("ADD TO COLLECTION >", right = if (addOpen == g.id) "OPEN" else null, indent = 28.dp, style = MaterialTheme.typography.titleSmall) { addOpen = if (addOpen == g.id) null else g.id }
-                        if (addOpen == g.id) cols.forEach { c ->
-                            val inIt = g.id in members[c.id].orEmpty()
-                            FocusLine((if (inIt) "[X] " else "[ ] ") + CollectionRules.tabLabel(c.name), marked = inIt, indent = 56.dp, style = MaterialTheme.typography.titleSmall) { vm.setMember(c.id, g.id, !inIt) }
+                    val auto = sys?.let { CoreRouter.autoChoice(it, g.title, gameId = g.gameId) }
+                    val chosen = CoreRouter.resolveOverride(g.coreOverride, cands)
+                    val autoLabel = "AUTO" + (auto?.displayName?.let { " ($it)" } ?: "")
+                    // A narrow, centered stack of in-game-menu-style buttons under the game's name.
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopStart) {
+                        Column(Modifier.padding(start = 16.dp, top = 4.dp, bottom = 10.dp).widthIn(max = 296.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OptionButton("PLAY") { vm.launch(ctx, g) }
+                            if (collectionId != null)
+                                OptionButton("REMOVE FROM COLLECTION") { vm.setMember(collectionId, g.id, false); expanded = null }
+                            if (cols.isNotEmpty()) {
+                                OptionButton("ADD TO COLLECTION", selected = addOpen == g.id) { addOpen = if (addOpen == g.id) null else g.id }
+                                if (addOpen == g.id) SubMenu {
+                                    cols.forEach { c ->
+                                        val inIt = g.id in members[c.id].orEmpty()
+                                        OptionButton((if (inIt) "[X] " else "[ ] ") + CollectionRules.tabLabel(c.name), selected = inIt, small = true, flat = true) { vm.setMember(c.id, g.id, !inIt) }
+                                    }
+                                }
+                            }
+                            // One CORE field. Closed: a single button. Open: the same box grows, with the current choice as its header
+                            // and every other core that can run this game listed under it.
+                            val current = "CORE: " + (chosen?.displayName ?: autoLabel)
+                            if (coreOpen != g.id) {
+                                OptionButton(current) { coreOpen = g.id }
+                            } else ExpandBox(
+                                header = { OptionButton(current, selected = true, flat = true) { coreOpen = null } },
+                            ) {
+                                // Everything except what the header already shows (AUTO resolves to [auto], so it is not listed again).
+                                val others = cands.filter { it.id != chosen?.id && (chosen != null || it.id != auto?.id) }
+                                if (chosen != null) OptionButton(autoLabel, small = true, flat = true) { vm.setGameCore(g, null); coreOpen = null }
+                                others.forEach { c -> OptionButton(c.displayName, small = true, flat = true) { vm.setGameCore(g, c.id); coreOpen = null } }
+                                if (chosen == null && others.isEmpty()) Text("NO OTHER CORES FOR THIS SYSTEM", Modifier.padding(8.dp).fillMaxWidth(),
+                                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                            }
                         }
                     }
-                    val auto = sys?.let { CoreRouter.autoChoice(it, g.title, gameId = g.gameId) }
-                    val gChosen0 = CoreRouter.resolveOverride(g.coreOverride, cands)
-                    FocusLine("CORE: AUTO", right = auto?.displayName ?: "-", marked = gChosen0 == null, indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.setGameCore(g, null) }
-                    val gChosen = CoreRouter.resolveOverride(g.coreOverride, cands)
-                    cands.forEach { c ->
-                        FocusLine("CORE: ${c.displayName}", marked = gChosen?.id == c.id, right = if (gChosen?.id == c.id) "SELECTED" else null,
-                            indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.setGameCore(g, c.id) }
-                    }
-                    Text(g.fileName, Modifier.padding(start = 44.dp, bottom = 6.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 }
             }
         }
+    }
     }
 }
 
-/** What Settings > SYSTEMS shows (the former SYSTEMS tab): per-system core choice, with the game count. */
-private fun LazyListScope.systemsItems(vm: MainViewModel, games: List<GameEntity>, tick: Int, expanded: System?, setExpanded: (System?) -> Unit) {
-    val counts = games.groupingBy { it.system }.eachCount()
-    val systems = System.entries.filter { counts.containsKey(it.name) || CoreRouter.candidates(it).isNotEmpty() }
-        .filter { it != System.OTHER || counts.containsKey("OTHER") }
-    items(systems, key = { "sys:${it.name}" }) { s ->
-        val cands = CoreRouter.candidates(s)
-        val chosen = remember(tick, cands.size) { CoreRouter.resolveOverride(vm.prefs.systemCore(s), cands) }
-        val auto = CoreRouter.autoChoice(s, "")
-        val label = (chosen ?: auto)?.displayName ?: "NO CORE"
-        Column {
-            FocusLine("${systemLabel(s)}  (${counts[s.name] ?: 0})", right = label, dim = cands.isEmpty(), indent = 28.dp, style = MaterialTheme.typography.titleSmall,
-                onAlt = { setExpanded(if (expanded == s) null else s) },
-                onClick = { setExpanded(if (expanded == s) null else s) })
-            if (expanded == s) {
-                if (cands.isEmpty()) Text("No installed core serves this system.", Modifier.padding(start = 72.dp, bottom = 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                else {
-                    FocusLine("CORE: AUTO", right = auto?.displayName, marked = chosen == null, indent = 56.dp, style = MaterialTheme.typography.titleSmall) { vm.setSystemCore(s, null) }
-                    cands.forEach { c ->
-                        FocusLine("CORE: ${c.displayName}", marked = chosen?.id == c.id, right = if (chosen?.id == c.id) "SELECTED" else null,
-                            indent = 56.dp, style = MaterialTheme.typography.titleSmall) { vm.setSystemCore(s, c.id) }
-                    }
-                    Text("Per-game overrides (X on a game) win over this.", Modifier.padding(start = 72.dp, bottom = 6.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
+/** Device battery level (0-100), kept current from the sticky battery broadcast; null if the device doesn't report one. */
+@Composable
+private fun rememberBatteryPercent(): Int? {
+    val ctx = LocalContext.current
+    fun pct(i: android.content.Intent?): Int? {
+        val level = i?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = i?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1) ?: -1
+        return if (level >= 0 && scale > 0) level * 100 / scale else null
     }
+    var value by remember { mutableStateOf<Int?>(null) }
+    DisposableEffect(ctx) {
+        val rx = object : android.content.BroadcastReceiver() { override fun onReceive(c: android.content.Context?, i: android.content.Intent?) { value = pct(i) } }
+        value = pct(ctx.registerReceiver(rx, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED)))   // sticky: gives the current level at once
+        onDispose { runCatching { ctx.unregisterReceiver(rx) } }
+    }
+    return value
 }
 
 /** True while RomCore is the device's chosen home app; re-read on every resume (the choice is made in a system screen). */
@@ -360,13 +373,10 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
     val biosLines by vm.biosLines.collectAsStateWithLifecycle()
     val biosNote by vm.biosNote.collectAsStateWithLifecycle()
     val status by vm.status.collectAsStateWithLifecycle()
-    val games by vm.games.collectAsStateWithLifecycle()
     val saveInfo by vm.saveInfo.collectAsStateWithLifecycle()
     val saveStatus by vm.saveStatus.collectAsStateWithLifecycle()
     val saveWarning by vm.saveWarning.collectAsStateWithLifecycle()
     val saveOthers by vm.saveOthers.collectAsStateWithLifecycle()
-    val tick by vm.prefsTick.collectAsStateWithLifecycle()
-    var openSystem by remember { mutableStateOf<System?>(null) }
     var open by remember { mutableStateOf<String?>(null) }
     fun toggle(k: String) { open = if (open == k) null else k }
     val rows = remember(vm.cores) { CoreRows.of(vm.cores, CoreBootstrap::versionOf) }
@@ -383,72 +393,74 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
             setupTick++
         }
     }
-    LazyColumn(Modifier.fillMaxSize()) {
-        item { FocusLine("ROM FOLDER", right = romDir?.substringAfterLast('/') ?: "-", onClick = { toggle("folder") }, onAlt = { toggle("folder") }) }
-        if (open == "folder") {
-            item { Note(romDir ?: "No folder chosen") }
-            item { FocusLine("SEARCH AGAIN", right = "AUTO-FIND", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.startRomSearch() } }
-            item { FocusLine("PICK FOLDER...", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { pickRom() } }
-            item { FocusLine("RESCAN NOW", right = status.ifEmpty { null }, indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.rescan() } }
-            item { Note("RomCore opens games by real path (All files access is ${if (allFiles) "on" else "OFF - press A on ALL FILES ACCESS below"}). Folders starting with . or _ and emulator data folders are not scanned.") }
-            if (!allFiles) item { FocusLine("ALL FILES ACCESS", right = "OFF (TAP)", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { openAllFilesAccess(ctx) } }
+    // Menu-style buttons in one narrow, centered column (like the in-game menu). A row that is open grows into ONE bordered
+    // box: its current value as the header, its options and notes inside.
+    CompositionLocalProvider(LocalButtonLook provides 1) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val side = ((maxWidth - 400.dp) / 2).coerceAtLeast(12.dp)
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = side, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item {
+            SettingRow("ROM FOLDER", romDir?.substringAfterLast('/') ?: "-", open == "folder", { toggle("folder") }) {
+                Note(romDir ?: "No folder chosen")
+                FocusLine("SEARCH AGAIN", right = "AUTO-FIND") { vm.startRomSearch() }
+                FocusLine("PICK FOLDER...") { pickRom() }
+                FocusLine("RESCAN NOW", right = status.ifEmpty { null }) { vm.rescan() }
+                Note("RomCore opens games by real path (All files access is ${if (allFiles) "on" else "OFF - press A on ALL FILES ACCESS below"}). Folders starting with . or _ and emulator data folders are not scanned.")
+                if (!allFiles) FocusLine("ALL FILES ACCESS", right = "OFF (TAP)") { openAllFilesAccess(ctx) }
+            }
         }
-        item { FocusLine("BIOS FOLDER", right = biosDir?.substringAfterLast('/') ?: "NONE   OPTIONAL", onClick = { toggle("bios") }, onAlt = { toggle("bios") }) }
-        if (open == "bios") {
-            item { Note(biosDir ?: "No BIOS folder chosen. Games that need one will say so.") }
-            item { FocusLine("SEARCH AGAIN", right = "AUTO-FIND", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.searchBios(first = false) } }
-            item { FocusLine("PICK FOLDER...", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { pickBios() } }
-            if (biosDir != null) item { FocusLine("IMPORT NOW", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.runBiosImport() } }
-            if (biosNote.isNotEmpty()) item { Note(biosNote) }
-            biosLines.forEach { l -> item { Note(l) } }
-            item { Note("Copies PS2 BIOS, Switch prod.keys + firmware and PS1 and other console BIOS into the cores. Your files are only read; newer copies are never overwritten.") }
+        item {
+            SettingRow("BIOS FOLDER", biosDir?.substringAfterLast('/') ?: "NONE   OPTIONAL", open == "bios", { toggle("bios") }) {
+                Note(biosDir ?: "No BIOS folder chosen. Games that need one will say so.")
+                FocusLine("SEARCH AGAIN", right = "AUTO-FIND") { vm.searchBios(first = false) }
+                FocusLine("PICK FOLDER...") { pickBios() }
+                if (biosDir != null) FocusLine("IMPORT NOW") { vm.runBiosImport() }
+                if (biosNote.isNotEmpty()) Note(biosNote)
+                biosLines.forEach { l -> Note(l) }
+                Note("Copies PS2 BIOS, Switch prod.keys + firmware and PS1 and other console BIOS into the cores. Your files are only read; newer copies are never overwritten.")
+            }
         }
         item {
             val saveName = if (saveWarning != null) "APP STORAGE (WARNING)" else saveInfo?.path?.substringAfterLast('/') ?: "-"
             val saveSize = saveInfo?.let { com.noryan.romcore.api.save.SaveRoot.sizeLabel(it.bytes) }
-            FocusLine("SAVE DATA FOLDER", right = if (saveSize != null) "$saveName   $saveSize" else saveName, onClick = { toggle("save") }, onAlt = { toggle("save") })
+            SettingRow("SAVE DATA FOLDER", if (saveSize != null) "$saveName   $saveSize" else saveName, open == "save", { toggle("save") }) {
+                if (saveWarning != null) Note("WARNING: $saveWarning")
+                Note(saveInfo?.path ?: "Not set up yet")
+                saveInfo?.let { i -> Note("${i.dataFiles}${if (i.capped) "+" else ""} save files, ${com.noryan.romcore.api.save.SaveRoot.sizeLabel(i.bytes)}, last changed ${saveDate(i.lastModified)}") }
+                FocusLine("SEARCH AGAIN", right = "AUTO-FIND") { vm.searchSaveAgain() }
+                FocusLine("PICK FOLDER...") { pickSave() }
+                if (saveStatus.isNotEmpty()) Note("STATUS: $saveStatus")
+                saveOthers.forEach { o -> FocusLine("USE ${o.path}", right = com.noryan.romcore.api.save.SaveRoot.sizeLabel(o.bytes)) { vm.chooseSave(o.path) } }
+                Note("All game saves and save states of every emulator live in this one folder (named ${com.noryan.romcore.api.save.SaveRoot.FOLDER_NAME}). Copy it to another device's ROMs folder and RomCore finds it by itself. Shader caches, configs, keys and BIOS are not stored there.")
+            }
         }
-        if (saveWarning != null) item { Note("WARNING: $saveWarning") }
-        if (open == "save") {
-            item { Note(saveInfo?.path ?: "Not set up yet") }
-            saveInfo?.let { i -> item { Note("${i.dataFiles}${if (i.capped) "+" else ""} save files, ${com.noryan.romcore.api.save.SaveRoot.sizeLabel(i.bytes)}, last changed ${saveDate(i.lastModified)}") } }
-            item { FocusLine("SEARCH AGAIN", right = "AUTO-FIND", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.searchSaveAgain() } }
-            item { FocusLine("PICK FOLDER...", indent = 28.dp, style = MaterialTheme.typography.titleSmall) { pickSave() } }
-            if (saveStatus.isNotEmpty()) item { Note("STATUS: $saveStatus") }
-            saveOthers.forEach { o -> item(key = "so:${o.path}") { FocusLine("USE ${o.path}", right = com.noryan.romcore.api.save.SaveRoot.sizeLabel(o.bytes), indent = 28.dp, style = MaterialTheme.typography.titleSmall) { vm.chooseSave(o.path) } } }
-            item { Note("All game saves and save states of every emulator live in this one folder (named ${com.noryan.romcore.api.save.SaveRoot.FOLDER_NAME}). Copy it to another device's ROMs folder and RomCore finds it by itself. Shader caches, configs, keys and BIOS are not stored there.") }
-        }
+        if (saveWarning != null && open != "save") item { Note("WARNING: $saveWarning") }
         item {
             val isHome by rememberIsHomeApp()
             FocusLine("HOME SCREEN", right = if (isHome) "ROMCORE" else "OFF   OPEN TO CHANGE", onClick = { openHomeAppSettings(ctx) })
         }
         item { Note("Make RomCore the launcher: choose it as the Home app, and the Home button brings you back here.") }
-        item { Section("SYSTEMS") }
-        item { FocusLine("CORE PER SYSTEM", right = if (open == "systems") "OPEN" else null, onClick = { toggle("systems") }, onAlt = { toggle("systems") }) }
-        if (open == "systems") systemsItems(vm, games, tick, openSystem) { openSystem = it }
         item { Section("INSTALLED CORES (${rows.size})") }
         if (rows.isEmpty()) item { Note("No cores are installed in this build.") }
         items(rows, key = { it.key }) { c ->
-            Column {
-                FocusLine(c.name, right = c.version, onClick = { toggle("core:${c.key}") }, onAlt = { toggle("core:${c.key}") })
-                if (open == "core:${c.key}") {
-                    Note("id: ${c.key}")
-                    Note("systems: " + c.systems.sortedBy { it.ordinal }.joinToString(", ") { systemLabel(it) })
-                    Note("extensions: " + c.extensions.sorted().joinToString(" "))
-                    c.license?.let { Note("license: $it") }
-                    CoreSetup.itemsFor(c.coreId).forEach { item ->
-                        val st = remember(setupTick, open) { CoreSetup.status(ctx, item) }
-                        FocusLine(item.label, right = st, indent = 28.dp, style = MaterialTheme.typography.titleSmall) {
-                            importFor = item; importMsg = null; importPicker.launch(item.accept)
-                        }
-                    }
-                    if (importMsg != null && CoreSetup.itemsFor(c.coreId).isNotEmpty()) Note(importMsg!!)
+            SettingRow(c.name, c.version, open == "core:${c.key}", { toggle("core:${c.key}") }) {
+                Note("id: ${c.key}")
+                Note("systems: " + c.systems.sortedBy { it.ordinal }.joinToString(", ") { systemLabel(it) })
+                Note("extensions: " + c.extensions.sorted().joinToString(" "))
+                c.license?.let { Note("license: $it") }
+                CoreSetup.itemsFor(c.coreId).forEach { item ->
+                    val st = remember(setupTick, open) { CoreSetup.status(ctx, item) }
+                    FocusLine(item.label, right = st) { importFor = item; importMsg = null; importPicker.launch(item.accept) }
                 }
+                if (importMsg != null && CoreSetup.itemsFor(c.coreId).isNotEmpty()) Note(importMsg!!)
             }
         }
         if (CoreBootstrap.missing.isNotEmpty()) {
-            item { FocusLine("NOT INSTALLED (${CoreBootstrap.missing.size})", dim = true, onClick = { toggle("missing") }, onAlt = { toggle("missing") }) }
-            if (open == "missing") item { Note(CoreBootstrap.missing.joinToString(", ") { CoreBootstrap.friendlyName(it) }) }
+            item {
+                SettingRow("NOT INSTALLED (${CoreBootstrap.missing.size})", null, open == "missing", { toggle("missing") }, dim = true) {
+                    Note(CoreBootstrap.missing.joinToString(", ") { CoreBootstrap.friendlyName(it) })
+                }
+            }
         }
         item { Section("ABOUT") }
         item { Note("RomCore ${BuildConfig.VERSION_NAME} - GPLv3. Embedded emulator cores keep their own licenses.") }
@@ -458,6 +470,20 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
         items(apps, key = { it.component.flattenToString() }) { a ->
             FocusLine(a.label, onClick = { launchApp(ctx, a) })
         }
+    }
+    }
+    }
+}
+
+/**
+ * One Settings row. Closed: a menu-style button (name, with [value] under it). Open: the same button becomes the header of a single
+ * bordered box that holds [children] (options drawn as flat small buttons, notes as centered text).
+ */
+@Composable
+private fun SettingRow(label: String, value: String?, expanded: Boolean, onToggle: () -> Unit, dim: Boolean = false, children: @Composable () -> Unit) {
+    if (!expanded) OptionButton(label, sub = value, dim = dim, onAlt = onToggle, onClick = onToggle)
+    else ExpandBox(header = { OptionButton(label, sub = value, selected = true, flat = true, dim = dim, onAlt = onToggle, onClick = onToggle) }) {
+        CompositionLocalProvider(LocalButtonLook provides 2) { children() }
     }
 }
 
@@ -481,9 +507,15 @@ private fun launchApp(ctx: android.content.Context, a: LaunchableApp) {
 }
 
 @Composable
-internal fun Section(t: String) =
-    Text(t, Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+internal fun Section(t: String) {
+    val centered = LocalButtonLook.current > 0
+    Text(t, if (centered) Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 2.dp) else Modifier.padding(start = 16.dp, top = 14.dp, bottom = 2.dp),
+        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, textAlign = if (centered) TextAlign.Center else TextAlign.Start)
+}
 
 @Composable
-internal fun Note(t: String) =
-    Text(t, Modifier.padding(start = 44.dp, end = 16.dp, top = 2.dp, bottom = 6.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+internal fun Note(t: String) {
+    val centered = LocalButtonLook.current > 0
+    Text(t, if (centered) Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp) else Modifier.padding(start = 44.dp, end = 16.dp, top = 2.dp, bottom = 6.dp),
+        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = if (centered) TextAlign.Center else TextAlign.Start)
+}

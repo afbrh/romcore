@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -92,11 +93,11 @@ private fun Modifier.altKeys(onAlt: (() -> Unit)?): Modifier = if (onAlt == null
 /**
  * Top-bar tab as a button: the selected tab is a solid orange plate, the others are mostly-black plates with a
  * faint border. Controller focus shows as a brighter border (white on the selected tab, orange on the others).
- * [onAlt] (X / Menu / long press) opens the tab's inline options.
+ * [onAlt] = X / Y / Menu on the focused tab; [onLongPress] = a touch long press (defaults to [onAlt]).
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun TabButton(text: String, selected: Boolean, modifier: Modifier = Modifier, onAlt: (() -> Unit)? = null, onClick: () -> Unit) {
+fun TabButton(text: String, selected: Boolean, modifier: Modifier = Modifier, onAlt: (() -> Unit)? = null, onLongPress: (() -> Unit)? = onAlt, onClick: () -> Unit) {
     val src = remember { MutableInteractionSource() }
     val focused by src.collectIsFocusedAsState()
     val label = if (selected) Color(0xFF14080A) else Color(0xFFE6E6EA)
@@ -106,12 +107,12 @@ fun TabButton(text: String, selected: Boolean, modifier: Modifier = Modifier, on
             .background(tabPlate(selected))
             .border(BorderStroke(if (focused) 3.dp else 2.dp, tabBorder(selected, focused)), RoundedCornerShape(8.dp))
             .altKeys(onAlt)
-            .combinedClickable(interactionSource = src, indication = null, onClick = onClick, onLongClick = onAlt)
+            .combinedClickable(interactionSource = src, indication = null, onClick = onClick, onLongClick = onLongPress)
             .padding(horizontal = 14.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, style = MaterialTheme.typography.titleMedium, color = label, textAlign = TextAlign.Center, maxLines = 1, softWrap = false,
+        Text(text, style = MaterialTheme.typography.titleMedium.copy(textDecoration = if (focused) androidx.compose.ui.text.style.TextDecoration.Underline else androidx.compose.ui.text.style.TextDecoration.None), color = label, textAlign = TextAlign.Center, maxLines = 1, softWrap = false,
             overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
     }
 }
@@ -184,6 +185,83 @@ fun PlainTextButton(text: String, selected: Boolean, description: String, modifi
             .combinedClickable(interactionSource = src, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, style = MaterialTheme.typography.titleMedium, color = ink, maxLines = 1, softWrap = false)
+        Text(text, style = MaterialTheme.typography.titleMedium.copy(textDecoration = if (focused) androidx.compose.ui.text.style.TextDecoration.Underline else androidx.compose.ui.text.style.TextDecoration.None), color = ink, maxLines = 1, softWrap = false)
+    }
+}
+
+
+/**
+ * 0 = normal list rows, 1 = rows draw as menu-style buttons (Settings), 2 = rows inside an expanded box draw as flat small buttons.
+ * [FocusLine], [Section] and [Note] read it, so a whole screen can switch look without touching each row.
+ */
+val LocalButtonLook = androidx.compose.runtime.compositionLocalOf { 0 }
+
+/**
+ * A button styled like the in-game menu's: dark plate + faint border, orange plate with a white border when focused,
+ * focused text underlined. [selected] (a chosen value in a list) shows as orange text and an orange-tinted border. Text is
+ * centered; [sub] adds a smaller second line (a row's current value). [onAlt] = X / Y / Menu / long press.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun OptionButton(
+    text: String, modifier: Modifier = Modifier, selected: Boolean = false, small: Boolean = false, flat: Boolean = false,
+    sub: String? = null, dim: Boolean = false, onAlt: (() -> Unit)? = null, onClick: () -> Unit,
+) {
+    val src = remember { MutableInteractionSource() }
+    val focused by src.collectIsFocusedAsState()
+    val shape = RoundedCornerShape(8.dp)
+    val alpha = if (dim && !focused) 0.45f else 1f
+    val label = when { focused -> Color(0xFF14080A); selected -> Color(0xFFFF6B4A); else -> Color(0xFFE6E6EA) }.copy(alpha = alpha)
+    val subInk = (if (focused) Color(0xFF14080A) else Color(0xFF8A8A93)).copy(alpha = alpha)
+    val ul = if (focused) androidx.compose.ui.text.style.TextDecoration.Underline else androidx.compose.ui.text.style.TextDecoration.None
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(if (focused) Color(0xFFFF6B4A) else if (flat) Color.Transparent else Color(0xFF0B0B0E))
+            .border(BorderStroke(if (focused) 3.dp else 2.dp,
+                if (focused) Color.White else if (flat) Color.Transparent else if (selected) Color(0xFF8A3A28) else Color(0xFF2A2A31)), shape)
+            .altKeys(onAlt)
+            .combinedClickable(interactionSource = src, indication = null, onClick = onClick, onLongClick = onAlt)
+            .padding(horizontal = 12.dp, vertical = if (small) 8.dp else 11.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text, style = (if (small) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleSmall).copy(textDecoration = ul), color = label,
+                textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (!sub.isNullOrEmpty()) Text(sub, style = MaterialTheme.typography.labelSmall, color = subInk, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/**
+ * A sub-menu under an [OptionButton]: a bordered, slightly inset panel whose entries are flat [OptionButton]s
+ * (orange when focused, orange text for the current value), so it reads as a menu that opened from the button above.
+ */
+@Composable
+fun SubMenu(content: @Composable () -> Unit) {
+    val shape = RoundedCornerShape(10.dp)
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp).clip(shape).background(Color(0xFF050507))
+            .border(BorderStroke(2.dp, Color(0xFF8A3A28)), shape).padding(6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) { content() }
+}
+
+
+/**
+ * The expanded form of a button: ONE bordered box that holds the current value as its header (press it to close) and,
+ * under a divider, the other choices as flat [OptionButton]s.
+ */
+@Composable
+fun ExpandBox(header: @Composable () -> Unit, content: @Composable () -> Unit) {
+    val shape = RoundedCornerShape(8.dp)
+    Column(
+        Modifier.fillMaxWidth().clip(shape).background(Color(0xFF0B0B0E)).border(BorderStroke(2.dp, Color(0xFF8A3A28)), shape).padding(4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        header()
+        Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp).height(2.dp).background(Color(0xFF2A2A31)))
+        content()
     }
 }

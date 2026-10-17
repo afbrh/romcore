@@ -43,6 +43,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -135,7 +136,7 @@ private fun RowItem(model: MenuModel, row: MenuRowModel, focused: Boolean, click
             val pair = row.action == MenuAction.LOAD_STATE || row.action == MenuAction.SAVE_STATE
             Box(click.button(focused).padding(if (pair) 6.dp else MenuStyle.RowPaddingHorizontal, 12.dp)) {
                 BasicText(if (row.action == MenuAction.CHANGE_CONTROLLER_MAPPING) "Controller Mapping" else MenuModel.title(row.action),
-                    Modifier.align(Alignment.Center), style = style(label, if (pair) 13.sp else MenuStyle.FontSize).copy(textAlign = TextAlign.Center), maxLines = 2)
+                    Modifier.align(Alignment.Center), style = style(label, if (pair) 13.sp else MenuStyle.FontSize).copy(textAlign = TextAlign.Center, textDecoration = if (focused) TextDecoration.Underline else TextDecoration.None), maxLines = 2)
                 val tail = if (disabled) "N/A"
                     else if (row.action == MenuAction.SAVE_STATE || row.action == MenuAction.LOAD_STATE) ""   // plain actions, no arrow
                     else if (row.action != MenuAction.CLOSE_GAME || open) (if (open) "v" else ">") else ""
@@ -162,7 +163,7 @@ private fun RowItem(model: MenuModel, row: MenuRowModel, focused: Boolean, click
 private fun Sub(click: Modifier, focused: Boolean, label: String, value: String, color: Color) {
     Row(click.button(focused, indent = true).padding(horizontal = MenuStyle.RowPaddingHorizontal, vertical = 9.dp),
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        BasicText(label, style = style(if (focused) OnAccent else color, 12.sp).copy(textAlign = TextAlign.Center), maxLines = 1)
+        BasicText(label, style = style(if (focused) OnAccent else color, 12.sp).copy(textAlign = TextAlign.Center, textDecoration = if (focused) TextDecoration.Underline else TextDecoration.None), maxLines = 1)
         if (value.isNotEmpty()) { Box(Modifier.width(10.dp)); BasicText(value, style = style(if (focused) OnAccent else Dim, 10.sp), maxLines = 1) }
     }
 }

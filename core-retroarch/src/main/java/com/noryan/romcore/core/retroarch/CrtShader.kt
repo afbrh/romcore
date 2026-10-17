@@ -28,6 +28,26 @@ internal object CrtShader {
     /** Systems that get the CRT look. Decided from the chosen core's systems (Nestopia/FCEUmm = NES, bsnes = SNES). */
     val SYSTEMS: Set<System> = setOf(System.NES, System.SNES)
 
+    // ---- Game Boy Advance: classic handheld LCD look (grid, RGB stripes, washed-out panel colours) ----
+    /** Boolean pref (same prefs file). Default true; no UI yet. */
+    const val GBA_PREF_KEY = "retro_gba_filter"
+    const val GBA_SHADER_FILE = "romcore-gba-lcd.glsl"
+    const val GBA_PRESET_FILE = "romcore-gba-lcd.glslp"
+
+    /** Which RomCore look a launch gets. mGBA runs GB, GBC and GBA, so the GBA look is decided by the GAME's system, not the core's. */
+    enum class Look(val presetFile: String, val prefKey: String) {
+        CRT(PRESET_FILE, PREF_KEY), GBA_LCD(GBA_PRESET_FILE, GBA_PREF_KEY)
+    }
+
+    fun lookFor(spec: CoreSpec, system: System?): Look? = when {
+        system == System.GBA && System.GBA in spec.systems -> Look.GBA_LCD
+        appliesTo(spec) -> Look.CRT
+        else -> null
+    }
+
+    fun isEnabled(ctx: Context, look: Look): Boolean =
+        runCatching { ctx.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE).getBoolean(look.prefKey, true) }.getOrDefault(true)
+
     fun appliesTo(spec: CoreSpec): Boolean = spec.systems.isNotEmpty() && spec.systems.all { it in SYSTEMS }
 
     fun isEnabled(ctx: Context): Boolean =
@@ -60,19 +80,20 @@ internal object CrtShader {
      * Copy shader + preset out of the APK (when missing or the APK was updated, like the libretro cores) and publish the
      * auto preset. Returns the shaders dir.
      */
-    fun install(ctx: Context): File {
+    fun install(ctx: Context, look: Look = Look.CRT): File {
         val dir = shadersDir(ctx)
         val stamp = File(dir, ".stamp")
         val ver = ctx.packageManager.getPackageInfo(ctx.packageName, 0).lastUpdateTime.toString()
-        val files = listOf(SHADER_FILE, PRESET_FILE)
+        val files = listOf(SHADER_FILE, PRESET_FILE, GBA_SHADER_FILE, GBA_PRESET_FILE)
         val fresh = stamp.exists() && stamp.readText() == ver && files.all { File(dir, it).exists() }
         if (!fresh) {
             for (n in files) ctx.assets.open("$ASSET_DIR/$n").use { i -> File(dir, n).outputStream().use { o -> i.copyTo(o) } }
             stamp.writeText(ver)
         }
+        // The auto preset is whichever look this launch wants (a copy of its preset; same folder as the .glsl files).
         val auto = File(dir, AUTO_PRESET_FILE)
-        val preset = File(dir, PRESET_FILE)
-        if (!fresh || !auto.exists() || auto.length() != preset.length()) preset.copyTo(auto, overwrite = true)
+        val preset = File(dir, look.presetFile)
+        if (!auto.exists() || auto.length() != preset.length() || !auto.readBytes().contentEquals(preset.readBytes())) preset.copyTo(auto, overwrite = true)
         return dir
     }
 

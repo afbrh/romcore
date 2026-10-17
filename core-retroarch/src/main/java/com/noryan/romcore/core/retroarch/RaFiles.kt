@@ -31,9 +31,10 @@ internal object RaFiles {
     }
 
     /** [crtFilter] = the user's `retro_crt_filter` pref; the CRT shader is only ever applied to NES/SNES cores. */
-    fun writeConfig(ctx: Context, spec: CoreSpec, crtFilter: Boolean = true): File {
-        val crt = crtFilter && CrtShader.appliesTo(spec)
-        val shadersDir: File? = if (crt) runCatching { CrtShader.install(ctx) }.getOrNull() else null
+    fun writeConfig(ctx: Context, spec: CoreSpec, crtFilter: Boolean = true, system: com.noryan.romcore.api.System? = null, gbaFilter: Boolean = true): File {
+        val look = CrtShader.lookFor(spec, system)
+        val on = when (look) { CrtShader.Look.CRT -> crtFilter; CrtShader.Look.GBA_LCD -> gbaFilter; null -> false }
+        val shadersDir: File? = if (on && look != null) runCatching { CrtShader.install(ctx, look) }.getOrNull() else null
         if (shadersDir == null) CrtShader.uninstallAutoPreset(ctx)
         val base = baseDir(ctx)
         // Portable save data: battery saves (.srm/.rtc/.eep/.mpk/.fla, SwanStation memcards) and RA's own states live in the

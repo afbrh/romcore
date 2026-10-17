@@ -44,6 +44,14 @@ class CrashLogicTest {
         assertEquals("GAME CLOSED UNEXPECTEDLY: X (PPSSPP)", CrashText.title(RunMarker(":ppsspp", "i", 1, "ppsspp", "X", 0)))
         assertTrue(CrashText.hint("Native crash (signal 11)").startsWith("Native crash"))
     }
+    @Test fun userKillsAreNotCrashes() {
+        assertTrue(CrashText.isUserInitiated(android.app.ApplicationExitInfo.REASON_USER_REQUESTED))
+        assertTrue(CrashText.isUserInitiated(android.app.ApplicationExitInfo.REASON_USER_STOPPED))
+        assertTrue(CrashText.isUserInitiated(16))   // PACKAGE_UPDATED (reinstall)
+        listOf(android.app.ApplicationExitInfo.REASON_CRASH, android.app.ApplicationExitInfo.REASON_CRASH_NATIVE, android.app.ApplicationExitInfo.REASON_ANR, android.app.ApplicationExitInfo.REASON_LOW_MEMORY, android.app.ApplicationExitInfo.REASON_SIGNALED, android.app.ApplicationExitInfo.REASON_UNKNOWN, android.app.ApplicationExitInfo.REASON_EXIT_SELF)
+            .forEach { assertFalse("reason $it must still be reported", CrashText.isUserInitiated(it)) }
+    }
+
     @Test fun pruneRemovesOldTombstones() {
         s.markDone("A"); s.markDone("B")
         File(File(dir, "x"), "done.A").setLastModified(0)

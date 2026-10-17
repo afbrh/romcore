@@ -95,6 +95,16 @@ object CrashText {
         "watermelonds" -> "WatermelonDS"; "" -> "core"; else -> core.replaceFirstChar { it.uppercase() }
     }
 
+    /**
+     * [android.app.ApplicationExitInfo] reasons that mean a person (or an update they ran) ended the process, as opposed to it
+     * dying on its own: force stop / swipe-away (USER_REQUESTED), user stopped (USER_STOPPED), permissions changed, or the app
+     * was updated/reinstalled (PACKAGE_UPDATED = 16, API 34+; written as a literal because minSdk is 30). Crashes, ANRs, low
+     * memory and signals are NOT in this set.
+     */
+    fun isUserInitiated(exitReason: Int) =
+        exitReason == android.app.ApplicationExitInfo.REASON_USER_REQUESTED || exitReason == android.app.ApplicationExitInfo.REASON_USER_STOPPED ||
+            exitReason == android.app.ApplicationExitInfo.REASON_PERMISSION_CHANGE || exitReason == 16
+
     fun title(m: RunMarker): String = "GAME CLOSED UNEXPECTEDLY: ${m.title.ifBlank { "game" }} (${coreLabel(m.core)})"
 
     /** [reason]: ApplicationExitInfo-derived hint, may be null. */

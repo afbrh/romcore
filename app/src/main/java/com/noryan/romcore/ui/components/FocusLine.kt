@@ -40,6 +40,11 @@ fun FocusLine(
     onAlt: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
+    val look = LocalButtonLook.current
+    if (look > 0) {
+        OptionButton(text, selected = marked, small = look >= 2, flat = look >= 2, sub = right, dim = dim, onAlt = onAlt, onClick = onClick)
+        return
+    }
     val src = remember { MutableInteractionSource() }
     val focused by src.collectIsFocusedAsState()
     val glow = if (focused) Shadow(HighlightColor, blurRadius = with(LocalDensity.current) { 24.dp.toPx() }) else null
@@ -59,7 +64,7 @@ fun FocusLine(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = if (center) Arrangement.Center else Arrangement.Start
     ) {
-        Text(text, style = style.copy(shadow = glow), color = c1, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        Text(text, style = style.copy(shadow = glow, textDecoration = if (focused) androidx.compose.ui.text.style.TextDecoration.Underline else androidx.compose.ui.text.style.TextDecoration.None), color = c1, maxLines = 1, overflow = TextOverflow.Ellipsis,
             textAlign = if (center) TextAlign.Center else TextAlign.Start, modifier = if (center) Modifier else Modifier.weight(1f))
         if (right != null) {
             Spacer(Modifier.width(12.dp))

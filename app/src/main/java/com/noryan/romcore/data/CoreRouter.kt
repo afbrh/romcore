@@ -40,7 +40,8 @@ object CoreRouter {
 
     fun choose(g: GameEntity, prefs: Prefs, cores: List<CoreDescriptor> = CoreRegistry.all()): CoreChoice? {
         val sys = runCatching { System.valueOf(g.system) }.getOrNull() ?: return null
-        return choose(sys, g.title, g.gameId, g.coreOverride, prefs.systemCore(sys), cores)
+        // There is no per-system setting in the UI any more, so a value left over from an older version must not override silently.
+        return choose(sys, g.title, g.gameId, g.coreOverride, null, cores)
     }
 
     /**

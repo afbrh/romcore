@@ -109,7 +109,7 @@ class DolphinSession(
     // ---- input -----------------------------------------------------------------------------------------------------
     @Volatile private var ready = false
     private var wii = false
-    private val held = DoubleArray(ControlId.WIIMOTE_FORCE_UPRIGHT + 1)
+    private val held = DoubleArray(ControlId.NUNCHUK_SHAKE + 1)
     private val dirs = DoubleArray(8) // LS up/down/left/right, RS up/down/left/right
 
     /** Called (UI thread) once the game booted and the emulated controllers exist. */
@@ -117,6 +117,27 @@ class DolphinSession(
     @Volatile var gameId: String? = null
     private var otherM: OtherM.Profile? = null
     private var lastOtherM: OtherM.Out? = null
+    private var galaxy: Galaxy.Profile? = null
+    private var lastGalaxy: Galaxy.Out? = null
+    // Galaxy's Star Pointer is sticky: the right stick MOVES it and it stays where you leave it (R recentres it), unlike the
+    // absolute pointer other Wii games get. A Handler tick integrates the stick while it is held.
+    private var gx = 0.0
+    private var gy = 0.0
+    private var gRunning = false
+    private val gHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val gTick = object : Runnable {
+        override fun run() {
+            val vx = dirs[7] - dirs[6]; val vy = dirs[4] - dirs[5]
+            val m = hypot(vx, vy)
+            if (m < GALAXY_POINTER_DEADZONE) { gRunning = false; return }
+            // Dead zone removed, response squared: fine aim near the centre of the stick, full speed at the edge.
+            val k = ((m - GALAXY_POINTER_DEADZONE) / (1.0 - GALAXY_POINTER_DEADZONE)).coerceIn(0.0, 1.0)
+            val speed = k * k * GALAXY_POINTER_SPEED * GALAXY_POINTER_TICK_MS / 1000.0
+            gx = (gx + vx / m * speed).coerceIn(-1.0, 1.0); gy = (gy + vy / m * speed).coerceIn(-1.0, 1.0)
+            put(ControlId.WIIMOTE_IR_X, gx); put(ControlId.WIIMOTE_IR_Y, gy)
+            gHandler.postDelayed(this, GALAXY_POINTER_TICK_MS)
+        }
+    }
 
     fun onGameReady() {
         if (ready) return
@@ -125,9 +146,14 @@ class DolphinSession(
             otherM = OtherM.Profile(sensitivity = otherMSensitivity())
             android.util.Log.i("RomCoreOtherM", "Other M profile active (${gameId}): sideways remote, IR hidden until POINT")
         }
+        if (wii && Galaxy.matches(gameId)) {
+            galaxy = Galaxy.Profile()
+            android.util.Log.i("RomCoreGalaxy", "Super Mario Galaxy profile active (${gameId}): Switch layout, shake = spin, right stick = Star Pointer")
+        }
         if (wii) InputOverrider.registerWii(PORT) else InputOverrider.registerGameCube(PORT)
         ready = true
         if (otherM != null) { applyOtherM(); return }
+        if (galaxy != null) { applyGalaxy() }
         for (c in held.indices) if (held[c] != 0.0 && isOurControl(c)) InputOverrider.setControlState(PORT, c, held[c])
     }
 
@@ -169,7 +195,25 @@ class DolphinSession(
         }
     }
 
+    /** Writes the Galaxy remote + Nunchuk state (Switch layout) to the overrider. */
+    private fun applyGalaxy() {
+        val p = galaxy ?: return
+        val o = p.out()
+        if (o == lastGalaxy) return
+        lastGalaxy = o
+        fun b(v: Boolean) = if (v) 1.0 else 0.0
+        put(ControlId.WIIMOTE_A_BUTTON, b(o.a)); put(ControlId.WIIMOTE_B_BUTTON, b(o.b))
+        put(ControlId.NUNCHUK_C_BUTTON, b(o.c)); put(ControlId.NUNCHUK_Z_BUTTON, b(o.z))
+        put(ControlId.WIIMOTE_SHAKE, b(o.shake)); put(ControlId.NUNCHUK_SHAKE, b(o.shake))
+        put(ControlId.WIIMOTE_PLUS_BUTTON, b(o.plus)); put(ControlId.WIIMOTE_MINUS_BUTTON, b(o.minus))
+        put(ControlId.WIIMOTE_DPAD_UP, b(o.up)); put(ControlId.WIIMOTE_DPAD_DOWN, b(o.down))
+        put(ControlId.WIIMOTE_DPAD_LEFT, b(o.left)); put(ControlId.WIIMOTE_DPAD_RIGHT, b(o.right))
+        stick(false)   // R recenters the Star Pointer: re-evaluate the pointer now
+        android.util.Log.i("RomCoreGalaxy", "remote: A=${o.a} B=${o.b} C=${o.c} Z=${o.z} shake=${o.shake} +=${o.plus} -=${o.minus} recenter=${o.recenterPointer}")
+    }
+
     override fun injectButton(pad: Pad, pressed: Boolean) {
+        if (galaxy != null && otherM == null) { galaxy!!.button(pad, pressed); if (ready) applyGalaxy(); return }
         if (otherM != null) { otherM!!.button(pad, pressed); if (ready) applyOtherM(); return }
         val v = if (pressed) 1.0 else 0.0
         if (!wii) when (pad) {
@@ -240,8 +284,19 @@ class DolphinSession(
             val max = InputOverrider.getGateRadiusAtAngle(PORT, cx, angle)
             if (max > 0 && r > max) { x = max * cos(angle); y = max * sin(angle) }
         }
+        if (!left && galaxy != null) {
+            // Galaxy: R recentres the Star Pointer; otherwise the stick moves it and it stays put on release.
+            if (galaxy!!.out().recenterPointer) { gx = 0.0; gy = 0.0; put(ControlId.WIIMOTE_IR_X, 0.0); put(ControlId.WIIMOTE_IR_Y, 0.0) }
+            else if (!gRunning && hypot(dirs[7] - dirs[6], dirs[4] - dirs[5]) >= GALAXY_POINTER_DEADZONE) { gRunning = true; gHandler.post(gTick) }
+            return
+        }
         put(cx, x); put(cy, y)
     }
 
-    private companion object { const val PORT = 0 }
+    private companion object {
+        const val PORT = 0
+        const val GALAXY_POINTER_DEADZONE = 0.12
+        const val GALAXY_POINTER_SPEED = 2.4        // pointer units per second at full deflection (the pointer range is -1..1)
+        const val GALAXY_POINTER_TICK_MS = 16L
+    }
 }
