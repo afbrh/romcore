@@ -75,3 +75,7 @@ includeBuild("../dusklight-src/platforms/android") {
     name = "dusklight"
     dependencySubstitution { substitute(module("dev.twilitrealm:app")).using(project(":app")) }
 }
+
+// :core-wwhd (Wii U: The Wind Waker HD only). Native runtime from ../wwhd-src (CMake, local branch `romcore`), no game code in the library;
+// the game is translated on the device from the user's own .wua. See core-wwhd/README-wwhd.md.
+include(":core-wwhd")

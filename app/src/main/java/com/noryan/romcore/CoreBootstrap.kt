@@ -11,16 +11,16 @@ import com.noryan.romcore.api.CoreRegistry
  */
 object CoreBootstrap {
     private const val TAG = "CoreBootstrap"
-    val CORE_IDS = listOf("retroarch", "ppsspp", "dolphin", "primehack", "cemu", "eden", "azahar", "watermelonds", "armsx2", "dusklight")
+    val CORE_IDS = listOf("retroarch", "ppsspp", "dolphin", "primehack", "cemu", "eden", "azahar", "watermelonds", "armsx2", "dusklight", "wwhd")
 
     private val DISPLAY_CASE = mapOf(
         "retroarch" to listOf("RetroArch", "Retroarch"), "primehack" to listOf("PrimeHack", "Primehack"),
         "watermelonds" to listOf("WatermelonDs", "WatermelonDS", "Watermelonds"), "armsx2" to listOf("ArmSX2", "Armsx2"),
-        "ppsspp" to listOf("PPSSPP", "Ppsspp")
+        "ppsspp" to listOf("PPSSPP", "Ppsspp"), "wwhd" to listOf("Wwhd")
     )
 
     /** Name for an engine id when it has no registered descriptor (Settings "NOT INSTALLED" list). */
-    fun friendlyName(id: String): String = if (id == "retroarch") "Libretro cores" else DISPLAY_CASE[id]?.first() ?: id.replaceFirstChar { it.uppercase() }
+    fun friendlyName(id: String): String = if (id == "retroarch") "Libretro cores" else if (id == "wwhd") "Wind Waker HD" else DISPLAY_CASE[id]?.first() ?: id.replaceFirstChar { it.uppercase() }
 
     /** ids that were found and registered / ids that failed or are missing, for the Settings screen. */
     val registered = mutableListOf<String>()
@@ -84,7 +84,7 @@ object CoreBootstrap {
         "cemu" to "Cemu 0.5-4 (SSimco android port)",
         "azahar" to "Azahar 95db543",
         "armsx2" to "ARMSX2 0d7a2b9",
-        "dusklight" to "Dusklight b245c6b (romcore patches)",
+        "dusklight" to "Dusklight b245c6b (romcore patches)", "wwhd" to "WindWakerHD-Android-Plus 1.11.1 (romcore)",
         "dolphin" to "Dolphin mainline", "eden" to "Eden v0.2.0-371", "ppsspp" to "PPSSPP", "watermelonds" to "WatermelonDS 0.8.0.rc2",
     )
 }

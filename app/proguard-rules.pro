@@ -10,3 +10,6 @@
 # every RomCore default (GL/4x/dual display).
 -keep class org.ini4j.** { *; }
 -keepclassmembers class * implements org.ini4j.spi.* { <init>(...); }
+# libwwhd.so looks up Native's static reverse-call methods and registers its natives by exact name in JNI_OnLoad.
+-keep class org.wwhdrecomp.app.Native { *; }
+-keep class org.wwhdrecomp.app.Native$Host { *; }

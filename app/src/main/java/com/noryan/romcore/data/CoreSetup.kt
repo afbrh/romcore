@@ -71,12 +71,19 @@ object CoreSetup {
             ?: Regex("metroid\\s*[-:._ ]*\\s*prime|prime\\s*(2|3)\\b|prime trilogy", RegexOption.IGNORE_CASE).containsMatchIn(title)
 }
 
-/** Dusklight (Twilight Princess) is a one-game core: its descriptor decides which game IDs it can run (reflective, optional module). */
+/**
+ * One-game cores: Dusklight (Twilight Princess) is recognised by its GameCube disc ID, Wind Waker HD by its title (a Wii U `.wua` has no
+ * cheap disc ID). Each core's own descriptor decides (reflective, optional modules); the plain rules below are the fallback.
+ */
 object GameSpecificCores {
     private val TP_GC_IDS = setOf("GZ2E01", "GZ2P01", "GZ2J01")
+    private val WWHD_TITLE = Regex("wind\\s*waker\\s*hd", RegexOption.IGNORE_CASE)
 
-    /** Cores that can only run particular games, id -> predicate on the 6-char disc game ID (null = unknown ID). */
+    /** Cores that can only run particular discs, id -> predicate on the 6-char disc game ID (null = unknown ID). */
     private val matchers: Map<String, (String?) -> Boolean> = mapOf("dusklight" to ::isTwilightPrincess)
+
+    /** Cores that can only run particular games recognised by name, id -> predicate on the game's title. */
+    private val titleMatchers: Map<String, (String?) -> Boolean> = mapOf("wwhd" to ::isWindWakerHd)
 
     fun isTwilightPrincess(gameId: String?): Boolean {
         if (gameId == null) return false
@@ -88,8 +95,23 @@ object GameSpecificCores {
         return r ?: (gameId in TP_GC_IDS)
     }
 
-    fun isGameSpecific(coreId: String) = coreId in matchers
+    fun isWindWakerHd(title: String?): Boolean {
+        if (title == null) return false
+        val r = runCatching {
+            Class.forName("com.noryan.romcore.core.wwhd.WwhdCore").let { c ->
+                c.getMethod("isWindWakerHdTitle", String::class.java).invoke(c.getField("INSTANCE").get(null), title) as? Boolean
+            }
+        }.getOrNull()
+        return r ?: WWHD_TITLE.containsMatchIn(title)
+    }
 
-    /** True when [coreId] may run the game with this disc ID (cores that are not game-specific can run anything). */
-    fun canRun(coreId: String, gameId: String?): Boolean = matchers[coreId]?.invoke(gameId) ?: true
+    fun isGameSpecific(coreId: String) = coreId in matchers || coreId in titleMatchers
+
+    /** True when [coreId] may run this game (cores that are not game-specific can run anything). [title] is the game's name. */
+    fun canRun(coreId: String, gameId: String?, title: String? = null): Boolean =
+        matchers[coreId]?.invoke(gameId) ?: titleMatchers[coreId]?.invoke(title) ?: true
+
+    /** True when [coreId] is a one-game core and this IS its game: it then wins the automatic choice. */
+    fun claims(coreId: String, gameId: String?, title: String?): Boolean =
+        matchers[coreId]?.let { gameId != null && it(gameId) } ?: titleMatchers[coreId]?.invoke(title) ?: false
 }

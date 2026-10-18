@@ -34,9 +34,9 @@ object CoreRouter {
         return c.firstOrNull { it.id == id } ?: c.firstOrNull { it.core.id == id }
     }
 
-    /** Candidates for one game: [candidates] minus game-specific cores (Dusklight) that cannot run this disc. */
-    fun candidatesFor(s: System, gameId: String?, cores: List<CoreDescriptor> = CoreRegistry.all()): List<CoreChoice> =
-        candidates(s, cores).filter { GameSpecificCores.canRun(it.core.id, gameId) }
+    /** Candidates for one game: [candidates] minus game-specific cores (Dusklight, Wind Waker HD) that cannot run this game. */
+    fun candidatesFor(s: System, gameId: String?, cores: List<CoreDescriptor> = CoreRegistry.all(), title: String? = null): List<CoreChoice> =
+        candidates(s, cores).filter { GameSpecificCores.canRun(it.core.id, gameId, title) }
 
     fun choose(g: GameEntity, prefs: Prefs, cores: List<CoreDescriptor> = CoreRegistry.all()): CoreChoice? {
         val sys = runCatching { System.valueOf(g.system) }.getOrNull() ?: return null
@@ -52,8 +52,8 @@ object CoreRouter {
                cores: List<CoreDescriptor> = CoreRegistry.all()): CoreChoice? {
         val c = candidates(sys, cores)
         if (c.isEmpty()) return null
-        resolveOverride(gameOverride, c)?.takeIf { GameSpecificCores.canRun(it.core.id, gameId) }?.let { return it }
-        resolveOverride(systemOverride, c)?.takeIf { GameSpecificCores.canRun(it.core.id, gameId) }?.let { return it }
+        resolveOverride(gameOverride, c)?.takeIf { GameSpecificCores.canRun(it.core.id, gameId, title) }?.let { return it }
+        resolveOverride(systemOverride, c)?.takeIf { GameSpecificCores.canRun(it.core.id, gameId, title) }?.let { return it }
         return autoChoice(sys, title, c, gameId)
     }
 
@@ -63,9 +63,9 @@ object CoreRouter {
      */
     fun autoChoice(sys: System, title: String, c: List<CoreChoice> = candidates(sys), gameId: String? = null): CoreChoice? {
         if (c.isEmpty()) return null
-        if (gameId != null) c.firstOrNull { GameSpecificCores.isGameSpecific(it.core.id) && GameSpecificCores.canRun(it.core.id, gameId) }?.let { return it }
+        c.firstOrNull { GameSpecificCores.claims(it.core.id, gameId, title) }?.let { return it }
         if (CoreSetup.isPrimeTitle(title)) c.firstOrNull { it.core.id == "primehack" }?.let { return it }
-        // PrimeHack only auto-runs Metroid Prime; Dusklight only auto-runs Twilight Princess; everything else prefers the general core.
+        // PrimeHack only auto-runs Metroid Prime; Dusklight only Twilight Princess; Wind Waker HD only that game; everything else prefers the general core.
         return c.firstOrNull { it.core.id != "primehack" && !GameSpecificCores.isGameSpecific(it.core.id) } ?: c.first()
     }
 }

@@ -281,7 +281,7 @@ private fun GameList(vm: MainViewModel, collectionId: Long?) {
                     onClick = { vm.launch(ctx, g) }
                 )
                 if (expanded == g.id) {
-                    val cands = sys?.let { CoreRouter.candidatesFor(it, g.gameId) }.orEmpty()
+                    val cands = sys?.let { CoreRouter.candidatesFor(it, g.gameId, title = g.title) }.orEmpty()
                     val auto = sys?.let { CoreRouter.autoChoice(it, g.title, gameId = g.gameId) }
                     val chosen = CoreRouter.resolveOverride(g.coreOverride, cands)
                     val autoLabel = "AUTO" + (auto?.displayName?.let { " ($it)" } ?: "")

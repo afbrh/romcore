@@ -83,4 +83,20 @@ class CoreRouterTest {
         assertEquals(listOf("dolphin", "primehack"), CoreRouter.candidatesFor(System.GAMECUBE, null, gc).map { it.id })
         assertEquals("Dusklight (Twilight Princess)", CoreRouter.candidatesFor(System.GAMECUBE, "GZ2E01", gc).last().displayName)
     }
+
+    // ---- Wind Waker HD -> wwhd core (routing by title; a .wua has no cheap disc ID) ----
+    private val cemu = Fake("cemu", "Cemu", setOf(System.WIIU))
+    private val wwhd = Fake("wwhd", "Wind Waker HD", setOf(System.WIIU))
+    private val wiiu = listOf(cemu, wwhd)
+
+    @Test fun windWakerHdRoutesToWwhdOnlyByTitle() {
+        val c = CoreRouter.candidates(System.WIIU, wiiu)
+        assertEquals("wwhd", CoreRouter.autoChoice(System.WIIU, "The Legend of Zelda: The Wind Waker HD", c)!!.id)
+        assertEquals("cemu", CoreRouter.autoChoice(System.WIIU, "Mario Kart 8", c)!!.id)
+        assertEquals(listOf("cemu", "wwhd"), CoreRouter.candidatesFor(System.WIIU, null, wiiu, "Zelda - Wind Waker HD").map { it.id })
+        assertEquals(listOf("cemu"), CoreRouter.candidatesFor(System.WIIU, null, wiiu, "Mario Kart 8").map { it.id })
+        // per-game override to Cemu wins for Wind Waker HD; a stale wwhd override on another game falls back
+        assertEquals("cemu", CoreRouter.choose(System.WIIU, "Wind Waker HD", null, "cemu", null, wiiu)!!.id)
+        assertEquals("cemu", CoreRouter.choose(System.WIIU, "Mario Kart 8", null, "wwhd", null, wiiu)!!.id)
+    }
 }
