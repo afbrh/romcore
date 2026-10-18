@@ -39,5 +39,7 @@ class WindWakerFpsTest {
         assertEquals("False", off["OverclockEnable"]); assertEquals("1.0", off["Overclock"]); assertNull(off["EnableCheats"])
     }
 
+    @Test fun onByDefault() { assertTrue(WindWakerFps.DEFAULT_ON) }
+
     @Test fun prefKeyIsTheOneTheSettingsRowWrites() { assertEquals("ww_fps_hack", WindWakerFps.PREF_KEY); assertEquals("romcore", WindWakerFps.PREFS_FILE) }
 }

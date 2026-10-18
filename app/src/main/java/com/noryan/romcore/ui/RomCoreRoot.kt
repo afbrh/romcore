@@ -445,7 +445,7 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
             val ww = remember(tick) { vm.prefs.wwFpsHack }
             FocusLine("WIND WAKER 60 FPS", right = if (ww) "ON  EXPERIMENTAL" else "OFF", marked = ww) { vm.toggleWwFps() }
         }
-        item { Note("Wind Waker (US disc) at 60 fps with a community hack and a 2x CPU clock. It can softlock the game and double enemy speed, so keep it off unless you want to test it. Applies the next time you start the game.") }
+        item { Note("Wind Waker (US disc) at 60 fps with a community hack and a 2x CPU clock. It's experimental: it can softlock a few spots and double enemy speed, so back up your save and turn it off here if something breaks. Applies the next time you start the game.") }
         item { Section("INSTALLED CORES (${rows.size})") }
         if (rows.isEmpty()) item { Note("No cores are installed in this build.") }
         items(rows, key = { it.key }) { c ->
