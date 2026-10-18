@@ -1,123 +1,19 @@
 diff --git a/Source/Core/Core/HW/WiimoteEmu/Dynamics.cpp b/Source/Core/Core/HW/WiimoteEmu/Dynamics.cpp
-index ebf24f7..99157d6 100644
+index 68d374c..d4fe267 100644
 --- a/Source/Core/Core/HW/WiimoteEmu/Dynamics.cpp
 +++ b/Source/Core/Core/HW/WiimoteEmu/Dynamics.cpp
-@@ -80,9 +80,17 @@ Common::Quaternion ComplementaryFilter(const Common::Quaternion& gyroscope,
- }
- 
- void EmulateShake(PositionalState* state, ControllerEmu::Shake* const shake_group,
--                  float time_elapsed)
-+                  float time_elapsed, const ControllerEmu::InputOverrideFunction& override_func)
- {
--  auto target_position = shake_group->GetState() * float(shake_group->GetIntensity() / 2);
-+  auto shake_state = shake_group->GetState();
-+  // RomCore (Super Mario Galaxy 1 + 2 only): the pad buttons X and Y press Dolphin's own "Shake" motion input in all three
-+  // directions (Motion Input > Shake X, Y and Z), exactly as if each of the three were bound to that button. Everything else is
-+  // Dolphin's normal shake emulation (its own intensity and frequency).
-+  if (override_func)
-+    if (const auto o = override_func("RomCoreShake", "On", 0.0))
-+      if (*o > 0.5)
-+        shake_state = Common::Vec3(1.f, 1.f, 1.f);
-+  auto target_position = shake_state * float(shake_group->GetIntensity() / 2);
+@@ -88,8 +88,12 @@ void EmulateShake(PositionalState* state, ControllerEmu::Shake* const shake_grou
+   // shake emulation (its own intensity and frequency).
+   if (override_func)
+     if (const auto o = override_func("RomCoreShake", "On", 0.0))
+-      if (*o > 0.5)
+-        shake_state = Common::Vec3(1.f, 0.f, 0.f);
++    {
++      // The override value is a bit mask of the Shake directions pressed: 1 = X, 2 = Y, 4 = Z.
++      const int mask = int(std::lround(*o));
++      if (mask > 0)
++        shake_state = Common::Vec3((mask & 1) ? 1.f : 0.f, (mask & 2) ? 1.f : 0.f, (mask & 4) ? 1.f : 0.f);
++    }
+   auto target_position = shake_state * float(shake_group->GetIntensity() / 2);
    for (std::size_t i = 0; i != target_position.data.size(); ++i)
    {
-     if (state->velocity.data[i] * std::copysign(1.f, target_position.data[i]) < 0 ||
-diff --git a/Source/Core/Core/HW/WiimoteEmu/Dynamics.h b/Source/Core/Core/HW/WiimoteEmu/Dynamics.h
-index 8f35c30..f568520 100644
---- a/Source/Core/Core/HW/WiimoteEmu/Dynamics.h
-+++ b/Source/Core/Core/HW/WiimoteEmu/Dynamics.h
-@@ -75,7 +75,8 @@ void ApproachPositionWithJerk(PositionalState* state, const Common::Vec3& target
- void ApproachAngleWithAccel(RotationalState* state, const Common::Vec3& target, float max_accel,
-                             float time_elapsed);
- 
--void EmulateShake(PositionalState* state, ControllerEmu::Shake* shake_group, float time_elapsed);
-+void EmulateShake(PositionalState* state, ControllerEmu::Shake* shake_group, float time_elapsed,
-+                  const ControllerEmu::InputOverrideFunction& override_func = {});
- void EmulateTilt(RotationalState* state, ControllerEmu::Tilt* tilt_group, float time_elapsed);
- void EmulateSwing(MotionState* state, ControllerEmu::Force* swing_group, float time_elapsed);
- void EmulatePoint(MotionState* state, ControllerEmu::Cursor* ir_group,
-diff --git a/Source/Core/Core/HW/WiimoteEmu/Extension/Nunchuk.cpp b/Source/Core/Core/HW/WiimoteEmu/Extension/Nunchuk.cpp
-index 6745602..5ec5fee 100644
---- a/Source/Core/Core/HW/WiimoteEmu/Extension/Nunchuk.cpp
-+++ b/Source/Core/Core/HW/WiimoteEmu/Extension/Nunchuk.cpp
-@@ -77,7 +77,7 @@ void Nunchuk::BuildDesiredExtensionState(DesiredExtensionState* target_state)
-   // Acceleration data:
-   EmulateSwing(&m_swing_state, m_swing, 1.f / ::Wiimote::UPDATE_FREQ);
-   EmulateTilt(&m_tilt_state, m_tilt, 1.f / ::Wiimote::UPDATE_FREQ);
--  EmulateShake(&m_shake_state, m_shake, 1.f / ::Wiimote::UPDATE_FREQ);
-+  EmulateShake(&m_shake_state, m_shake, 1.f / ::Wiimote::UPDATE_FREQ, m_input_override_function);
- 
-   const auto transformation =
-       GetRotationalMatrix(-m_tilt_state.angle) * GetRotationalMatrix(-m_swing_state.angle);
-diff --git a/Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.cpp b/Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.cpp
-index 7b0f4d9..b8af26d 100644
---- a/Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.cpp
-+++ b/Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.cpp
-@@ -848,7 +848,7 @@ void Wiimote::StepDynamics()
-   EmulateSwing(&m_swing_state, m_swing, 1.f / ::Wiimote::UPDATE_FREQ);
-   EmulateTilt(&m_tilt_state, m_tilt, 1.f / ::Wiimote::UPDATE_FREQ);
-   EmulatePoint(&m_point_state, m_ir, m_input_override_function, 1.f / ::Wiimote::UPDATE_FREQ);
--  EmulateShake(&m_shake_state, m_shake, 1.f / ::Wiimote::UPDATE_FREQ);
-+  EmulateShake(&m_shake_state, m_shake, 1.f / ::Wiimote::UPDATE_FREQ, m_input_override_function);
-   EmulateIMUCursor(&m_imu_cursor_state, m_imu_ir, m_imu_accelerometer, m_imu_gyroscope,
-                    1.f / ::Wiimote::UPDATE_FREQ);
- }
-@@ -875,8 +875,16 @@ Common::Matrix44 Wiimote::GetTransformation(const Common::Matrix33& extra_rotati
-   // Includes positional and rotational effects of:
-   // Point, Swing, Tilt, Shake
- 
-+  // RomCore: while the input overrider holds the shake gesture (Super Mario Galaxy's spin), the shake must only reach the
-+  // accelerometer; letting it translate the remote would also drag the IR pointer around the screen.
-+  Common::Vec3 shake_position = m_shake_state.position;
-+  if (m_input_override_function)
-+    if (const auto o = m_input_override_function("RomCoreShake", "On", 0.0))
-+      if (*o > 0.5)
-+        shake_position = Common::Vec3(0.f, 0.f, 0.f);
-+
-   // TODO: Think about and clean up matrix order + make nunchuk match.
--  return Common::Matrix44::Translate(-m_shake_state.position) *
-+  return Common::Matrix44::Translate(-shake_position) *
-          Common::Matrix44::FromMatrix33(extra_rotation * GetRotationalMatrix(-m_tilt_state.angle) *
-                                         GetRotationalMatrix(-m_point_state.angle) *
-                                         GetRotationalMatrix(-m_swing_state.angle)) *
-diff --git a/Source/Core/InputCommon/ControllerInterface/Touch/InputOverrider.cpp b/Source/Core/InputCommon/ControllerInterface/Touch/InputOverrider.cpp
-index 02d510d..61cb30e 100644
---- a/Source/Core/InputCommon/ControllerInterface/Touch/InputOverrider.cpp
-+++ b/Source/Core/InputCommon/ControllerInterface/Touch/InputOverrider.cpp
-@@ -96,6 +96,7 @@ const ControlsMap s_wiimote_controls_map = {{
-      ControlID::WIIMOTE_IR_HIDE},
-     {{"RomCoreOrient", "Sideways"}, ControlID::WIIMOTE_FORCE_SIDEWAYS},
-     {{"RomCoreOrient", "Upright"}, ControlID::WIIMOTE_FORCE_UPRIGHT},
-+    {{"RomCoreShake", "On"}, ControlID::WIIMOTE_SHAKE},
- }};
- 
- const ControlsMap s_nunchuk_controls_map = {{
-@@ -107,6 +108,7 @@ const ControlsMap s_nunchuk_controls_map = {{
-      ControlID::NUNCHUK_STICK_X},
-     {{WiimoteEmu::Nunchuk::STICK_GROUP, ControllerEmu::ReshapableInput::Y_INPUT_OVERRIDE},
-      ControlID::NUNCHUK_STICK_Y},
-+    {{"RomCoreShake", "On"}, ControlID::NUNCHUK_SHAKE},
- }};
- 
- const ControlsMap s_classic_controls_map = {{
-diff --git a/Source/Core/InputCommon/ControllerInterface/Touch/InputOverrider.h b/Source/Core/InputCommon/ControllerInterface/Touch/InputOverrider.h
-index f4acbca..76da5ae 100644
---- a/Source/Core/InputCommon/ControllerInterface/Touch/InputOverrider.h
-+++ b/Source/Core/InputCommon/ControllerInterface/Touch/InputOverrider.h
-@@ -72,13 +72,15 @@ enum ControlID
-   WIIMOTE_IR_HIDE = 56,        // >0.5: pointer hidden (game sees no IR dots)
-   WIIMOTE_FORCE_SIDEWAYS = 57, // overrides "Sideways Wiimote": 0 = flat/pointing grip, 1 = NES grip
-   WIIMOTE_FORCE_UPRIGHT = 58,  // overrides "Upright Wiimote": 1 = remote pointing at the ceiling
-+  WIIMOTE_SHAKE = 59,          // >0.5: hold the Wii Remote shake gesture on (all axes)
-+  NUNCHUK_SHAKE = 60,          // >0.5: hold the Nunchuk shake gesture on (all axes)
- 
-   NUMBER_OF_CONTROLS,
- 
-   FIRST_GC_CONTROL = GCPAD_A_BUTTON,
-   LAST_GC_CONTROL = GCPAD_C_STICK_Y,
-   FIRST_WII_CONTROL = WIIMOTE_A_BUTTON,
--  LAST_WII_CONTROL = WIIMOTE_FORCE_UPRIGHT,
-+  LAST_WII_CONTROL = NUNCHUK_SHAKE,
- 
- };
- void RegisterGameCubeInputOverrider(int controller_index);

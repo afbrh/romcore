@@ -10,7 +10,7 @@ import java.util.EnumSet
  * Switch button            -> emulated Wii input
  *   Left stick             -> Nunchuk stick (move)
  *   A / B                  -> Wii Remote A  (jump, swim)
- *   X / Y                  -> shake         (spin; Wii Remote + Nunchuk shake held on)
+ *   X / Y                  -> Nunchuk > Shake > X (spin); nothing else is bound to X/Y
  *   ZL                     -> Nunchuk Z     (crouch)
  *   ZR                     -> Wii Remote B  (shoot a Star Bit)
  *   L                      -> Nunchuk C     (reset camera)

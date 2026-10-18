@@ -195,6 +195,11 @@ class DolphinSession(
         }
     }
 
+    private fun shakeMasks(): Pair<Int, Int> = runCatching {
+        val t = File(context.getExternalFilesDir(null), "galaxy_shake.txt").readText().trim().split(Regex("\\s+"))
+        (t[0].toInt() and 7) to (t[1].toInt() and 7)
+    }.getOrDefault(0 to 1)
+
     /** Writes the Galaxy remote + Nunchuk state (Switch layout) to the overrider. */
     private fun applyGalaxy() {
         val p = galaxy ?: return
@@ -204,7 +209,11 @@ class DolphinSession(
         fun b(v: Boolean) = if (v) 1.0 else 0.0
         put(ControlId.WIIMOTE_A_BUTTON, b(o.a)); put(ControlId.WIIMOTE_B_BUTTON, b(o.b))
         put(ControlId.NUNCHUK_C_BUTTON, b(o.c)); put(ControlId.NUNCHUK_Z_BUTTON, b(o.z))
-        put(ControlId.WIIMOTE_SHAKE, b(o.shake)); put(ControlId.NUNCHUK_SHAKE, b(o.shake))
+        // X / Y press Dolphin's Shake motion inputs; the value is the bit mask of directions (1 = X, 2 = Y, 4 = Z) for the Wii Remote and
+        // the Nunchuk. Default: Nunchuk > Shake > X only. The masks can be tuned without rebuilding: files/galaxy_shake.txt = "<remote> <nunchuk>".
+        val (wmMask, ncMask) = shakeMasks()
+        put(ControlId.WIIMOTE_SHAKE, if (o.shake) wmMask.toDouble() else 0.0)
+        put(ControlId.NUNCHUK_SHAKE, if (o.shake) ncMask.toDouble() else 0.0)
         put(ControlId.WIIMOTE_PLUS_BUTTON, b(o.plus)); put(ControlId.WIIMOTE_MINUS_BUTTON, b(o.minus))
         put(ControlId.WIIMOTE_DPAD_UP, b(o.up)); put(ControlId.WIIMOTE_DPAD_DOWN, b(o.down))
         put(ControlId.WIIMOTE_DPAD_LEFT, b(o.left)); put(ControlId.WIIMOTE_DPAD_RIGHT, b(o.right))
