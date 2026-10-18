@@ -55,6 +55,7 @@ object DolphinCore : CoreDescriptor {
             putExtra(DolphinActivity.EXTRA_ROM_PATH, request.romPath)
             putExtra(DolphinActivity.EXTRA_SYSTEM, request.system.name)
             putExtra(DolphinActivity.EXTRA_RESUME_STATE, request.resumeState)
+            putExtra(DolphinActivity.EXTRA_WW60, WindWakerFps.isEnabled(ctx))   // opt-in Wind Waker 60 fps mode (Settings)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 

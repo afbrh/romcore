@@ -16,7 +16,7 @@ internal object DolphinRuntime {
     @Volatile private var initialized = false
 
     @Synchronized
-    fun ensureInitialized(ctx: Context, disc: SunshineFps.Disc? = null) {
+    fun ensureInitialized(ctx: Context, disc: SunshineFps.Disc? = null, ww60: Boolean = false) {
         if (initialized) return
         val app = ctx.applicationContext
         DolphinApplication.initialize(app)
@@ -29,14 +29,17 @@ internal object DolphinRuntime {
         DolphinDefaults.apply(DirectoryInitialization.getUserDirectoryPath(app), app) // also points the engine at <root>/dolphin (save data)
         // Per-game: EnableCheats must be in Dolphin.ini before native init reads it (late config applies one launch late).
         SunshineFps.enableEarly(DirectoryInitialization.getUserDirectoryPath(app), disc)
+        WindWakerFps.enableEarly(DirectoryInitialization.getUserDirectoryPath(app), disc, ww60) // Wind Waker 60 fps (opt-in): cheats + 2x clock; resets it for every other game
         OtherM.prepareEarly(DirectoryInitialization.getUserDirectoryPath(app), disc?.id) // sideways remote INI, before init
         DirectoryInitialization.initializeBlocking(app)
         initialized = true
     }
 
     /** After init (Sys/ exists), before the game boots: per-game INI with the Gecko codes (Super Mario Sunshine 60 fps). */
-    fun prepareGame(ctx: Context, disc: SunshineFps.Disc?) {
+    fun prepareGame(ctx: Context, disc: SunshineFps.Disc?, ww60: Boolean = false) {
         val app = ctx.applicationContext
+        val wwCodes = WindWakerFps.prepare(app, DirectoryInitialization.getUserDirectoryPath(app), disc, ww60)
+        if (wwCodes > 0) android.util.Log.i("RomCoreDolphin", "${disc?.id}: Wind Waker 60 fps hack ON ($wwCodes Gecko codes, ${WindWakerFps.OVERCLOCK}x clock)")
         val names = SunshineFps.prepare(DirectoryInitialization.getUserDirectoryPath(app),
             java.io.File(app.filesDir, "dolphin/Sys"), disc)
         if (names.isNotEmpty()) android.util.Log.i("RomCoreDolphin", "${disc?.id} r${disc?.revision}: Gecko codes enabled $names")

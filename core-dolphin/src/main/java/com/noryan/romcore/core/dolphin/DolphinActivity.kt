@@ -32,6 +32,7 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
         const val EXTRA_ROM_PATH = "com.noryan.romcore.core.dolphin.ROM_PATH"
         const val EXTRA_SYSTEM = "com.noryan.romcore.core.dolphin.SYSTEM"
         const val EXTRA_RESUME_STATE = "com.noryan.romcore.core.dolphin.RESUME_STATE"
+        const val EXTRA_WW60 = "com.noryan.romcore.core.dolphin.WW60"
     }
 
     private lateinit var session: DolphinSession
@@ -55,6 +56,7 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
         val launchPath = intent.getStringExtra(EXTRA_PATH)
         if (launchPath == null) { finish(); return }
         val romPath = intent.getStringExtra(EXTRA_ROM_PATH) ?: launchPath
+        val ww60 = intent.getBooleanExtra(EXTRA_WW60, false)
         system = runCatching { System.valueOf(intent.getStringExtra(EXTRA_SYSTEM) ?: "") }.getOrDefault(System.GAMECUBE)
 
         window.setBackgroundDrawableResource(android.R.color.black)
@@ -80,8 +82,8 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
             try {
                 val disc = readDisc(launchPath, romPath)
                 session.gameId = disc?.id
-                DolphinRuntime.ensureInitialized(this, disc)
-                DolphinRuntime.prepareGame(this, disc)
+                DolphinRuntime.ensureInitialized(this, disc, ww60)
+                DolphinRuntime.prepareGame(this, disc, ww60)
             } catch (t: Throwable) {
                 hooks.error("Dolphin failed to start", t.message ?: t.toString(), true)
                 return@Thread

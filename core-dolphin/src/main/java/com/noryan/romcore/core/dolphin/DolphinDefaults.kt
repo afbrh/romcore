@@ -8,7 +8,7 @@ import java.io.File
  * Only keys listed here are touched; everything else the user/Dolphin wrote is preserved.
  */
 internal object DolphinDefaults {
-    private const val VERSION = 1
+    private const val VERSION = 2   // v2: default 2x internal resolution
     private const val MARKER = ".romcore_defaults_v$VERSION"
 
     // file -> section -> key -> value
@@ -25,7 +25,8 @@ internal object DolphinDefaults {
         "GFX.ini" to mapOf(
             // Specialized shaders only (mode 0). Ubershader modes (1/2) make Adreno allocate ~24 MB of private GPU memory
             // per pipeline (hundreds of them -> several GB, outside the app's PSS): see ENFORCED below.
-            "Settings" to mapOf("ShaderCompilationMode" to "0", "WaitForShadersBeforeStarting" to "True"),
+            "Settings" to mapOf("ShaderCompilationMode" to "0", "WaitForShadersBeforeStarting" to "True",
+                "InternalResolution" to "2"),   // default 2x native resolution (GFX_EFB_SCALE: 1 = native, 2 = 2x)
         ),
         "WiimoteNew.ini" to mapOf(
             "Wiimote1" to mapOf("Source" to "1", "Extension" to "Nunchuk"),

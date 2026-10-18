@@ -166,6 +166,11 @@ class DolphinSession(
         if (ready) InputOverrider.setControlState(PORT, c, v)
     }
 
+    /** Default ON; prefs file "romcore_dolphin", key "invert_cstick_x". Only the GameCube C-stick; the Wii pointer is never inverted. */
+    private fun invertCStickX(): Boolean = !wii && runCatching {
+        context.getSharedPreferences("romcore_dolphin", Context.MODE_PRIVATE).getBoolean("invert_cstick_x", true)
+    }.getOrDefault(true)
+
     private fun otherMSensitivity(): Double = runCatching {
         context.getSharedPreferences("romcore_dolphin", Context.MODE_PRIVATE).getFloat("otherm_pointer_sens", 1.0f).toDouble()
     }.getOrDefault(1.0)
@@ -269,8 +274,9 @@ class DolphinSession(
             Pad.LS_RIGHT -> { dirs[3] = v; stick(true) }
             Pad.RS_UP -> { dirs[4] = v; stick(false) }
             Pad.RS_DOWN -> { dirs[5] = v; stick(false) }
-            Pad.RS_LEFT -> { dirs[6] = v; stick(false) }
-            Pad.RS_RIGHT -> { dirs[7] = v; stick(false) }
+            // GameCube C-stick: X is inverted by default (camera left/right). Wii games keep their pointer mapping untouched.
+            Pad.RS_LEFT -> { dirs[if (invertCStickX()) 7 else 6] = v; stick(false) }
+            Pad.RS_RIGHT -> { dirs[if (invertCStickX()) 6 else 7] = v; stick(false) }
             else -> {}
         }
     }

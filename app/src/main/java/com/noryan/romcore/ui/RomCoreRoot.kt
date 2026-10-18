@@ -377,6 +377,7 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
     val saveStatus by vm.saveStatus.collectAsStateWithLifecycle()
     val saveWarning by vm.saveWarning.collectAsStateWithLifecycle()
     val saveOthers by vm.saveOthers.collectAsStateWithLifecycle()
+    val tick by vm.prefsTick.collectAsStateWithLifecycle()
     var open by remember { mutableStateOf<String?>(null) }
     fun toggle(k: String) { open = if (open == k) null else k }
     val rows = remember(vm.cores) { CoreRows.of(vm.cores, CoreBootstrap::versionOf) }
@@ -440,6 +441,11 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
             FocusLine("HOME SCREEN", right = if (isHome) "ROMCORE" else "OFF   OPEN TO CHANGE", onClick = { openHomeAppSettings(ctx) })
         }
         item { Note("Make RomCore the launcher: choose it as the Home app, and the Home button brings you back here.") }
+        item {
+            val ww = remember(tick) { vm.prefs.wwFpsHack }
+            FocusLine("WIND WAKER 60 FPS", right = if (ww) "ON  EXPERIMENTAL" else "OFF", marked = ww) { vm.toggleWwFps() }
+        }
+        item { Note("Wind Waker (US disc) at 60 fps with a community hack and a 2x CPU clock. It can softlock the game and double enemy speed, so keep it off unless you want to test it. Applies the next time you start the game.") }
         item { Section("INSTALLED CORES (${rows.size})") }
         if (rows.isEmpty()) item { Note("No cores are installed in this build.") }
         items(rows, key = { it.key }) { c ->

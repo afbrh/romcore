@@ -23,6 +23,10 @@ class Prefs(ctx: Context) {
         set(v) { sp.edit().putInt("detect_version", v).apply() }
     fun systemCore(s: System): String? = sp.getString("syscore_${s.name}", null)
     fun setSystemCore(s: System, id: String?) { sp.edit().apply { if (id == null) remove("syscore_${s.name}") else putString("syscore_${s.name}", id) }.apply() }
+    /** Experimental Wind Waker 60 fps Gecko hack (read by :core-dolphin at launch: prefs file "romcore", key "ww_fps_hack"). Off by default. */
+    var wwFpsHack: Boolean
+        get() = sp.getBoolean("ww_fps_hack", false)
+        set(v) { sp.edit().putBoolean("ww_fps_hack", v).apply() }
     /** Selected content tab: 0 = GAMES, else a collection id. Resolved against the live collections on use (never trusted blindly). */
     var selectedTab: Long
         get() = sp.getLong("selected_tab", 0L)
