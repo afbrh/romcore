@@ -67,6 +67,7 @@ class WatermelonDsSession(
      * (see WatermelonDsHost.detach) with this watchdog as the backstop.
      */
     override fun close() {
+        zelda?.stop()
         runCatching { MelonEmulator.pauseEmulation() }
         // Cartridge saves are written by melonDS' SaveManager (debounced 2 s, final write when the emulator is stopped).
         // Stop the emulator HERE, synchronously on a worker, so the final .sav write in the save root completes before
@@ -78,7 +79,22 @@ class WatermelonDsSession(
         main.postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, 5000)
     }
 
+    /** Phantom Hourglass / Spirit Tracks: stick + d-pad drive Link by synthesising the stylus (see [ZeldaStickMove]). */
+    private val zelda: ZeldaStickMove? =
+        if (ZeldaStickMove.isSupportedGameCode(ZeldaStickMove.gameCode(romPath)))
+            ZeldaStickMove({ x, y -> MelonEmulator.onScreenTouch(x, y) }, { MelonEmulator.onScreenRelease() }) else null
+
     override fun injectButton(pad: Pad, pressed: Boolean) {
+        zelda?.let { z ->
+            when (pad) {
+                Pad.SELECT -> z.select(pressed)
+                Pad.DPAD_UP -> if (z.owns()) { z.dpad(0, pressed); return }
+                Pad.DPAD_DOWN -> if (z.owns()) { z.dpad(1, pressed); return }
+                Pad.DPAD_LEFT -> if (z.owns()) { z.dpad(2, pressed); return }
+                Pad.DPAD_RIGHT -> if (z.owns()) { z.dpad(3, pressed); return }
+                else -> {}
+            }
+        }
         val input = when (pad) {
             // Nintendo family: canonical == native, 1:1 (A-A, B-B, X-X, Y-Y).
             Pad.A -> Input.A; Pad.B -> Input.B; Pad.X -> Input.X; Pad.Y -> Input.Y
@@ -95,6 +111,15 @@ class WatermelonDsSession(
 
     /** The DS only has a d-pad: the left stick drives it (digital, 0.5 threshold) so analog-only mappings still play. */
     override fun injectAxis(pad: Pad, value: Float) {
+        zelda?.takeIf { it.owns() }?.let { z ->
+            when (pad) {
+                Pad.LS_UP -> { z.axis(0, value); return }
+                Pad.LS_DOWN -> { z.axis(1, value); return }
+                Pad.LS_LEFT -> { z.axis(2, value); return }
+                Pad.LS_RIGHT -> { z.axis(3, value); return }
+                else -> {}
+            }
+        }
         val (idx, input) = when (pad) {
             Pad.LS_UP -> 0 to Input.UP; Pad.LS_DOWN -> 1 to Input.DOWN
             Pad.LS_LEFT -> 2 to Input.LEFT; Pad.LS_RIGHT -> 3 to Input.RIGHT
