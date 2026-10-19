@@ -19,8 +19,7 @@ import org.citra.citra_emu.NativeLibrary.ButtonType as B
  * save/load signals while running, so a paused session is briefly un-paused for the operation. These two methods
  * block (<= ~4 s); the menu already calls them off the main thread.
  */
-class AzaharSession(private val activity: Activity, private val sixtyFpsGame: Boolean = false) :
-    CoreSession, StateSlotProvider, FastForwardSupport, com.noryan.romcore.api.OptionToggleSupport {
+class AzaharSession(private val activity: Activity) : CoreSession, StateSlotProvider, FastForwardSupport {
     @Volatile var paused = false
         private set
     private val stick = FloatArray(4) // lx, ly, rx, ry; screen convention (down positive) as Azahar expects
@@ -34,21 +33,6 @@ class AzaharSession(private val activity: Activity, private val sixtyFpsGame: Bo
         else NativeLibrary.disableTemporaryFrameLimit()
         true
     } catch (_: Throwable) { false }
-
-    // ---- optional menu row: Majora's Mask 3D 60 fps (see SixtyFps) -----------------------------------------------
-    override val optionLabel = "60 FPS"
-    override val optionAvailable get() = sixtyFpsGame
-    override fun isOptionOn() = SixtyFps.savedOn(activity)
-    override fun setOptionOn(on: Boolean): Boolean {
-        val cheats = runCatching { org.citra.citra_emu.features.cheats.model.CheatEngine.getCheats() }.getOrNull() ?: return false
-        val c60 = cheats.firstOrNull { it.getName() == SixtyFps.ENTRY_60 }
-        val c30 = cheats.firstOrNull { it.getName() == SixtyFps.ENTRY_30 }
-        if (c60 == null || c30 == null) return false
-        // Turn the new one on first: a tick between the two writes then still sets a valid value.
-        if (on) { c60.setEnabled(true); c30.setEnabled(false) } else { c30.setEnabled(true); c60.setEnabled(false) }
-        SixtyFps.save(activity, on)
-        return true
-    }
 
     override fun pause() { paused = true; NativeLibrary.pauseEmulation() }
     override fun resume() { paused = false; NativeLibrary.unPauseEmulation() }
