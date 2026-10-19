@@ -24,6 +24,13 @@ class InputLogicTest {
         assertEquals("xinput", DeviceProfiles.forDevice(xbox).id)
         assertEquals("ayn-odin", DeviceProfiles.forDevice(DeviceInfo("Odin Controller")).id)
         assertEquals("retroid", DeviceProfiles.forDevice(DeviceInfo("Retroid Pocket Controller")).id)
+        val nova = DeviceProfiles.forDevice(DeviceInfo("Retroid Pocket Controller", hostManufacturer = "Moorechip", hostModel = "Retroid Pocket Nova"))
+        assertEquals("retroid-nova", nova.id)
+        // bottom button (KEYCODE_BUTTON_A) is the one printed "A": canonical A, so PS Circle... and the right one (BUTTON_B) is B = Cross
+        assertEquals(Pad.A, nova.bindings[PhysicalControl.key(android.view.KeyEvent.KEYCODE_BUTTON_A)])
+        assertEquals(Pad.B, nova.bindings[PhysicalControl.key(android.view.KeyEvent.KEYCODE_BUTTON_B)])
+        assertEquals(Pad.X, nova.bindings[PhysicalControl.key(android.view.KeyEvent.KEYCODE_BUTTON_X)])
+        assertTrue(DeviceProfiles.isKnownHandheld(nova))
         assertEquals("anbernic", DeviceProfiles.forDevice(DeviceInfo("x", hostManufacturer = "Anbernic", hostModel = "RG557")).id)
         assertEquals("8bitdo", DeviceProfiles.forDevice(DeviceInfo("8BitDo SN30 Pro", vendorId = 0x2dc8)).id)
         assertEquals("generic", DeviceProfiles.forDevice(DeviceInfo("Some Pad")).id)

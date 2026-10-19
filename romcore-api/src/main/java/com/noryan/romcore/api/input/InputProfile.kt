@@ -123,6 +123,10 @@ object DeviceProfiles {
                 InputProfile.standard("ayn-thor", "AYN Thor", FaceLayout.LABELED)
             "odin" in n || "odin" in host ->
                 InputProfile.standard("ayn-odin", "AYN Odin", FaceLayout.LABELED)
+            // Retroid Pocket Nova (Android: Generic.kl, BTN_SOUTH = KEYCODE_BUTTON_A): the button printed "A" is the BOTTOM one, so the
+            // key codes are positional Xbox style. The generic Retroid guess below (Nintendo positions) swapped A/B and X/Y here.
+            "retroid pocket nova" in host ->
+                InputProfile.standard("retroid-nova", "Retroid Pocket Nova", FaceLayout.XBOX)
             "retroid" in n || "retroid" in host ->
                 InputProfile.standard("retroid", "Retroid Pocket", FaceLayout.NINTENDO)
             "anbernic" in n || "anbernic" in host || Regex("\\brg ?\\d{2,3}").containsMatchIn(n + " " + host) ->
@@ -132,5 +136,5 @@ object DeviceProfiles {
     }
 
     /** True if the device is a recognised handheld whose built-in controls should be treated as always-present. */
-    fun isKnownHandheld(p: InputProfile) = p.id in setOf("ayn-thor", "ayn-odin", "retroid", "anbernic")
+    fun isKnownHandheld(p: InputProfile) = p.id in setOf("ayn-thor", "ayn-odin", "retroid", "retroid-nova", "anbernic")
 }
