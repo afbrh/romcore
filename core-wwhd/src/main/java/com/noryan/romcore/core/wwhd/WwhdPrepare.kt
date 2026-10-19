@@ -20,6 +20,12 @@ internal object WwhdPrepare {
     private const val GAME_SPACE = 3L shl 30      // extracted files (~1.7 GB) plus slack
     private const val CODE_SPACE = 400L shl 20
 
+    /** True when [ensureGame] will unpack or translate something (minutes), false when the game is already prepared (instant). */
+    fun needsWork(ctx: Context): Boolean {
+        val game = WwhdSaveData.gameDir(ctx)
+        return Native.checkGame(game.path) != null || Native.needsCompile(game.path, WwhdSaveData.codeDir(ctx).path)
+    }
+
     /** Returns null when the game is ready to start, else a message for the user. */
     fun ensureGame(ctx: Context, romPath: String, progress: Progress): String? {
         val game = WwhdSaveData.gameDir(ctx)

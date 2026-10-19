@@ -76,11 +76,13 @@ class WwhdActivity : Activity(), SurfaceHolder.Callback, Native.Host {
             java.lang.System.loadLibrary("wwhd")
             Native.host = this
 
-            WwhdKeepAliveService.start(this)
+            // The keep-alive foreground service is only for the minutes-long first launch; an already prepared game skips it.
+            val keepAlive = WwhdPrepare.needsWork(this)
+            if (keepAlive) WwhdKeepAliveService.start(this)
             val err = try {
                 WwhdPrepare.ensureGame(this, romPath) { frac, text -> ui.post { hooks?.setLoadingProgress(frac, text) } }
             } finally {
-                WwhdKeepAliveService.stop(this)
+                if (keepAlive) WwhdKeepAliveService.stop(this)
             }
             if (destroyed) return
             if (err != null) {
