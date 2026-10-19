@@ -18,6 +18,8 @@ sealed interface MenuRowModel {
     data class Bind(val pad: Pad) : MenuRowModel
     data class Hot(val action: MenuAction) : MenuRowModel
     data class Confirm(val yes: Boolean) : MenuRowModel
+    /** The session's optional on/off setting ([com.noryan.romcore.api.OptionToggleSupport]). */
+    object Option : MenuRowModel
     object Reset : MenuRowModel
     object ClearHotkey : MenuRowModel
 }
@@ -62,6 +64,7 @@ class MenuModel(
 
     val rows: List<MenuRowModel> get() = buildList {
         for (a in TOP) {
+            if (a == MenuAction.CLOSE_GAME && option != null) add(MenuRowModel.Option)
             add(MenuRowModel.Top(a))
             if (a == expanded) when (a) {
                 MenuAction.CLOSE_GAME -> { add(MenuRowModel.Confirm(true)); add(MenuRowModel.Confirm(false)) }
@@ -71,6 +74,11 @@ class MenuModel(
             }
         }
     }
+
+    private val option get() = (session as? com.noryan.romcore.api.OptionToggleSupport)?.takeIf { it.optionAvailable }
+    /** Row text for the optional setting, e.g. "60 FPS: On"; null when the session has none. */
+    val optionText: String? get() { @Suppress("UNUSED_EXPRESSION") revision; return option?.let { "${it.optionLabel}: ${if (it.isOptionOn()) "On" else "Off"}" } }
+    private fun rowIndex(a: MenuAction) = rows.indexOfFirst { it is MenuRowModel.Top && it.action == a }.coerceAtLeast(0)
 
     fun open() {
         if (isOpen) return
@@ -103,7 +111,7 @@ class MenuModel(
 
     private fun collapse() {
         val e = expanded ?: return
-        expanded = null; cursor = TOP.indexOf(e).coerceAtLeast(0); status = ""
+        expanded = null; cursor = rowIndex(e); status = ""
     }
 
     fun nav(n: MenuNav) {
@@ -131,7 +139,7 @@ class MenuModel(
             else if (row.action == MenuAction.SAVE_STATE || row.action == MenuAction.LOAD_STATE) doState(row.action == MenuAction.SAVE_STATE)
             else if (expanded == row.action) collapse() else {
                 expanded = row.action; status = ""
-                cursor = TOP.indexOf(row.action) + 1
+                cursor = rowIndex(row.action) + 1
             }
             is MenuRowModel.Confirm -> if (row.yes) { status = "Closing..."; val s = session; close(); s.close() } else collapse()
             is MenuRowModel.Slot -> doState(expanded == MenuAction.SAVE_STATE, row.slot)
@@ -148,6 +156,12 @@ class MenuModel(
                 if (hotkeys.liveCapture) hotkeys.beginCapture(act) { ok ->
                     if (capturingHotkey == act) { capturingHotkey = null; revision++; status = if (ok) "Hotkey set" else "Cancelled" }
                 }
+            }
+            MenuRowModel.Option -> option?.let {
+                val want = !it.isOptionOn()
+                val ok = runCatching { it.setOptionOn(want) }.getOrDefault(false)
+                revision++
+                status = if (ok) "${it.optionLabel} ${if (want) "on" else "off"}" else "Could not change ${it.optionLabel}"
             }
             MenuRowModel.Reset -> { if (expanded == MenuAction.SET_HOTKEYS) hotkeys.resetToDefaults() else mapping.resetToDefaults(); revision++; status = "Reset to defaults" }
             MenuRowModel.ClearHotkey -> {}

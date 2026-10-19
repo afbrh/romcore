@@ -154,6 +154,13 @@ private fun RowItem(model: MenuModel, row: MenuRowModel, focused: Boolean, click
             Sub(click, focused, model.hotkeys.title(row.action) ?: MenuModel.title(row.action).replace("Change Controller Mapping", "Mapping"),
                 if (cap) "HOLD..." else model.hotkeys.describe(row.action), Color(0xFFE6E6EA))
         }
+        MenuRowModel.Option -> {
+            @Suppress("UNUSED_EXPRESSION") model.revision
+            Box(click.button(focused).padding(MenuStyle.RowPaddingHorizontal, 12.dp)) {
+                BasicText(model.optionText.orEmpty(), Modifier.align(Alignment.Center),
+                    style = style(if (focused) OnAccent else Color(0xFFE6E6EA)).copy(textAlign = TextAlign.Center, textDecoration = if (focused) TextDecoration.Underline else TextDecoration.None), maxLines = 2)
+            }
+        }
         MenuRowModel.Reset -> Sub(click, focused, "Reset defaults", "", MenuStyle.Danger)
         MenuRowModel.ClearHotkey -> Sub(click, focused, "Clear", "", Color(0xFFE6E6EA))
     }

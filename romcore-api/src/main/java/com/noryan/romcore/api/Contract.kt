@@ -46,6 +46,19 @@ interface FastForwardSupport {
     companion object { const val MAX_MULTIPLIER = 5 }
 }
 
+/**
+ * Optional: a game-specific on/off setting the shared menu shows as one extra row above Close Game (e.g. a 60 fps patch).
+ * [optionLabel] is the row's name; the menu appends On/Off. Called on the main thread, so it must be quick. Return false
+ * from [setOptionOn] if the change could not be applied (the menu then keeps the old state and says so).
+ */
+interface OptionToggleSupport {
+    val optionLabel: String
+    /** False when this particular game has no such setting (the row is then not shown). */
+    val optionAvailable: Boolean get() = true
+    fun isOptionOn(): Boolean
+    fun setOptionOn(on: Boolean): Boolean
+}
+
 /** Static description of an embedded core, registered with CoreRegistry. */
 interface CoreDescriptor {
     val id: String                       // "dolphin", "ppsspp", ...

@@ -32,6 +32,8 @@ object AzaharHost {
     private val SYSTEM = System.N3DS
     @Volatile var closing = false
     private var session: AzaharSession? = null
+    /** Set by [prepare]: this launch is a game with a RomCore 60 fps option (see SixtyFps). */
+    private var sixtyFpsGame = false
     private var hooks: RomCoreCoreHost.Hooks? = null
     private var backGuard: OnBackPressedCallback? = null
 
@@ -65,6 +67,16 @@ object AzaharHost {
             put(IntSetting.FRAME_LIMIT, 100)
             first.edit().putBoolean("defaults_v1", true).apply()
         }
+        // Majora's Mask 3D (USA): write its 60 fps cheat file now, before the emulator loads cheats at game start.
+        sixtyFpsGame = false
+        runCatching {
+            com.noryan.romcore.api.save.SaveRoot.adopt(a.intent) // normally done later by RomCoreCoreHost.install
+            val rom = File(a.intent.getParcelableExtra<org.citra.citra_emu.model.Game>("game")!!.path.removePrefix("!"))
+            if (SixtyFps.supports(rom)) {
+                SixtyFps.writeFile(a, dir, AzaharCore.saveDirs(a).sdmc)
+                sixtyFpsGame = true
+            }
+        }.onFailure { android.util.Log.w("RomCoreAzahar", "60 fps setup failed", it) }
         applyLayout(a, runCatching { AzaharCore.ScreenMode.valueOf(i.getStringExtra(AzaharCore.EXTRA_MODE)!!) }
             .getOrDefault(AzaharCore.ScreenMode.AUTO))
     }
@@ -106,7 +118,7 @@ object AzaharHost {
     fun attach(a: EmulationActivity) {
         if (a.isFinishing) return
         closing = false
-        val s = AzaharSession(a).also { session = it }
+        val s = AzaharSession(a, sixtyFpsGame).also { session = it }
         // One call wires the router, the shared menu, hotkeys AND RomCore's loading screen / notices / error panel.
         val h = RomCoreCoreHost.install(a, s, SYSTEM).also { hooks = it }
         // RomCore owns all non-game UI: Azahar's loading layout/toasts/dialogs are patched out (azahar-src, local only)

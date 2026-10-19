@@ -15,6 +15,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation(project(":romcore-api"))
     // azahar-src/src/android (:app already converted to a library) via includeBuild in settings.gradle.kts.
     // Native lib: libcitra-android.so (unique among RomCore cores); Java package org.citra.citra_emu (no clash).
