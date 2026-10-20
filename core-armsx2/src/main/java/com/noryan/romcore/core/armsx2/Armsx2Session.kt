@@ -5,6 +5,10 @@ import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
 import com.armsx2.EmuState
+import com.armsx2.config.ConfigStore
+import com.armsx2.config.SettingsScope
+import com.armsx2.ext.copyWith
+import com.armsx2.ui.InGameOverlay
 import com.armsx2.runtime.MainActivityRuntime
 import com.noryan.romcore.api.FastForwardSupport
 import com.noryan.romcore.api.Pad
@@ -21,7 +25,8 @@ import java.io.File
  * Save states are PCSX2's own slot states (`<data>/sstates/<serial> (<crc>).NN.p2s`, zip with screenshot), slots 1..10, which
  * is exactly the 10 slots the shared menu shows. save/load are blocking and are called off the main thread by the menu.
  */
-internal class Armsx2Session(private val activity: Armsx2Activity) : CoreSession, StateSlotProvider, FastForwardSupport {
+internal class Armsx2Session(private val activity: Armsx2Activity) :
+    CoreSession, StateSlotProvider, FastForwardSupport, com.noryan.romcore.api.OptionCycleSupport {
     private val main = Handler(Looper.getMainLooper())
 
     // ---- pause / resume ----------------------------------------------------------------------------------------------
@@ -50,6 +55,28 @@ internal class Armsx2Session(private val activity: Armsx2Activity) : CoreSession
             true
         }.getOrDefault(false)
     }
+
+    // ---- optional menu row: internal resolution -----------------------------------------------------------------------
+    // The default stays 2x (Armsx2Prefs). The choice is saved PER GAME through ARMSX2's own config layer, so other games keep 2x,
+    // and applied live. ARMSX2's overlay normally prepares settingsState/scope/serial in open(), which RomCore never calls.
+    override val optionLabel = "Resolution"
+
+    private fun gameSerial(): String? = MainActivityRuntime.currentGame.value?.settingsKey
+        ?: runCatching { NativeApp.getPauseGameSerial() }.getOrNull()?.substringBefore(" (")?.trim()?.takeIf(String::isNotBlank)
+
+    override fun optionValue(): String =
+        label(runCatching { ConfigStore.resolveForGame(gameSerial()).upscaleFloat }.getOrDefault(DEFAULT_SCALE))
+
+    override fun cycleOption(): Boolean = runCatching {
+        val serial = gameSerial()
+        val cur = ConfigStore.resolveForGame(serial)
+        val next = SCALES[(SCALES.indexOfFirst { kotlin.math.abs(it - cur.upscaleFloat) < 0.01f } + 1) % SCALES.size]
+        InGameOverlay.currentSerial.value = serial
+        InGameOverlay.settingsScope.value = if (serial == null) SettingsScope.Global else SettingsScope.Game
+        InGameOverlay.settingsState.value = cur
+        InGameOverlay.saveSettings(cur.copyWith(mapOf("upscaleFloat" to next)))   // saves + applies live
+        true
+    }.getOrDefault(false)
 
     // ---- states ------------------------------------------------------------------------------------------------------
     override fun saveState(slot: Int): Boolean {
@@ -123,6 +150,10 @@ internal class Armsx2Session(private val activity: Armsx2Activity) : CoreSession
     }
 
     companion object {
+        const val DEFAULT_SCALE = 2f
+        /** Internal resolution steps the menu cycles through (multiples of the PS2's native 640x448). */
+        val SCALES = floatArrayOf(1f, 2f, 3f).toList()
+        fun label(v: Float) = (if (v == v.toInt().toFloat()) v.toInt().toString() else v.toString()) + "x"
         /** Android-keycode-shaped PS2 target codes understood by NativeApp.setPadButton*. */
         fun codeFor(pad: Pad): Int? = when (pad) {
             Pad.A, Pad.B, Pad.X, Pad.Y -> when (PsFace.of(pad)) {

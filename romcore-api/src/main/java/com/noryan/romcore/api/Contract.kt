@@ -47,16 +47,17 @@ interface FastForwardSupport {
 }
 
 /**
- * Optional: a game-specific on/off setting the shared menu shows as one extra row above Close Game (e.g. a 60 fps patch).
- * [optionLabel] is the row's name; the menu appends On/Off. Called on the main thread, so it must be quick. Return false
- * from [setOptionOn] if the change could not be applied (the menu then keeps the old state and says so).
+ * Optional: a setting the shared menu shows as one extra row above Close Game ("Resolution: 2x", "60 FPS: On" ...). Selecting
+ * the row calls [cycleOption], which moves to the next value (wrapping round); [optionValue] is the text after the label.
+ * Both run on the main thread, so they must be quick. [cycleOption] returns false if the change could not be applied (the menu
+ * then keeps showing the old value and says so).
  */
-interface OptionToggleSupport {
+interface OptionCycleSupport {
     val optionLabel: String
-    /** False when this particular game has no such setting (the row is then not shown). */
+    /** False when this particular game or core has no such setting (the row is then not shown). */
     val optionAvailable: Boolean get() = true
-    fun isOptionOn(): Boolean
-    fun setOptionOn(on: Boolean): Boolean
+    fun optionValue(): String
+    fun cycleOption(): Boolean
 }
 
 /** Static description of an embedded core, registered with CoreRegistry. */

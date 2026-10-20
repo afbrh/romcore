@@ -18,7 +18,7 @@ sealed interface MenuRowModel {
     data class Bind(val pad: Pad) : MenuRowModel
     data class Hot(val action: MenuAction) : MenuRowModel
     data class Confirm(val yes: Boolean) : MenuRowModel
-    /** The session's optional on/off setting ([com.noryan.romcore.api.OptionToggleSupport]). */
+    /** The session's optional setting row ([com.noryan.romcore.api.OptionCycleSupport]). */
     object Option : MenuRowModel
     object Reset : MenuRowModel
     object ClearHotkey : MenuRowModel
@@ -75,9 +75,9 @@ class MenuModel(
         }
     }
 
-    private val option get() = (session as? com.noryan.romcore.api.OptionToggleSupport)?.takeIf { it.optionAvailable }
-    /** Row text for the optional setting, e.g. "60 FPS: On"; null when the session has none. */
-    val optionText: String? get() { @Suppress("UNUSED_EXPRESSION") revision; return option?.let { "${it.optionLabel}: ${if (it.isOptionOn()) "On" else "Off"}" } }
+    private val option get() = (session as? com.noryan.romcore.api.OptionCycleSupport)?.takeIf { it.optionAvailable }
+    /** Row text for the optional setting, e.g. "Resolution: 2x"; null when the session has none. */
+    val optionText: String? get() { @Suppress("UNUSED_EXPRESSION") revision; return option?.let { "${it.optionLabel}: ${it.optionValue()}" } }
     private fun rowIndex(a: MenuAction) = rows.indexOfFirst { it is MenuRowModel.Top && it.action == a }.coerceAtLeast(0)
 
     fun open() {
@@ -158,10 +158,9 @@ class MenuModel(
                 }
             }
             MenuRowModel.Option -> option?.let {
-                val want = !it.isOptionOn()
-                val ok = runCatching { it.setOptionOn(want) }.getOrDefault(false)
+                val ok = runCatching { it.cycleOption() }.getOrDefault(false)
                 revision++
-                status = if (ok) "${it.optionLabel} ${if (want) "on" else "off"}" else "Could not change ${it.optionLabel}"
+                status = if (ok) "${it.optionLabel}: ${it.optionValue()}" else "Could not change ${it.optionLabel}"
             }
             MenuRowModel.Reset -> { if (expanded == MenuAction.SET_HOTKEYS) hotkeys.resetToDefaults() else mapping.resetToDefaults(); revision++; status = "Reset to defaults" }
             MenuRowModel.ClearHotkey -> {}
