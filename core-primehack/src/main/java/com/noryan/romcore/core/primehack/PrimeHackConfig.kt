@@ -21,6 +21,9 @@ object PrimeHackPrefs {
  * Requires DirectoryInitialization to have finished (native Initialize ran).
  */
 object PrimeHackConfig {
+    /** Whether the 4:3 screen setting was on when this launch's game INI was written (the menu row says "restart" otherwise). */
+    @Volatile var fourThreeAtLaunch = false
+
     fun configDir(): File = File(DirectoryInitialization.getUserDirectory(), "Config").also { it.mkdirs() }
 
     fun apply(ctx: Context, gameId: String?, system: System, disc: SunshineFps.Disc? = null) {
@@ -49,6 +52,9 @@ object PrimeHackConfig {
             PrimeHackProfiles.mergeSection(File(cfg, "GCPadNew.ini"), "GCPad1", PrimeHackProfiles.gcProfile(prime, gyro))
         }
         // Wii games that are not Prime still use the Wiimote/Nunchuk scheme above; GC games use GCPad1.
+
+        // 4:3 screen (Metroid Prime Trilogy on a 4:3 display): the game's own INI gets `[Wii] Widescreen = False`, or is cleaned.
+        fourThreeAtLaunch = com.noryan.romcore.api.FourByThree.prepare(ctx, File(DirectoryInitialization.getUserDirectory()), gameId)
 
         // Super Mario Sunshine: 60 fps (+ widescreen) Gecko codes. Names are resolved from the engine's own game INIs: they carry
         // an author suffix ("$60FPS [gamemasterplc]") and a bare "$60FPS" in [Gecko_Enabled] matches nothing (that was the bug).

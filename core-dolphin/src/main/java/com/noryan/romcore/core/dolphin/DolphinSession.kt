@@ -27,7 +27,7 @@ class DolphinSession(
     context: Context,
     romPath: String,
     private val onClose: () -> Unit,
-) : CoreSessionBase(context.applicationContext, "dolphin", romPath), FastForwardSupport {
+) : CoreSessionBase(context.applicationContext, "dolphin", romPath), FastForwardSupport, com.noryan.romcore.api.OptionCycleSupport {
 
     private val resumeFile: File get() = File(stateDir, "resume")
 
@@ -115,6 +115,14 @@ class DolphinSession(
     /** Called (UI thread) once the game booted and the emulated controllers exist. */
     /** 6-char disc ID of the launched game (set by the Activity before boot); Other M switches to its own pad profile. */
     @Volatile var gameId: String? = null
+    /** Whether the 4:3 screen setting was on when this game booted (the menu row says "restart" when the saved choice differs). */
+    @Volatile var fourThreeAtLaunch = false
+
+    // ---- optional menu row: 4:3 screen (Wii games on a 4:3 display), applies from the next launch ---------------------------
+    override val optionLabel = "4:3 Screen"
+    override val optionAvailable get() = com.noryan.romcore.api.FourByThree.supports(gameId)
+    override fun optionValue(): String = gameId?.let { com.noryan.romcore.api.FourByThree.optionValue(context, it, fourThreeAtLaunch) } ?: ""
+    override fun cycleOption(): Boolean { val id = gameId ?: return false; com.noryan.romcore.api.FourByThree.toggle(context, id); return true }
     private var otherM: OtherM.Profile? = null
     private var lastOtherM: OtherM.Out? = null
     private var galaxy: Galaxy.Profile? = null

@@ -24,7 +24,15 @@ class PrimeHackSession(
     context: Context,
     romPath: String,
     private val activity: Activity,
-) : CoreSessionBase(context, "primehack", romPath), FastForwardSupport {
+) : CoreSessionBase(context, "primehack", romPath), FastForwardSupport, com.noryan.romcore.api.OptionCycleSupport {
+    /** Game ID of the disc (set by the activity after it reads the header). */
+    @Volatile var gameId: String? = null
+
+    override val optionLabel = "4:3 Screen"
+    override val optionAvailable get() = com.noryan.romcore.api.FourByThree.supports(gameId)
+    override fun optionValue(): String = gameId?.let { com.noryan.romcore.api.FourByThree.optionValue(context, it, PrimeHackConfig.fourThreeAtLaunch) } ?: ""
+    override fun cycleOption(): Boolean { val id = gameId ?: return false; com.noryan.romcore.api.FourByThree.toggle(context, id); return true }
+
 
     @Volatile var paused = false
         private set

@@ -88,7 +88,7 @@ class PrimeHackActivity : EmulationActivity() {
         intent.putExtra(EmulationActivity.EXTRA_SELECTED_GAMES, arrayOf(target))
         super.onCreate(savedInstanceState)
 
-        session = PrimeHackSession(this, path ?: uri!!, this)
+        session = PrimeHackSession(this, path ?: uri!!, this).also { it.gameId = disc?.first }
         hooks = RomCoreCoreHost.install(this, session, system)   // InputRouter + shared menu + hotkeys + keep-screen-on
 
         com.noryan.romcore.core.primehack.jni.UiBridge.noticeSink = { t -> hooks?.notice(t) }

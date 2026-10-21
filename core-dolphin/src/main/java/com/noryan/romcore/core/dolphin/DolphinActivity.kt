@@ -84,6 +84,7 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
                 session.gameId = disc?.id
                 DolphinRuntime.ensureInitialized(this, disc, ww60)
                 DolphinRuntime.prepareGame(this, disc, ww60)
+                session.fourThreeAtLaunch = disc?.id?.let { com.noryan.romcore.api.FourByThree.supports(it) && com.noryan.romcore.api.FourByThree.isEnabled(this, it) } ?: false
             } catch (t: Throwable) {
                 hooks.error("Dolphin failed to start", t.message ?: t.toString(), true)
                 return@Thread
