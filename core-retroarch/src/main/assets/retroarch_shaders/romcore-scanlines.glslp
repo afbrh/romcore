@@ -1,0 +1,12 @@
+# RomCore scanlines preset (single pass). Licensed GPL-3.0-or-later, same as RomCore.
+# Source texture is filtered bilinearly: the shader does its own sharp-bilinear snapping.
+shaders = 1
+shader0 = romcore-scanlines.glsl
+filter_linear0 = true
+wrap_mode0 = clamp_to_edge
+mipmap_input0 = false
+alias0 = ""
+float_framebuffer0 = false
+srgb_framebuffer0 = false
+scale_type0 = viewport
+scale0 = 1.0

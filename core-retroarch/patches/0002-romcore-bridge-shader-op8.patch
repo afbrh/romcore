@@ -1,0 +1,46 @@
+From ddf664fcbbf22427135f3a4fba2a866b435057fc Mon Sep 17 00:00:00 2001
+From: romcore <romcore@local>
+Date: Wed, 21 Oct 2026 07:19:07 -0500
+Subject: [PATCH] romcore bridge: op 8, apply/clear a video shader preset live
+
+---
+ romcore_bridge.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/romcore_bridge.c b/romcore_bridge.c
+index 6b860b9..0ed3819 100644
+--- a/romcore_bridge.c
++++ b/romcore_bridge.c
+@@ -18,7 +18,7 @@ static atomic_int   rc_axes[2][2];            /* [stick L/R][x/y] in -0x7fff..0x
+ 
+ static pthread_mutex_t rc_mutex = PTHREAD_MUTEX_INITIALIZER;
+ static pthread_cond_t  rc_cond  = PTHREAD_COND_INITIALIZER;
+-static int rc_op      = 0;   /* 0 none, 1 save, 2 load, 3 pause, 4 resume, 5 quit, 6 flush, 7 fast-forward */
++static int rc_op      = 0;   /* 0 none, 1 save, 2 load, 3 pause, 4 resume, 5 quit, 6 flush, 7 fast-forward, 8 shader preset */
+ static int rc_arg     = 0;
+ static char rc_path[PATH_MAX_LENGTH];
+ static int rc_pending = 0;
+@@ -162,6 +162,11 @@ static void romcore_exec(int op, int arg, const char *path, int *res)
+          }
+          break;
+       }
++      case 8: /* video shader: path = absolute .glslp/.slangp to apply live, empty path = shader off */
++#if defined(HAVE_CG) || defined(HAVE_GLSL) || defined(HAVE_SLANG) || defined(HAVE_HLSL)
++         *res = command_set_shader(NULL, path) ? 1 : 0;
++#endif
++         break;
+       case 6: /* flush battery saves (SRAM/RTC) to disk now */
+          command_event(CMD_EVENT_SAVE_FILES, NULL);
+          *res = 1;
+@@ -183,7 +188,7 @@ static void rc_service(int allow_state_ops)
+    if (!rc_pending) /* cheap racy check; re-checked under lock */
+       return;
+    pthread_mutex_lock(&rc_mutex);
+-   if (!rc_pending || (!allow_state_ops && (rc_op == 1 || rc_op == 2)))
++   if (!rc_pending || (!allow_state_ops && (rc_op == 1 || rc_op == 2 || rc_op == 8)))
+    {
+       pthread_mutex_unlock(&rc_mutex);
+       return;
+-- 
+2.54.0 (Apple Git-157)
+

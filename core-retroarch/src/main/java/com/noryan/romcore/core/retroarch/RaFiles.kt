@@ -31,10 +31,16 @@ internal object RaFiles {
     }
 
     /** [crtFilter] = the user's `retro_crt_filter` pref; the CRT shader is only ever applied to NES/SNES cores. */
-    fun writeConfig(ctx: Context, spec: CoreSpec, crtFilter: Boolean = true, system: com.noryan.romcore.api.System? = null, gbaFilter: Boolean = true): File {
+    fun writeConfig(ctx: Context, spec: CoreSpec, crtFilter: Boolean = true, system: com.noryan.romcore.api.System? = null, gbaFilter: Boolean = true,
+                    pick: ShaderChoice.Pick? = null): File {
         val look = CrtShader.lookFor(spec, system)
-        val on = when (look) { CrtShader.Look.CRT -> crtFilter; CrtShader.Look.GBA_LCD -> gbaFilter; null -> false }
-        val shadersDir: File? = if (on && look != null) runCatching { CrtShader.install(ctx, look) }.getOrNull() else null
+        val on = if (pick != null) pick != ShaderChoice.Pick.OFF
+            else when (look) { CrtShader.Look.CRT -> crtFilter; CrtShader.Look.GBA_LCD -> gbaFilter; null -> false }
+        // Every shader is copied for the 2D systems (the menu row can switch live); only the chosen one is the launch preset.
+        if (pick != null) runCatching { CrtShader.installFiles(ctx) }
+        val shadersDir: File? = if (pick != null) {
+            if (on) runCatching { CrtShader.install(ctx, pick.presetFile!!) }.getOrNull() else null
+        } else if (on && look != null) runCatching { CrtShader.install(ctx, look) }.getOrNull() else null
         if (shadersDir == null) CrtShader.uninstallAutoPreset(ctx)
         val base = baseDir(ctx)
         // Portable save data: battery saves (.srm/.rtc/.eep/.mpk/.fla, SwanStation memcards) and RA's own states live in the

@@ -34,6 +34,22 @@ internal object CrtShader {
     const val GBA_SHADER_FILE = "romcore-gba-lcd.glsl"
     const val GBA_PRESET_FILE = "romcore-gba-lcd.glslp"
 
+    // ---- extra looks offered by the in-game "Shader" row (see ShaderChoice) ----
+    const val BOLD_SHADER_FILE = "romcore-crt-bold.glsl"        // generated from the CRT shader with stronger constants
+    const val BOLD_PRESET_FILE = "romcore-crt-bold.glslp"
+    const val SCANLINES_SHADER_FILE = "romcore-scanlines.glsl"
+    const val SCANLINES_PRESET_FILE = "romcore-scanlines.glslp"
+    const val SHARP_SHADER_FILE = "romcore-sharp.glsl"
+    const val SHARP_PRESET_FILE = "romcore-sharp.glslp"
+
+    /** The CRT shader text with heavier scanlines, mask and beam widening ("CRT Bold"). Pure text, unit-tested. */
+    fun boldCrt(crt: String): String {
+        var t = crt
+        for ((name, v) in listOf("SCANLINE_STRENGTH" to "0.85", "MASK_STRENGTH" to "0.60", "BEAM_SOFTNESS" to "0.50", "BLOOM" to "0.22"))
+            t = t.replace(Regex("(?m)^#define $name [0-9.]+"), "#define $name $v")
+        return t
+    }
+
     /** Which RomCore look a launch gets. mGBA runs GB, GBC and GBA, so the GBA look is decided by the GAME's system, not the core's. */
     enum class Look(val presetFile: String, val prefKey: String) {
         CRT(PRESET_FILE, PREF_KEY), GBA_LCD(GBA_PRESET_FILE, GBA_PREF_KEY)
@@ -80,19 +96,30 @@ internal object CrtShader {
      * Copy shader + preset out of the APK (when missing or the APK was updated, like the libretro cores) and publish the
      * auto preset. Returns the shaders dir.
      */
-    fun install(ctx: Context, look: Look = Look.CRT): File {
+    fun install(ctx: Context, look: Look = Look.CRT): File = install(ctx, look.presetFile)
+
+    /** Copies every shader + preset out of the APK (and generates the bold CRT), without choosing one. Returns the shaders dir. */
+    fun installFiles(ctx: Context): File {
         val dir = shadersDir(ctx)
         val stamp = File(dir, ".stamp")
         val ver = ctx.packageManager.getPackageInfo(ctx.packageName, 0).lastUpdateTime.toString()
-        val files = listOf(SHADER_FILE, PRESET_FILE, GBA_SHADER_FILE, GBA_PRESET_FILE)
-        val fresh = stamp.exists() && stamp.readText() == ver && files.all { File(dir, it).exists() }
+        val assetFiles = listOf(SHADER_FILE, PRESET_FILE, GBA_SHADER_FILE, GBA_PRESET_FILE,
+            SCANLINES_SHADER_FILE, SCANLINES_PRESET_FILE, SHARP_SHADER_FILE, SHARP_PRESET_FILE)
+        val fresh = stamp.exists() && stamp.readText() == ver && (assetFiles + BOLD_SHADER_FILE + BOLD_PRESET_FILE).all { File(dir, it).exists() }
         if (!fresh) {
-            for (n in files) ctx.assets.open("$ASSET_DIR/$n").use { i -> File(dir, n).outputStream().use { o -> i.copyTo(o) } }
+            for (n in assetFiles) ctx.assets.open("$ASSET_DIR/$n").use { i -> File(dir, n).outputStream().use { o -> i.copyTo(o) } }
+            File(dir, BOLD_SHADER_FILE).writeText(boldCrt(File(dir, SHADER_FILE).readText()))
+            File(dir, BOLD_PRESET_FILE).writeText(File(dir, PRESET_FILE).readText().replace(SHADER_FILE, BOLD_SHADER_FILE).replace("flat CRT preset", "bold CRT preset"))
             stamp.writeText(ver)
         }
-        // The auto preset is whichever look this launch wants (a copy of its preset; same folder as the .glsl files).
+        return dir
+    }
+
+    /** [installFiles], then publish [presetFile] as the launch's auto preset (a copy; same folder as the .glsl files). */
+    fun install(ctx: Context, presetFile: String): File {
+        val dir = installFiles(ctx)
         val auto = File(dir, AUTO_PRESET_FILE)
-        val preset = File(dir, look.presetFile)
+        val preset = File(dir, presetFile)
         if (!auto.exists() || auto.length() != preset.length() || !auto.readBytes().contentEquals(preset.readBytes())) preset.copyTo(auto, overwrite = true)
         return dir
     }

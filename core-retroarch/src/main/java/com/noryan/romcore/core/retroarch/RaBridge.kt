@@ -17,6 +17,9 @@ internal object RaBridge {
     /** Hold-to-run fast forward at a hard 5.0x ratio (arg 1 on, 0 off). Needs the op-7 native patch; false on old builds. */
     const val OP_FAST_FORWARD = 7
 
+    /** Video shader: path = absolute .glslp preset to apply live, empty path = shader off. Needs the op-8 native patch. */
+    const val OP_SHADER = 8
+
     @JvmStatic external fun nativeButton(retroId: Int, pressed: Boolean)
     /** stick 0=left 1=right, axis 0=x 1=y, value -32767..32767 (libretro convention: -y is up). */
     @JvmStatic external fun nativeAxis(stick: Int, axis: Int, value: Int)

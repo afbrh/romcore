@@ -17,7 +17,7 @@ internal class RaSession(
     romKey: String,
     private val system: System,
     private val onClose: () -> Unit,
-) : CoreSessionBase(context, "retroarch", romKey), FastForwardSupport {
+) : CoreSessionBase(context, "retroarch", romKey), FastForwardSupport, com.noryan.romcore.api.OptionCycleSupport {
 
     // direction magnitudes 0..1
     private val stick = FloatArray(8) // LS_UP, LS_DOWN, LS_LEFT, LS_RIGHT, RS_UP, RS_DOWN, RS_LEFT, RS_RIGHT
@@ -63,6 +63,26 @@ internal class RaSession(
         if (ok) ffOn = on
         else if (!on) ffOn = false // a failed release must not leave us believing we are still fast
         return ok
+    }
+
+    // ---- optional menu row: picture shader for the 2D systems (NES, SNES, GB, GBC, GBA) -----------------------------------
+    // The choice is saved per system and applied live (bridge op 8 on the RetroArch thread, ordered after pause/resume). The
+    // request runs off the main thread because the menu calls cycleOption on it; the row updates at once.
+    override val optionLabel = "Shader"
+    override val optionAvailable get() = ShaderChoice.applies(system)
+    @Volatile private var shaderPick: ShaderChoice.Pick? = null
+    override fun optionValue(): String = (shaderPick ?: ShaderChoice.current(context, system).also { shaderPick = it }).label
+    override fun cycleOption(): Boolean {
+        if (!ShaderChoice.applies(system)) return false
+        val next = (shaderPick ?: ShaderChoice.current(context, system)).next()
+        shaderPick = next
+        ShaderChoice.save(context, system, next)
+        val path = next.presetFile?.let { File(CrtShader.shadersDir(context), it).absolutePath }.orEmpty()
+        pauser.execute {
+            val ok = RaBridge.request(RaBridge.OP_SHADER, path, 3000)
+            android.util.Log.i(TAG, "shader ${next.id} ok=$ok")
+        }
+        return true
     }
 
     override fun saveState(slot: Int): Boolean {
