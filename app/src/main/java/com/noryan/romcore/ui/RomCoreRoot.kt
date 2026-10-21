@@ -380,20 +380,8 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
     val tick by vm.prefsTick.collectAsStateWithLifecycle()
     var open by remember { mutableStateOf<String?>(null) }
     fun toggle(k: String) { open = if (open == k) null else k }
-    val rows = remember(vm.cores) { CoreRows.of(vm.cores, CoreBootstrap::versionOf) }
     val allFiles by rememberAllFilesGranted()
-    var importFor by remember { mutableStateOf<CoreSetup.Item?>(null) }
-    var importMsg by remember { mutableStateOf<String?>(null) }
-    var setupTick by remember { mutableIntStateOf(0) }
     val apps = remember { launchableApps(ctx) }   // re-read each time Settings opens
-    val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        val item = importFor
-        if (uri != null && item != null) {
-            val ok = CoreSetup.import(ctx, item, uri)
-            importMsg = if (ok) "${item.label.removePrefix("IMPORT ")}: DONE" else "${item.label.removePrefix("IMPORT ")}: FAILED"
-            setupTick++
-        }
-    }
     // Menu-style buttons in one narrow, centered column (like the in-game menu). A row that is open grows into ONE bordered
     // box: its current value as the header, its options and notes inside.
     CompositionLocalProvider(LocalButtonLook provides 1) {
@@ -446,28 +434,6 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
             FocusLine("WIND WAKER 60 FPS", right = if (ww) "ON  EXPERIMENTAL" else "OFF", marked = ww) { vm.toggleWwFps() }
         }
         item { Note("Wind Waker (US disc) at 60 fps with a community hack and a 2x CPU clock. It's experimental: it can softlock a few spots and double enemy speed, so back up your save and turn it off here if something breaks. Applies the next time you start the game.") }
-        item { Section("INSTALLED CORES (${rows.size})") }
-        if (rows.isEmpty()) item { Note("No cores are installed in this build.") }
-        items(rows, key = { it.key }) { c ->
-            SettingRow(c.name, c.version, open == "core:${c.key}", { toggle("core:${c.key}") }) {
-                Note("id: ${c.key}")
-                Note("systems: " + c.systems.sortedBy { it.ordinal }.joinToString(", ") { systemLabel(it) })
-                Note("extensions: " + c.extensions.sorted().joinToString(" "))
-                c.license?.let { Note("license: $it") }
-                CoreSetup.itemsFor(c.coreId).forEach { item ->
-                    val st = remember(setupTick, open) { CoreSetup.status(ctx, item) }
-                    FocusLine(item.label, right = st) { importFor = item; importMsg = null; importPicker.launch(item.accept) }
-                }
-                if (importMsg != null && CoreSetup.itemsFor(c.coreId).isNotEmpty()) Note(importMsg!!)
-            }
-        }
-        if (CoreBootstrap.missing.isNotEmpty()) {
-            item {
-                SettingRow("NOT INSTALLED (${CoreBootstrap.missing.size})", null, open == "missing", { toggle("missing") }, dim = true) {
-                    Note(CoreBootstrap.missing.joinToString(", ") { CoreBootstrap.friendlyName(it) })
-                }
-            }
-        }
         item { Section("ABOUT") }
         item { Note("RomCore ${BuildConfig.VERSION_NAME} - GPLv3. Embedded emulator cores keep their own licenses.") }
         // Every installed app that has a launcher icon, so RomCore still works as the device's home screen.
