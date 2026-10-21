@@ -125,7 +125,7 @@ class WwhdActivity : Activity(), SurfaceHolder.Callback, Native.Host {
     /** The console language the game sees: the device's, if the game has it, else English. */
     private fun gameLanguage(): String = Locale.getDefault().language.takeIf { it in setOf("en", "fr", "de", "it", "es") } ?: "en"
 
-    /** Fixed defaults (RomCore's menu has no settings surface): 60 fps by interpolation, the Pro Controller, no motion, no autosave states. */
+    /** Fixed defaults (RomCore's menu has no settings surface): 60 fps by interpolation, the Pro Controller, no motion, no autosave states, the screen's own aspect ratio. */
     private fun applyOptions() {
         runCatching {
             Native.setOption("pro_controller", 1)     // the game acts on a Wii U Pro Controller: one screen, no GamePad touch
@@ -134,7 +134,7 @@ class WwhdActivity : Activity(), SurfaceHolder.Callback, Native.Host {
             Native.setOption("core_mode", 3)           // the project's default CPU core placement
             Native.setOption("autosave_secs", 0)       // its 235 MB autosave states are replaced by the shared menu's state
             Native.setOption("tv_aspect", 0)
-            Native.setOption("render_aspect", 0)
+            Native.setOption("render_aspect", 1)       // "match window": the game renders at the screen's own shape (4:3 on the Nova, 16:9 on the Thor)
         }.onFailure { Log.e(TAG, "options failed", it) }
     }
 
