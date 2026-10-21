@@ -21,8 +21,8 @@ Both cores write the game's own Dolphin INI (`<userDir>/GameSettings/<GAMEID>.in
 |---|---|---|---|
 | Super Mario Galaxy 2 | SB4[EPJK]01 | `Widescreen = False` | **Works**: title screen fills the 4:3 screen (was letterboxed). |
 | New Super Mario Bros. Wii | SMN[EPJK]01 | `Widescreen = False` | Menus (file select, copy, dialogs) fill the screen. **Gameplay stays a letterboxed 16:9 picture**: the game does that itself in 4:3 mode. |
-| Metroid: Other M | R3O[EPJK]01 | `Widescreen = False`; NTSC-U also the Gecko code | Launches with the setting on; menus fill the screen; the opening movies are 16:9 letterboxed (as the wiki says). **Gameplay never reached**, so the Gecko code is untested. |
-| Metroid Prime Trilogy (PrimeHack core) | R3M[EPJK]01 | `Widescreen = False` | INI written, row works. Launcher menu looks letterboxed 16:9 both on and off (slightly different geometry). **Gameplay never reached.** |
+| Metroid: Other M | R3O[EPJK]01 | `Widescreen = False`; NTSC-U also the Gecko code | **Works in gameplay**: fills the 4:3 screen (lit rows 6-953 of 960; was 124-835 letterboxed). The opening movies and cutscenes stay 16:9. Verified in memory: code handler installed, `0x80103F94` = `c0a28b10`. |
+| Metroid Prime Trilogy (PrimeHack core) | R3M[EPJK]01 | `Widescreen = False` | First-person gameplay fills the screen. **Morph ball mode is drawn by the game as a letterboxed ~16:9 view** (black bars of ~100 px top and bottom); forcing Dolphin to stretch does not remove them, so they are in the game's own render. No known fix. |
 
 ## Tried and rejected
 * NSMBW community "Remove Borders" Gecko codes (NTSC-U, Dolphin forum, Brandondorf9999), tested three ways on the Nova (with
@@ -31,6 +31,11 @@ Both cores write the game's own Dolphin INI (`<userDir>/GameSettings/<GAMEID>.in
   some levels. Not shipped.
 * 21:9 codes: irrelevant to a 4:3 screen.
 * `[Video_Settings] SuggestedAspectRatio = 2` is also written, so Dolphin's widescreen heuristic cannot flip the display to 16:9.
+
+## Bug found and fixed along the way
+The first version wrote the Gecko code's enable line with its creator tag (`$name [creator]`). Dolphin cuts a code's name at `[` and compares
+the `[Gecko_Enabled]` entry with that bare name only, so the code never ran (verified by reading a save state: no code handler in
+memory). The enable line now uses the bare name (`FourByThree.bareName`), covered by a test that reproduces Dolphin's rule.
 
 ## Status
 Unit tests: `romcore-api/.../FourByThreeTest.kt`. Still to check by eye: Other M and Prime Trilogy gameplay (both need a long

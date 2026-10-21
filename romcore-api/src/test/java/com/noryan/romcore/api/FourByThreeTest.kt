@@ -53,6 +53,25 @@ class FourByThreeTest {
         assertTrue(t.contains("Widescreen = False")); assertFalse(t.contains("Gecko"))
     }
 
+    /** Dolphin: title cut at '[' for the code name, [Gecko_Enabled] lines compared with that bare name (GeckoCodeConfig.cpp / CheatCodes.h). */
+    private fun dolphinEnabledNames(ini: String): List<String> {
+        var sec = ""; val codes = ArrayList<String>(); val enabled = ArrayList<String>()
+        for (raw in ini.lines()) {
+            val l = raw.trim()
+            if (l.startsWith("[") && l.endsWith("]")) { sec = l.substring(1, l.length - 1); continue }
+            if (sec == "Gecko" && l.startsWith("$")) codes += l.substring(1).substringBefore('[').trim()
+            if (sec == "Gecko_Enabled" && l.startsWith("$")) enabled += l.substring(1)
+        }
+        return codes.filter { it in enabled }
+    }
+
+    @Test fun enabledEntryMatchesDolphinsBareCodeName() {
+        val ini = FourByThree.apply("", "R3OE01", on = true)
+        assertEquals(listOf("RomCore 4:3 Remove Borders"), dolphinEnabledNames(ini))   // the code really is enabled
+        assertTrue(ini.contains("\$RomCore 4:3 Remove Borders [Dolphin Wiki]\n04103f94"))  // credited title kept in [Gecko]
+        assertTrue(ini.contains("[Gecko_Enabled]\n\$RomCore 4:3 Remove Borders\n"))
+    }
+
     @Test fun geckoCodeIsTheWikiCode() {
         assertEquals(24, FourByThree.OTHER_M_GECKO.size)
         assertEquals("04103f94 C0A28B10", FourByThree.OTHER_M_GECKO.first())

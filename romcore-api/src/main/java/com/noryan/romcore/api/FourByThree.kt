@@ -43,6 +43,13 @@ object FourByThree {
     private const val OTHER_M_NAME = "RomCore 4:3 Remove Borders [Dolphin Wiki]"
     private val GECKO_NAMES = setOf(OTHER_M_NAME)
 
+    /**
+     * What Dolphin calls the code: it cuts the `$` title at the first `[` (the rest is the creator). The `[Gecko_Enabled]` list is
+     * matched against THIS name, so it must carry the bare name; the full title with `[creator]` matches nothing and the code
+     * silently never runs (that was the bug the first version of this feature had).
+     */
+    fun bareName(title: String) = title.substringBefore('[').trim()
+
 
     /** Dolphin Wiki "Metroid: Other M" > Remove 4:3 Borders (NTSC-U). Only matters while the Wii aspect ratio is 4:3. */
     val OTHER_M_GECKO: List<String> = listOf(
@@ -146,7 +153,7 @@ object FourByThree {
                 if (s.startsWith("$")) skipping = s.substring(1).trim() in GECKO_NAMES
                 if (skipping) continue
             }
-            if (section.equals("Gecko_Enabled", true) && s.startsWith("$") && s.substring(1).trim() in GECKO_NAMES) continue
+            if (section.equals("Gecko_Enabled", true) && s.startsWith("$") && s.substring(1).trim() in GECKO_NAMES.map(::bareName)) continue
             out += l
         }
         return dropEmptySections(out.joinToString("\n"))
@@ -159,8 +166,8 @@ object FourByThree {
         if (g < 0) { while (lines.isNotEmpty() && lines.last().isBlank()) lines.removeAt(lines.lastIndex); if (lines.isNotEmpty()) lines += ""; lines += "[Gecko]"; lines += block }
         else lines.addAll(g + 1, block)
         val e = lines.indexOfFirst { it.trim().equals("[Gecko_Enabled]", true) }
-        if (e < 0) { while (lines.isNotEmpty() && lines.last().isBlank()) lines.removeAt(lines.lastIndex); lines += ""; lines += "[Gecko_Enabled]"; lines += "$" + code.name }
-        else lines.add(e + 1, "$" + code.name)
+        if (e < 0) { while (lines.isNotEmpty() && lines.last().isBlank()) lines.removeAt(lines.lastIndex); lines += ""; lines += "[Gecko_Enabled]"; lines += "$" + bareName(code.name) }
+        else lines.add(e + 1, "$" + bareName(code.name))
         return lines.joinToString("\n").trimEnd('\n') + "\n"
     }
 
