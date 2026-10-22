@@ -113,6 +113,9 @@ internal object RaFiles {
             "audio_fastforward_mute" to "true",
         )
         cfg.putAll(CrtShader.configKeys(shadersDir))
+        // GBA: full-width picture at the game's own shape, pinned to the top of the screen (see GbaViewport).
+        if (system == com.noryan.romcore.api.System.GBA && com.noryan.romcore.api.System.GBA in spec.systems)
+            cfg.putAll(GbaViewport.configKeys)
         cfg.putAll(spec.cfg)
         // RomCore owns all UI and the device has physical controls: no on-screen overlay/gamepad, whatever a core spec says.
         cfg["input_overlay_enable"] = "false"
