@@ -137,8 +137,10 @@ private fun RowItem(model: MenuModel, row: MenuRowModel, focused: Boolean, click
             Box(click.button(focused).padding(if (pair) 6.dp else MenuStyle.RowPaddingHorizontal, 12.dp)) {
                 BasicText(if (row.action == MenuAction.CHANGE_CONTROLLER_MAPPING) "Controller Mapping" else MenuModel.title(row.action),
                     Modifier.align(Alignment.Center), style = style(label, if (pair) 13.sp else MenuStyle.FontSize).copy(textAlign = TextAlign.Center, textDecoration = if (focused) TextDecoration.Underline else TextDecoration.None), maxLines = 2)
-                val tail = if (disabled) "N/A"
-                    else if (row.action == MenuAction.SAVE_STATE || row.action == MenuAction.LOAD_STATE) ""   // plain actions, no arrow
+                // The half-width Save / Load buttons have no room for a tail: when disabled they are just dimmed, and the note under the
+                // menu says why (an "N/A" there was drawn on top of the label).
+                val tail = if (pair) ""                                                                           // plain actions, no arrow
+                    else if (disabled) "N/A"
                     else if (row.action != MenuAction.CLOSE_GAME || open) (if (open) "v" else ">") else ""
                 if (tail.isNotEmpty()) BasicText(tail, Modifier.align(Alignment.CenterEnd), style = style(if (focused) OnAccent else Dim))
             }
