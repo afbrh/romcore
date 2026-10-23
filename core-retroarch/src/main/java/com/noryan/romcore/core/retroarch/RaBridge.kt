@@ -20,6 +20,9 @@ internal object RaBridge {
     /** Video shader: path = absolute .glslp preset to apply live, empty path = shader off. Needs the op-8 native patch. */
     const val OP_SHADER = 8
 
+    /** Integer scale: arg 1 on, 0 off. Needs the op-9 native patch; false on old builds. */
+    const val OP_INTEGER_SCALE = 9
+
     @JvmStatic external fun nativeButton(retroId: Int, pressed: Boolean)
     /** stick 0=left 1=right, axis 0=x 1=y, value -32767..32767 (libretro convention: -y is up). */
     @JvmStatic external fun nativeAxis(stick: Int, axis: Int, value: Int)

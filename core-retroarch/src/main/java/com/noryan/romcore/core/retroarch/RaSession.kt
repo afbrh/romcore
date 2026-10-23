@@ -17,7 +17,8 @@ internal class RaSession(
     romKey: String,
     private val system: System,
     private val onClose: () -> Unit,
-) : CoreSessionBase(context, "retroarch", romKey), FastForwardSupport, com.noryan.romcore.api.OptionCycleSupport {
+) : CoreSessionBase(context, "retroarch", romKey), FastForwardSupport, com.noryan.romcore.api.OptionCycleSupport,
+    com.noryan.romcore.api.ToggleOptionSupport {
 
     // direction magnitudes 0..1
     private val stick = FloatArray(8) // LS_UP, LS_DOWN, LS_LEFT, LS_RIGHT, RS_UP, RS_DOWN, RS_LEFT, RS_RIGHT
@@ -72,15 +73,35 @@ internal class RaSession(
     override val optionAvailable get() = ShaderChoice.applies(system)
     @Volatile private var shaderPick: ShaderChoice.Pick? = null
     override fun optionValue(): String = (shaderPick ?: ShaderChoice.current(context, system).also { shaderPick = it }).label
-    override fun cycleOption(): Boolean {
+    override fun cycleOption(): Boolean = applyShader { it.next() }
+    override fun cycleOptionBack(): Boolean = applyShader { it.previous() }
+
+    private fun applyShader(step: (ShaderChoice.Pick) -> ShaderChoice.Pick): Boolean {
         if (!ShaderChoice.applies(system)) return false
-        val next = (shaderPick ?: ShaderChoice.current(context, system)).next()
+        val next = step(shaderPick ?: ShaderChoice.current(context, system))
         shaderPick = next
         ShaderChoice.save(context, system, next)
-        val path = next.presetFile?.let { File(CrtShader.shadersDir(context), it).absolutePath }.orEmpty()
+        val path = ShaderChoice.presetFile(system, next)?.let { File(CrtShader.shadersDir(context), it).absolutePath }.orEmpty()
         pauser.execute {
             val ok = RaBridge.request(RaBridge.OP_SHADER, path, 3000)
             android.util.Log.i(TAG, "shader ${next.id} ok=$ok")
+        }
+        return true
+    }
+
+    // ---- optional menu toggle: Integer Scale for the pixel-art systems --------------------------------------------------------
+    override val toggleLabel = "Integer Scale"
+    override val toggleAvailable get() = IntegerScale.applies(system)
+    @Volatile private var integerOn: Boolean? = null
+    override fun toggleValue(): Boolean = integerOn ?: IntegerScale.isOn(context, system).also { integerOn = it }
+    override fun toggle(): Boolean {
+        if (!IntegerScale.applies(system)) return false
+        val next = !toggleValue()
+        integerOn = next
+        IntegerScale.save(context, system, next)
+        pauser.execute {
+            val ok = RaBridge.requestArg(RaBridge.OP_INTEGER_SCALE, if (next) 1 else 0, 3000)
+            android.util.Log.i(TAG, "integer scale $next ok=$ok")
         }
         return true
     }

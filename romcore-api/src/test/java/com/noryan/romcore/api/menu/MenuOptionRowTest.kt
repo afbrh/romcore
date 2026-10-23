@@ -15,6 +15,7 @@ class MenuOptionRowTest {
         override val optionLabel = "Resolution"
         override fun optionValue() = values[idx]
         override fun cycleOption(): Boolean { if (works) idx = (idx + 1) % values.size; return works }
+        override fun cycleOptionBack(): Boolean { if (works) idx = (idx + values.size - 1) % values.size; return works }
         override fun pause() {}; override fun resume() {}; override fun saveState(slot: Int) = true
         override fun loadState(slot: Int) = true; override fun close() {}
         override fun injectButton(pad: Pad, pressed: Boolean) {}; override fun injectAxis(pad: Pad, value: Float) {}
@@ -49,5 +50,13 @@ class MenuOptionRowTest {
         m.select(m.rows.indexOfFirst { it is MenuRowModel.Top && it.action == MenuAction.CLOSE_GAME })
         assertTrue(m.rows.last() is MenuRowModel.Confirm)
         assertEquals(MenuRowModel.Confirm(true), m.rows[m.cursor])   // cursor lands on "Yes, close game"
+    }
+
+    @Test fun leftAndRightStepTheOptionRowBothWays() {
+        val s = S(true); val m = model(s); m.open()
+        while (m.cursor != m.rows.indexOf(MenuRowModel.Option)) m.nav(MenuNav.DOWN)
+        m.nav(MenuNav.RIGHT); assertEquals("Resolution: 3x", m.optionText)
+        m.nav(MenuNav.LEFT); m.nav(MenuNav.LEFT); assertEquals("Resolution: 1x", m.optionText)
+        m.nav(MenuNav.LEFT); assertEquals("Resolution: 3x", m.optionText)      // wraps backwards too
     }
 }

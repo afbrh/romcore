@@ -20,6 +20,8 @@ sealed interface MenuRowModel {
     data class Confirm(val yes: Boolean) : MenuRowModel
     /** The session's optional setting row ([com.noryan.romcore.api.OptionCycleSupport]). */
     object Option : MenuRowModel
+    /** The session's optional on/off row ([com.noryan.romcore.api.ToggleOptionSupport]). */
+    object Toggle : MenuRowModel
     object Reset : MenuRowModel
     object ClearHotkey : MenuRowModel
 }
@@ -65,6 +67,7 @@ class MenuModel(
     val rows: List<MenuRowModel> get() = buildList {
         for (a in TOP) {
             if (a == MenuAction.CLOSE_GAME && option != null) add(MenuRowModel.Option)
+            if (a == MenuAction.CLOSE_GAME && toggle != null) add(MenuRowModel.Toggle)
             add(MenuRowModel.Top(a))
             if (a == expanded) when (a) {
                 MenuAction.CLOSE_GAME -> { add(MenuRowModel.Confirm(true)); add(MenuRowModel.Confirm(false)) }
@@ -78,6 +81,9 @@ class MenuModel(
     private val option get() = (session as? com.noryan.romcore.api.OptionCycleSupport)?.takeIf { it.optionAvailable }
     /** Row text for the optional setting, e.g. "Resolution: 2x"; null when the session has none. */
     val optionText: String? get() { @Suppress("UNUSED_EXPRESSION") revision; return option?.let { "${it.optionLabel}: ${it.optionValue()}" } }
+    private val toggle get() = (session as? com.noryan.romcore.api.ToggleOptionSupport)?.takeIf { it.toggleAvailable }
+    /** Row text for the optional on/off setting, e.g. "Integer Scale: On"; null when the session has none. */
+    val toggleText: String? get() { @Suppress("UNUSED_EXPRESSION") revision; return toggle?.let { "${it.toggleLabel}: ${if (it.toggleValue()) "On" else "Off"}" } }
     private fun rowIndex(a: MenuAction) = rows.indexOfFirst { it is MenuRowModel.Top && it.action == a }.coerceAtLeast(0)
 
     fun open() {
@@ -124,10 +130,23 @@ class MenuModel(
                 cursor = when { cursor < PAIR -> list.lastIndex; cursor == PAIR -> lastPair; else -> cursor - 1 } }
             MenuNav.DOWN -> { if (cursor < PAIR) lastPair = cursor
                 cursor = when { cursor < PAIR -> PAIR.coerceAtMost(list.lastIndex); cursor >= list.lastIndex -> lastPair; else -> cursor + 1 } }
-            MenuNav.LEFT -> if (cursor < PAIR) { cursor = 0; lastPair = 0 }
-            MenuNav.RIGHT -> if (cursor < PAIR) { cursor = 1; lastPair = 1 }
+            MenuNav.LEFT -> if (cursor < PAIR) { cursor = 0; lastPair = 0 } else stepOption(list.getOrNull(cursor), false)
+            MenuNav.RIGHT -> if (cursor < PAIR) { cursor = 1; lastPair = 1 } else stepOption(list.getOrNull(cursor), true)
             MenuNav.BACK -> if (expanded != null) collapse() else close()
             MenuNav.SELECT -> list.getOrNull(cursor)?.let { activate(it) }
+        }
+    }
+
+    /** LEFT / RIGHT on the setting rows: RIGHT = same as selecting; LEFT = previous value (an on/off row flips either way). */
+    private fun stepOption(row: MenuRowModel?, forward: Boolean) {
+        when (row) {
+            MenuRowModel.Option -> if (forward) activate(row) else option?.let {
+                val ok = runCatching { it.cycleOptionBack() }.getOrDefault(false)
+                revision++
+                if (ok) status = "${it.optionLabel}: ${it.optionValue()}"
+            }
+            MenuRowModel.Toggle -> activate(row)
+            else -> {}
         }
     }
 
@@ -161,6 +180,11 @@ class MenuModel(
                 val ok = runCatching { it.cycleOption() }.getOrDefault(false)
                 revision++
                 status = if (ok) "${it.optionLabel}: ${it.optionValue()}" else "Could not change ${it.optionLabel}"
+            }
+            MenuRowModel.Toggle -> toggle?.let {
+                val ok = runCatching { it.toggle() }.getOrDefault(false)
+                revision++
+                status = if (ok) toggleText.orEmpty() else "Could not change ${it.toggleLabel}"
             }
             MenuRowModel.Reset -> { if (expanded == MenuAction.SET_HOTKEYS) hotkeys.resetToDefaults() else mapping.resetToDefaults(); revision++; status = "Reset to defaults" }
             MenuRowModel.ClearHotkey -> {}

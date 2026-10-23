@@ -34,21 +34,41 @@ internal object CrtShader {
     const val GBA_SHADER_FILE = "romcore-gba-lcd.glsl"
     const val GBA_PRESET_FILE = "romcore-gba-lcd.glslp"
 
+    // ---- Game Boy: original green DMG screen (four shades, pixel grid, drop shadow) ----
+    const val DMG_SHADER_FILE = "romcore-dmg.glsl"
+    const val DMG_PRESET_FILE = "romcore-dmg.glslp"
+
+    // ---- Game Boy: Super Game Boy border crop. Every GB preset is wrapped (see [wrapForGb]) so the border never shows ----
+    const val GBCROP_SHADER_FILE = "romcore-gbcrop.glsl"
+    const val GBCROP_PRESET_FILE = "romcore-gbcrop.glslp"
+    fun gbWrapped(preset: String) = "gb-$preset"
+
+    /**
+     * The same preset with a crop pass in front: pass 0 cuts the 160x144 screen out of a Super Game Boy frame (output exactly 160x144),
+     * and the original passes follow with their indices shifted by one, so they see the plain Game Boy picture. Pure text, unit-tested.
+     */
+    fun wrapForGb(preset: String): String {
+        val keyed = Regex("^(\\s*)([A-Za-z_]+?)(\\d+)(\\s*=.*)$")
+        val lines = preset.lines().map { line ->
+            val count = Regex("^\\s*shaders\\s*=\\s*(\\d+)\\s*$").find(line)
+            val m = keyed.find(line)
+            when {
+                count != null -> "shaders = ${count.groupValues[1].toInt() + 1}"
+                m != null -> m.groupValues[1] + m.groupValues[2] + (m.groupValues[3].toInt() + 1) + m.groupValues[4]
+                else -> line
+            }
+        }
+        val crop = listOf("shader0 = $GBCROP_SHADER_FILE", "filter_linear0 = false", "wrap_mode0 = clamp_to_edge", "mipmap_input0 = false",
+            "alias0 = \"\"", "float_framebuffer0 = false", "srgb_framebuffer0 = false",
+            "scale_type0 = absolute", "scale_x0 = 160", "scale_y0 = 144")
+        return (lines.dropLastWhile { it.isBlank() } + crop).joinToString("\n") + "\n"
+    }
+
     // ---- extra looks offered by the in-game "Shader" row (see ShaderChoice) ----
-    const val BOLD_SHADER_FILE = "romcore-crt-bold.glsl"        // generated from the CRT shader with stronger constants
-    const val BOLD_PRESET_FILE = "romcore-crt-bold.glslp"
     const val SCANLINES_SHADER_FILE = "romcore-scanlines.glsl"
     const val SCANLINES_PRESET_FILE = "romcore-scanlines.glslp"
     const val SHARP_SHADER_FILE = "romcore-sharp.glsl"
     const val SHARP_PRESET_FILE = "romcore-sharp.glslp"
-
-    /** The CRT shader text with heavier scanlines, mask and beam widening ("CRT Bold"). Pure text, unit-tested. */
-    fun boldCrt(crt: String): String {
-        var t = crt
-        for ((name, v) in listOf("SCANLINE_STRENGTH" to "0.85", "MASK_STRENGTH" to "0.60", "BEAM_SOFTNESS" to "0.50", "BLOOM" to "0.22"))
-            t = t.replace(Regex("(?m)^#define $name [0-9.]+"), "#define $name $v")
-        return t
-    }
 
     /** Which RomCore look a launch gets. mGBA runs GB, GBC and GBA, so the GBA look is decided by the GAME's system, not the core's. */
     enum class Look(val presetFile: String, val prefKey: String) {
@@ -98,18 +118,20 @@ internal object CrtShader {
      */
     fun install(ctx: Context, look: Look = Look.CRT): File = install(ctx, look.presetFile)
 
-    /** Copies every shader + preset out of the APK (and generates the bold CRT), without choosing one. Returns the shaders dir. */
+    /** Copies every shader + preset out of the APK without choosing one. Returns the shaders dir. */
     fun installFiles(ctx: Context): File {
         val dir = shadersDir(ctx)
         val stamp = File(dir, ".stamp")
         val ver = ctx.packageManager.getPackageInfo(ctx.packageName, 0).lastUpdateTime.toString()
         val assetFiles = listOf(SHADER_FILE, PRESET_FILE, GBA_SHADER_FILE, GBA_PRESET_FILE,
-            SCANLINES_SHADER_FILE, SCANLINES_PRESET_FILE, SHARP_SHADER_FILE, SHARP_PRESET_FILE)
-        val fresh = stamp.exists() && stamp.readText() == ver && (assetFiles + BOLD_SHADER_FILE + BOLD_PRESET_FILE).all { File(dir, it).exists() }
+            SCANLINES_SHADER_FILE, SCANLINES_PRESET_FILE, SHARP_SHADER_FILE, SHARP_PRESET_FILE, DMG_SHADER_FILE, DMG_PRESET_FILE,
+            GBCROP_SHADER_FILE, GBCROP_PRESET_FILE)
+        val gbFiles = listOf(PRESET_FILE, GBA_PRESET_FILE, SCANLINES_PRESET_FILE, SHARP_PRESET_FILE, DMG_PRESET_FILE).map(::gbWrapped)
+        val fresh = stamp.exists() && stamp.readText() == ver && (assetFiles + gbFiles).all { File(dir, it).exists() }
         if (!fresh) {
             for (n in assetFiles) ctx.assets.open("$ASSET_DIR/$n").use { i -> File(dir, n).outputStream().use { o -> i.copyTo(o) } }
-            File(dir, BOLD_SHADER_FILE).writeText(boldCrt(File(dir, SHADER_FILE).readText()))
-            File(dir, BOLD_PRESET_FILE).writeText(File(dir, PRESET_FILE).readText().replace(SHADER_FILE, BOLD_SHADER_FILE).replace("flat CRT preset", "bold CRT preset"))
+            for (n in listOf(PRESET_FILE, GBA_PRESET_FILE, SCANLINES_PRESET_FILE, SHARP_PRESET_FILE, DMG_PRESET_FILE))
+                File(dir, gbWrapped(n)).writeText(wrapForGb(File(dir, n).readText()))
             stamp.writeText(ver)
         }
         return dir

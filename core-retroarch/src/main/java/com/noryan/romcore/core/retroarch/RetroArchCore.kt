@@ -72,7 +72,8 @@ object RetroArchCore : CoreDescriptor {
             ?: throw IllegalArgumentException("No bundled core runs ${request.system}")
         val corePath = RaFiles.ensureCore(ctx, spec)
         val pick = if (ShaderChoice.applies(request.system) && request.system in spec.systems) ShaderChoice.current(ctx, request.system) else null
-        val cfg = RaFiles.writeConfig(ctx, spec, CrtShader.isEnabled(ctx), request.system, CrtShader.isEnabled(ctx, CrtShader.Look.GBA_LCD), pick)
+        val cfg = RaFiles.writeConfig(ctx, spec, CrtShader.isEnabled(ctx), request.system, CrtShader.isEnabled(ctx, CrtShader.Look.GBA_LCD), pick,
+            IntegerScale.isOn(ctx, request.system))
         val rom = request.romPath.ifBlank { request.romUri.orEmpty() }
         return Intent().setClassName(ctx, RomCoreRetroActivity::class.java.name)
             .putExtra("ROM", rom)

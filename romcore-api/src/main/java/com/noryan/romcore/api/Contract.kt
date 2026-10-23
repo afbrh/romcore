@@ -58,6 +58,21 @@ interface OptionCycleSupport {
     val optionAvailable: Boolean get() = true
     fun optionValue(): String
     fun cycleOption(): Boolean
+    /** The previous value (LEFT on the row); false when this setting cannot step backwards, which leaves the value alone. */
+    fun cycleOptionBack(): Boolean = false
+}
+
+/**
+ * Optional: an on/off setting the shared menu shows as a row above Close Game ("Integer Scale: On"), below the [OptionCycleSupport] row
+ * when there is one. Selecting the row calls [toggle]; [toggleValue] is the state after it. Both run on the main thread, so they must
+ * be quick. [toggle] returns false if the change could not be applied (the menu then says so).
+ */
+interface ToggleOptionSupport {
+    val toggleLabel: String
+    /** False when this particular game or core has no such setting (the row is then not shown). */
+    val toggleAvailable: Boolean get() = true
+    fun toggleValue(): Boolean
+    fun toggle(): Boolean
 }
 
 /** Static description of an embedded core, registered with CoreRegistry. */

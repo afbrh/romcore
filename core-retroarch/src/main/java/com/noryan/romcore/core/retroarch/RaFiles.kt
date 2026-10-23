@@ -32,14 +32,15 @@ internal object RaFiles {
 
     /** [crtFilter] = the user's `retro_crt_filter` pref; the CRT shader is only ever applied to NES/SNES cores. */
     fun writeConfig(ctx: Context, spec: CoreSpec, crtFilter: Boolean = true, system: com.noryan.romcore.api.System? = null, gbaFilter: Boolean = true,
-                    pick: ShaderChoice.Pick? = null): File {
+                    pick: ShaderChoice.Pick? = null, integerScale: Boolean = false): File {
         val look = CrtShader.lookFor(spec, system)
-        val on = if (pick != null) pick != ShaderChoice.Pick.OFF
+        val pickFile = if (pick != null && system != null) ShaderChoice.presetFile(system, pick) else pick?.presetFile
+        val on = if (pick != null) pickFile != null
             else when (look) { CrtShader.Look.CRT -> crtFilter; CrtShader.Look.GBA_LCD -> gbaFilter; null -> false }
         // Every shader is copied for the 2D systems (the menu row can switch live); only the chosen one is the launch preset.
         if (pick != null) runCatching { CrtShader.installFiles(ctx) }
         val shadersDir: File? = if (pick != null) {
-            if (on) runCatching { CrtShader.install(ctx, pick.presetFile!!) }.getOrNull() else null
+            if (on) runCatching { CrtShader.install(ctx, pickFile!!) }.getOrNull() else null
         } else if (on && look != null) runCatching { CrtShader.install(ctx, look) }.getOrNull() else null
         if (shadersDir == null) CrtShader.uninstallAutoPreset(ctx)
         val base = baseDir(ctx)
@@ -51,7 +52,6 @@ internal object RaFiles {
         val cfgDir = File(base, "config").apply { mkdirs() }
         val opt = File(cfgDir, spec.id + ".opt")
         if (!opt.exists()) opt.writeText(spec.options.entries.joinToString("\n") { "${it.key} = \"${it.value}\"" } + "\n")
-
         val cfg = linkedMapOf(
             // ---- paths ----
             "libretro_directory" to File(ctx.applicationInfo.dataDir, "cores").absolutePath,
@@ -116,6 +116,11 @@ internal object RaFiles {
         // GBA: full-width picture at the game's own shape, pinned to the top of the screen (see GbaViewport).
         if (system == com.noryan.romcore.api.System.GBA && com.noryan.romcore.api.System.GBA in spec.systems)
             cfg.putAll(GbaViewport.configKeys)
+        // Game Boy: the 160x144 screen fills the height at its own 10:9 shape (see GbViewport); the DMG shader crops any SGB border.
+        if (system == com.noryan.romcore.api.System.GB && com.noryan.romcore.api.System.GB in spec.systems)
+            cfg.putAll(GbViewport.configKeys)
+        // Integer Scale menu toggle (applies to the viewports above too: they only fix the aspect and where the picture sits).
+        if (integerScale) cfg["video_scale_integer"] = "true"
         cfg.putAll(spec.cfg)
         // RomCore owns all UI and the device has physical controls: no on-screen overlay/gamepad, whatever a core spec says.
         cfg["input_overlay_enable"] = "false"
