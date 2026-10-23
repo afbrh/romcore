@@ -9,6 +9,9 @@ import com.noryan.romcore.api.Pad
 import com.noryan.romcore.api.menu.CoreSessionBase
 import me.magnum.melonds.MelonEmulator
 import me.magnum.melonds.domain.model.Input
+import me.magnum.melonds.romcore.RomCoreScreenLayout
+import me.magnum.melonds.romcore.RomCoreScreenLayouts
+import me.magnum.melonds.romcore.RomCoreBridge
 import me.magnum.melonds.ui.emulator.EmulatorActivity
 import java.io.File
 
@@ -21,7 +24,7 @@ class WatermelonDsSession(
     context: Context,
     romPath: String,
     private val activity: EmulatorActivity,
-) : CoreSessionBase(context, WatermelonDsCore.id, romPath), FastForwardSupport {
+) : CoreSessionBase(context, WatermelonDsCore.id, romPath), FastForwardSupport, com.noryan.romcore.api.OptionCycleSupport {
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var paused = false
 
@@ -35,6 +38,39 @@ class WatermelonDsSession(
         MelonEmulator.setFastForwardEnabled(on)
         true
     } catch (_: Throwable) { false }
+
+    // ---- screen layout: "Single Screen" (one screen fills the display) / "Stacked" (big screen on top, small one below) ----------
+    // The choice is remembered (own prefs file: this process only); L3 swaps which screen is shown / big (not remembered).
+    // The layout itself is built in the WatermelonDS fork (RomCoreScreenLayouts), driven by RomCoreBridge.screenLayout.
+    private val layoutPrefs = context.getSharedPreferences("romcore_ds", Context.MODE_PRIVATE)
+    private var layoutMode = if (layoutPrefs.getString("screen_layout", null) == "single") RomCoreScreenLayouts.Mode.SINGLE else RomCoreScreenLayouts.Mode.STACKED
+    private var bottomFocus = false
+    /** Set by the host: uptime of the last hotkey combo (InputRouter.lastHotkeyAtMs), to tell an L3 tap from L3 in a combo. */
+    @Volatile var comboClock: () -> Long = { 0L }
+    private var l3DownAt = 0L
+
+    init { publishLayout() }
+
+    private fun publishLayout() { RomCoreBridge.screenLayout.value = RomCoreScreenLayout(layoutMode, bottomFocus) }
+
+    override val optionLabel = "Screen Layout"
+    override fun optionValue(): String = if (layoutMode == RomCoreScreenLayouts.Mode.SINGLE) "Single Screen" else "Stacked"
+    override fun cycleOption(): Boolean {
+        layoutMode = if (layoutMode == RomCoreScreenLayouts.Mode.SINGLE) RomCoreScreenLayouts.Mode.STACKED else RomCoreScreenLayouts.Mode.SINGLE
+        layoutPrefs.edit().putString("screen_layout", if (layoutMode == RomCoreScreenLayouts.Mode.SINGLE) "single" else "stacked").apply()
+        publishLayout()
+        return true
+    }
+    override fun cycleOptionBack(): Boolean = cycleOption()
+
+    /** L3 tapped on its own (not as part of a hotkey combo such as L3+R1): swap the screens. */
+    private fun onL3(pressed: Boolean) {
+        if (pressed) { l3DownAt = android.os.SystemClock.uptimeMillis(); return }
+        val downAt = l3DownAt.also { l3DownAt = 0L }
+        if (downAt == 0L || comboClock() >= downAt) return
+        bottomFocus = !bottomFocus
+        publishLayout()
+    }
 
     override fun pause() { paused = true; runCatching { MelonEmulator.pauseEmulation() } }
     override fun resume() { paused = false; runCatching { MelonEmulator.resumeEmulation() } }
@@ -85,6 +121,7 @@ class WatermelonDsSession(
             ZeldaStickMove({ x, y -> MelonEmulator.onScreenTouch(x, y) }, { MelonEmulator.onScreenRelease() }) else null
 
     override fun injectButton(pad: Pad, pressed: Boolean) {
+        if (pad == Pad.L3) { onL3(pressed); return }
         zelda?.let { z ->
             when (pad) {
                 Pad.SELECT -> z.select(pressed)

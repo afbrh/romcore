@@ -62,6 +62,7 @@ internal object WatermelonDsHost {
         val session = WatermelonDsSession(activity, romPath, activity)
         // RomCoreCoreHost wires InputRouter (profiles/mapping/hotkeys) + the shared menu + hotkey actions + keep-screen-on.
         val hooks = RomCoreCoreHost.install(activity, session, System.NDS)
+        session.comboClock = { hooks.router.lastHotkeyAtMs }
         current = Attached(activity, hooks)
 
         RomCoreBridge.host = object : RomCoreBridge.Host {

@@ -208,6 +208,10 @@ class InputRouter(
         s.onPad(pad, now)
     }
 
+    /** Uptime (ms) of the last hotkey combo that fired or pulled an already-forwarded pad back; 0 = none yet. */
+    @Volatile var lastHotkeyAtMs: Long = 0L
+        private set
+
     internal fun dispatch(events: List<PadEvent>, system: System) {
         for (ev in events) {
             if (ev.pad.isStick) {
@@ -218,6 +222,8 @@ class InputRouter(
             val digital = ev.value >= 0.5f
             hotkeyCapture?.let { c -> c.onPad(ev.pad, digital); if (c.finished) hotkeyCapture = null; continue }
             val r = hotkeys.onPad(ev.pad, digital)
+            // Before the releases below reach the session: lets a session tell "L3 tapped alone" from "L3 as part of a combo".
+            if (r.toRelease.isNotEmpty() || r.event != null) lastHotkeyAtMs = android.os.SystemClock.uptimeMillis()
             for (p in r.toRelease) if (injected[p] != null) inject(p, 0f)
             r.event?.let { hotkeyListener.onHotkey(it) }
             if (r.swallow || ev.pad == Pad.HOME || ev.pad == Pad.BACK) continue
