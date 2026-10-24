@@ -76,16 +76,6 @@ includeBuild("../dusklight-src/platforms/android") {
     dependencySubstitution { substitute(module("dev.twilitrealm:app")).using(project(":app")) }
 }
 
-// :core-shipwright (N64, The Legend of Zelda: Ocarina of Time ONLY). Ship of Harkinian (decomp-based native port) through the community
-// Android fork please-be-nice/Shipwright-android, cloned to ../shipwright-src (local branch `romcore-local`, never pushed): its Android
-// project is a library consumed as a composite build; native libs libsoh.so + libSDL2.so, SDL2 Java package org.libsdl.appsoh.
-// Build notes: core-shipwright/README-shipwright.md (soh.o2r must exist in shipwright-src/Android/app/src/main/assets).
-include(":core-shipwright")
-includeBuild("../shipwright-src/Android") {
-    name = "shipwright"
-    dependencySubstitution { substitute(module("com.dishii:app")).using(project(":app")) }
-}
-
 // :core-wwhd (Wii U: The Wind Waker HD only). Native runtime from ../wwhd-src (CMake, local branch `romcore`), no game code in the library;
 // the game is translated on the device from the user's own .wua. See core-wwhd/README-wwhd.md.
 include(":core-wwhd")

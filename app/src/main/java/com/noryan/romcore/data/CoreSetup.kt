@@ -78,13 +78,12 @@ object CoreSetup {
 object GameSpecificCores {
     private val TP_GC_IDS = setOf("GZ2E01", "GZ2P01", "GZ2J01")
     private val WWHD_TITLE = Regex("wind\\s*waker\\s*hd", RegexOption.IGNORE_CASE)
-    private val OOT_TITLE = Regex("ocarina\\s*of\\s*time", RegexOption.IGNORE_CASE)
 
     /** Cores that can only run particular discs, id -> predicate on the 6-char disc game ID (null = unknown ID). */
     private val matchers: Map<String, (String?) -> Boolean> = mapOf("dusklight" to ::isTwilightPrincess)
 
     /** Cores that can only run particular games recognised by name, id -> predicate on the game's title. */
-    private val titleMatchers: Map<String, (String?) -> Boolean> = mapOf("wwhd" to ::isWindWakerHd, "shipwright" to ::isOcarinaOfTime)
+    private val titleMatchers: Map<String, (String?) -> Boolean> = mapOf("wwhd" to ::isWindWakerHd)
 
     fun isTwilightPrincess(gameId: String?): Boolean {
         if (gameId == null) return false
@@ -104,17 +103,6 @@ object GameSpecificCores {
             }
         }.getOrNull()
         return r ?: WWHD_TITLE.containsMatchIn(title)
-    }
-
-    /** Ship of Harkinian runs only the N64 Ocarina of Time ROMs (recognised by title: an N64 ROM has no disc ID the scanner stores). */
-    fun isOcarinaOfTime(title: String?): Boolean {
-        if (title == null) return false
-        val r = runCatching {
-            Class.forName("com.noryan.romcore.core.shipwright.ShipwrightCore").let { c ->
-                c.getMethod("isOcarinaOfTimeTitle", String::class.java).invoke(c.getField("INSTANCE").get(null), title) as? Boolean
-            }
-        }.getOrNull()
-        return r ?: OOT_TITLE.containsMatchIn(title)
     }
 
     fun isGameSpecific(coreId: String) = coreId in matchers || coreId in titleMatchers
