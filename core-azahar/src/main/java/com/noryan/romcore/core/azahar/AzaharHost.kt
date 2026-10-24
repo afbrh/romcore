@@ -1,5 +1,6 @@
 package com.noryan.romcore.core.azahar
 
+import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.hardware.display.DisplayManager
@@ -69,6 +70,39 @@ object AzaharHost {
             .getOrDefault(AzaharCore.ScreenMode.AUTO))
     }
 
+    /** True when this launch uses the RomCore custom screen layouts (a single display), so the Screen Layout row is offered. */
+    @Volatile var customLayout = false
+        private set
+
+    private const val CUSTOM_LAYOUT = 5 // Settings::LayoutOption::CustomLayout on Android
+
+    /** Window size for the layout maths: the game is forced to landscape, so the long side is the width. */
+    private fun windowSize(ctx: Context): Pair<Int, Int> {
+        val b = (ctx.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).maximumWindowMetrics.bounds
+        return maxOf(b.width(), b.height()) to minOf(b.width(), b.height())
+    }
+
+    private fun writeScreenLayout(ctx: Context, mode: AzaharScreenLayouts.Mode, bottomFocus: Boolean) {
+        val (w, h) = windowSize(ctx)
+        val l = AzaharScreenLayouts.compute(mode, bottomFocus, w, h)
+        put(IntSetting.SCREEN_LAYOUT, CUSTOM_LAYOUT)
+        put(IntSetting.LANDSCAPE_TOP_X, l.topSlot.x); put(IntSetting.LANDSCAPE_TOP_Y, l.topSlot.y)
+        put(IntSetting.LANDSCAPE_TOP_WIDTH, l.topSlot.width); put(IntSetting.LANDSCAPE_TOP_HEIGHT, l.topSlot.height)
+        put(IntSetting.LANDSCAPE_BOTTOM_X, l.bottomSlot.x); put(IntSetting.LANDSCAPE_BOTTOM_Y, l.bottomSlot.y)
+        put(IntSetting.LANDSCAPE_BOTTOM_WIDTH, l.bottomSlot.width); put(IntSetting.LANDSCAPE_BOTTOM_HEIGHT, l.bottomSlot.height)
+        put(BooleanSetting.SWAP_SCREEN, bottomFocus)
+        EmulationMenuSettings.swapScreens = bottomFocus
+    }
+
+    /** Menu row / L3: rewrite the rectangles and make the running emulator pick them up (same calls as Azahar's own layout cycling). */
+    fun applyScreenLayout(a: Activity, mode: AzaharScreenLayouts.Mode, bottomFocus: Boolean) {
+        if (!customLayout) return
+        writeScreenLayout(a, mode, bottomFocus)
+        NativeLibrary.reloadSettings()
+        NativeLibrary.swapScreens(bottomFocus, a.windowManager.defaultDisplay.rotation)
+        NativeLibrary.updateFramebuffer(false)
+    }
+
     private fun put(s: IntSetting, v: Int) { s.int = v; SettingsFile.saveFile(SettingsFile.FILE_NAME_CONFIG, s) }
     private fun put(s: BooleanSetting, v: Boolean) { s.boolean = v; SettingsFile.saveFile(SettingsFile.FILE_NAME_CONFIG, s) }
 
@@ -87,8 +121,10 @@ object AzaharHost {
                 put(IntSetting.ORIENTATION_OPTION, landscape)
             }
             AzaharCore.ScreenMode.LARGE_SCREEN -> {
-                put(IntSetting.SCREEN_LAYOUT, 2); put(IntSetting.SMALL_SCREEN_POSITION, 2) // small screen bottom-right
+                // One display: RomCore's own layouts (Screen Layout menu row, L3 swap) as exact custom rectangles.
+                customLayout = true
                 put(BooleanSetting.ENABLE_SECONDARY_DISPLAY, false); put(IntSetting.ORIENTATION_OPTION, landscape)
+                writeScreenLayout(ctx, AzaharScreenLayouts.loadMode(ctx), false)
             }
             AzaharCore.ScreenMode.SIDE_BY_SIDE -> {
                 put(IntSetting.SCREEN_LAYOUT, 3)
@@ -109,13 +145,18 @@ object AzaharHost {
         val s = AzaharSession(a).also { session = it }
         // One call wires the router, the shared menu, hotkeys AND RomCore's loading screen / notices / error panel.
         val h = RomCoreCoreHost.install(a, s, SYSTEM).also { hooks = it }
+        s.comboClock = { h.router.lastHotkeyAtMs }
         // RomCore owns all non-game UI: Azahar's loading layout/toasts/dialogs are patched out (azahar-src, local only)
         // and report through RomCoreBridge instead.
         RomCoreBridge.notice = { h.notice(it) }
         RomCoreBridge.error = { t, m, fatal -> h.error(t, m, fatal) }
         RomCoreBridge.progress = { f, t -> h.setLoadingProgress(f, t) }
         RomCoreBridge.loadingText = { h.setLoadingText(it) }
-        RomCoreBridge.ready = { h.onGameReady() }
+        RomCoreBridge.ready = {
+            h.onGameReady()
+            // The emulator read config.ini before prepare() could rewrite the layout: re-apply it now that the game is running.
+            a.runOnUiThread { runCatching { applyScreenLayout(a, AzaharScreenLayouts.loadMode(a), false) } }
+        }
         RomCoreBridge.flushPending()
 
         // Everything the stock activity would do with keys/sticks goes through RomCore first (contract rule).

@@ -19,7 +19,7 @@ import org.citra.citra_emu.NativeLibrary.ButtonType as B
  * save/load signals while running, so a paused session is briefly un-paused for the operation. These two methods
  * block (<= ~4 s); the menu already calls them off the main thread.
  */
-class AzaharSession(private val activity: Activity) : CoreSession, StateSlotProvider, FastForwardSupport {
+class AzaharSession(private val activity: Activity) : CoreSession, StateSlotProvider, FastForwardSupport, com.noryan.romcore.api.OptionCycleSupport {
     @Volatile var paused = false
         private set
     private val stick = FloatArray(4) // lx, ly, rx, ry; screen convention (down positive) as Azahar expects
@@ -33,6 +33,33 @@ class AzaharSession(private val activity: Activity) : CoreSession, StateSlotProv
         else NativeLibrary.disableTemporaryFrameLimit()
         true
     } catch (_: Throwable) { false }
+
+    // ---- screen layout: "Single Screen" / "Stacked" (see AzaharScreenLayouts); L3 tapped alone swaps the screens ---------------------
+    private var layoutMode = AzaharScreenLayouts.loadMode(activity)
+    private var bottomFocus = false
+    /** Set by the host: uptime of the last hotkey combo (InputRouter.lastHotkeyAtMs), to tell an L3 tap from L3 in a combo. */
+    @Volatile var comboClock: () -> Long = { 0L }
+    private var l3DownAt = 0L
+
+    override val optionLabel = "Screen Layout"
+    override val optionAvailable get() = AzaharHost.customLayout
+    override fun optionValue(): String = layoutMode.label
+    override fun cycleOption(): Boolean = setMode(layoutMode.next())
+    override fun cycleOptionBack(): Boolean = setMode(layoutMode.previous())
+    private fun setMode(m: AzaharScreenLayouts.Mode): Boolean {
+        layoutMode = m
+        AzaharScreenLayouts.saveMode(activity, m)
+        AzaharHost.applyScreenLayout(activity, m, bottomFocus)
+        return true
+    }
+
+    private fun onL3(pressed: Boolean) {
+        if (pressed) { l3DownAt = SystemClock.uptimeMillis(); return }
+        val downAt = l3DownAt.also { l3DownAt = 0L }
+        if (downAt == 0L || comboClock() >= downAt || !AzaharHost.customLayout) return
+        bottomFocus = !bottomFocus
+        AzaharHost.applyScreenLayout(activity, layoutMode, bottomFocus)
+    }
 
     override fun pause() { paused = true; NativeLibrary.pauseEmulation() }
     override fun resume() { paused = false; NativeLibrary.unPauseEmulation() }
@@ -79,6 +106,7 @@ class AzaharSession(private val activity: Activity) : CoreSession, StateSlotProv
     }
 
     override fun injectButton(pad: Pad, pressed: Boolean) {
+        if (pad == Pad.L3) { onL3(pressed); return }
         val id = when (pad) {
             Pad.A -> B.BUTTON_A; Pad.B -> B.BUTTON_B; Pad.X -> B.BUTTON_X; Pad.Y -> B.BUTTON_Y // Nintendo family: 1:1
             Pad.L1 -> B.TRIGGER_L; Pad.R1 -> B.TRIGGER_R
