@@ -41,9 +41,13 @@ internal class ShipwrightSession(private val activity: ShipwrightActivity) : Cor
     private var l2 = 0f
     private var r1 = 0f
     private var r2 = 0f
+    private var xHeld = 0f // X = C-right, Y = C-down: digital presses on the right-stick axes (the C buttons)
+    private var yHeld = 0f
 
     override fun injectButton(pad: Pad, pressed: Boolean) {
         if (pad == Pad.R1) { r1 = if (pressed) 1f else 0f; call { activity.setAxis(ShipwrightInput.AXIS_RTRIG, ShipwrightInput.trigger(r1).toShort()) }; return }
+        if (pad == Pad.X) { xHeld = if (pressed) 1f else 0f; call { rx() }; return }
+        if (pad == Pad.Y) { yHeld = if (pressed) 1f else 0f; call { ry() }; return }
         val b = ShipwrightInput.button(pad) ?: return
         call { activity.setButton(b, pressed) }
     }
@@ -72,8 +76,8 @@ internal class ShipwrightSession(private val activity: ShipwrightActivity) : Cor
     private fun z() = activity.setAxis(ShipwrightInput.AXIS_LTRIG, ShipwrightInput.trigger(maxOf(l2, r2)).toShort())
     private fun lx() = activity.setAxis(ShipwrightInput.AXIS_LEFTX, ShipwrightInput.stick(dirs[2], dirs[3]).toShort())
     private fun ly() = activity.setAxis(ShipwrightInput.AXIS_LEFTY, ShipwrightInput.stick(dirs[0], dirs[1]).toShort())
-    private fun rx() = activity.setAxis(ShipwrightInput.AXIS_RIGHTX, ShipwrightInput.stick(dirs[6], dirs[7]).toShort())
-    private fun ry() = activity.setAxis(ShipwrightInput.AXIS_RIGHTY, ShipwrightInput.stick(dirs[4], dirs[5]).toShort())
+    private fun rx() = activity.setAxis(ShipwrightInput.AXIS_RIGHTX, ShipwrightInput.stick(dirs[6], maxOf(dirs[7], xHeld)).toShort())
+    private fun ry() = activity.setAxis(ShipwrightInput.AXIS_RIGHTY, ShipwrightInput.stick(dirs[4], maxOf(dirs[5], yHeld)).toShort())
 
     private inline fun call(block: () -> Unit) {
         try { block() } catch (_: UnsatisfiedLinkError) { /* native library not loaded yet */ }

@@ -8,7 +8,8 @@ import com.noryan.romcore.api.Pad
  *
  * Harkinian's default bindings (device independent): A = b0, B = b1, Start = b6, L = left shoulder (b9), Z = left trigger axis (a4),
  * R = right trigger axis (a5), D-pad = b11-14, main stick = left stick, C buttons = right stick directions.
- * So: Pad.A/B 1:1 (N64 A/B), L1 = L, R1 = R, L2 or R2 = Z, Start, D-pad, sticks (right stick = the four C buttons).
+ * So: Pad.A/B 1:1 (N64 A/B), L1 = L, R1 = R, L2 or R2 = Z, Start, D-pad, sticks (right stick = the four C buttons),
+ * plus X = C-right and Y = C-down (driven onto the right-stick axes by the session).
  */
 internal object ShipwrightInput {
     const val SOUTH = 0; const val EAST = 1; const val START = 6
@@ -31,7 +32,8 @@ internal object ShipwrightInput {
         Pad.DPAD_DOWN -> DPAD_DOWN
         Pad.DPAD_LEFT -> DPAD_LEFT
         Pad.DPAD_RIGHT -> DPAD_RIGHT
-        // R1 (N64 R) and L2/R2 (N64 Z) go through the trigger axes; X/Y/SELECT/L3/R3 have no default N64 binding
+        // R1 (N64 R), L2/R2 (N64 Z) go through the trigger axes and X/Y (C-right / C-down) through the right-stick axes (session);
+        // SELECT/L3/R3 have no N64 equivalent
         else -> null
     }
 

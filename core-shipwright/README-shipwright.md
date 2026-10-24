@@ -58,7 +58,7 @@ builds, so `Android/app/consumer-rules.pro` keeps `org.libsdl.appsoh.**` and `co
 
 `InputRouter -> ShipwrightSession.injectButton/injectAxis -> MainActivity.setButton/setAxis (JNI) -> SDL2 virtual joystick`
 (libultraship `attachController`, standard SDL layout). Mapping: A/B 1:1, **L1 = L, R1 = R, L2 or R2 = Z**, Start, D-pad,
-left stick = control stick, right stick = the four C buttons; X/Y/Select/L3/R3 unused. The physical controller never reaches SDL
+left stick = control stick, right stick = the four C buttons, **X = C-right, Y = C-down** (also on the right-stick axes); Select/L3/R3 unused. The physical controller never reaches SDL
 (`ShipwrightActivity` consumes every key and joystick motion).
 
 ## Menu / session
