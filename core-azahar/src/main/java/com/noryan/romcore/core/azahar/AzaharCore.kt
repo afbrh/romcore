@@ -70,6 +70,7 @@ object AzaharCore : CoreDescriptor {
 
     override fun launchIntent(ctx: Context, request: LaunchRequest): Intent {
         val file = request.romPath.substringAfterLast('/')
+        AzaharPatches.install(ensureUserDir(ctx), request.romPath)
         val game = Game(
             valid = true,
             title = file.substringBeforeLast('.'),

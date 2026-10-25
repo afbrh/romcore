@@ -159,6 +159,17 @@ object AzaharHost {
         }
         RomCoreBridge.flushPending()
 
+        // Debug only: `adb shell run-as com.noryan.romcore touch files/perflog` makes the emulator log FPS/speed once a second (tag RCPerf).
+        if (File(a.filesDir, "perflog").exists()) Thread {
+            while (!a.isFinishing) {
+                runCatching {
+                    val p = NativeLibrary.getPerfStats()
+                    android.util.Log.i("RCPerf", String.format("sys=%.1f fps=%.1f speed=%.0f%% frame=%.1fms", p[0], p[1], p[2] * 100, p[3] * 1000))
+                }
+                Thread.sleep(1000)
+            }
+        }.start()
+
         // Everything the stock activity would do with keys/sticks goes through RomCore first (contract rule).
         val orig = a.window.callback
         a.window.callback = object : WindowCallbackWrapper(orig) {
