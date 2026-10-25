@@ -24,7 +24,7 @@ class WatermelonDsSession(
     context: Context,
     romPath: String,
     private val activity: EmulatorActivity,
-) : CoreSessionBase(context, WatermelonDsCore.id, romPath), FastForwardSupport, com.noryan.romcore.api.OptionCycleSupport {
+) : CoreSessionBase(context, WatermelonDsCore.id, romPath), FastForwardSupport, com.noryan.romcore.api.OptionCycleSupport, com.noryan.romcore.api.ToggleOptionSupport {
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var paused = false
 
@@ -40,14 +40,16 @@ class WatermelonDsSession(
     } catch (_: Throwable) { false }
 
     // ---- screen layout: "Single Screen" (one screen fills the display) / "Stacked" (big screen on top, small one below) ----------
-    // The choice is remembered (own prefs file: this process only); L3 swaps which screen is shown / big (not remembered).
+    // The choice is remembered (own prefs file: this process only); L3 or R3 swaps which screen is shown / big (not remembered; the quick menu row Swap Screens can turn that off).
     // The layout itself is built in the WatermelonDS fork (RomCoreScreenLayouts), driven by RomCoreBridge.screenLayout.
     private val layoutPrefs = context.getSharedPreferences("romcore_ds", Context.MODE_PRIVATE)
     private var layoutMode = if (layoutPrefs.getString("screen_layout", null) == "single") RomCoreScreenLayouts.Mode.SINGLE else RomCoreScreenLayouts.Mode.STACKED
     private var bottomFocus = false
-    /** Set by the host: uptime of the last hotkey combo (InputRouter.lastHotkeyAtMs), to tell an L3 tap from L3 in a combo. */
-    @Volatile var comboClock: () -> Long = { 0L }
-    private var l3DownAt = 0L
+    private val swapShortcut = com.noryan.romcore.api.SwapScreensShortcut(context, "romcore_ds") { bottomFocus = !bottomFocus; publishLayout() }
+    /** Set by the host: uptime of the last hotkey combo (InputRouter.lastHotkeyAtMs), to tell an L3/R3 tap from one in a combo. */
+    var comboClock: () -> Long
+        get() = swapShortcut.comboClock
+        set(v) { swapShortcut.comboClock = v }
 
     init { publishLayout() }
 
@@ -63,14 +65,9 @@ class WatermelonDsSession(
     }
     override fun cycleOptionBack(): Boolean = cycleOption()
 
-    /** L3 tapped on its own (not as part of a hotkey combo such as L3+R1): swap the screens. */
-    private fun onL3(pressed: Boolean) {
-        if (pressed) { l3DownAt = android.os.SystemClock.uptimeMillis(); return }
-        val downAt = l3DownAt.also { l3DownAt = 0L }
-        if (downAt == 0L || comboClock() >= downAt) return
-        bottomFocus = !bottomFocus
-        publishLayout()
-    }
+    override val toggleLabel = "Swap Screens"
+    override fun toggleValue() = swapShortcut.enabled
+    override fun toggle() = swapShortcut.toggle()
 
     override fun pause() { paused = true; runCatching { MelonEmulator.pauseEmulation() } }
     override fun resume() { paused = false; runCatching { MelonEmulator.resumeEmulation() } }
@@ -121,7 +118,7 @@ class WatermelonDsSession(
             ZeldaStickMove({ x, y -> MelonEmulator.onScreenTouch(x, y) }, { MelonEmulator.onScreenRelease() }) else null
 
     override fun injectButton(pad: Pad, pressed: Boolean) {
-        if (pad == Pad.L3) { onL3(pressed); return }
+        if (swapShortcut.onButton(pad, pressed)) return
         zelda?.let { z ->
             when (pad) {
                 Pad.SELECT -> z.select(pressed)
