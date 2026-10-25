@@ -109,7 +109,8 @@ object RomCoreCrashGuard {
         Process.killProcess(myPid)
     }
 
-    data class Report(val marker: RunMarker, val reason: String?)
+    /** [diedAt]: wall-clock time the system recorded for the process exit, when it reported one. */
+    data class Report(val marker: RunMarker, val reason: String?, val diedAt: Long? = null)
 
     /**
      * Shell side: find games whose process died without a clean close, report each once (tombstones their launch so a
@@ -137,7 +138,7 @@ object RomCoreCrashGuard {
                 File(ctx.filesDir, "romcore_crash.log").also { if (it.length() > 64_000) it.delete() }
                     .appendText("${java.util.Date()} core=${m.core} title='${m.title}' pid=${m.pid} reason=${reason ?: "unknown"} desc='${info?.description ?: ""}'\n")
             }
-            Report(m, reason)
+            Report(m, reason, info?.timestamp)
         }
     }
 

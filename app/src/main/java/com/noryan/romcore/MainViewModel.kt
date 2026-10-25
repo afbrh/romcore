@@ -13,6 +13,7 @@ import com.noryan.romcore.api.CoreDescriptor
 import com.noryan.romcore.api.CoreRegistry
 import com.noryan.romcore.api.LaunchRequest
 import com.noryan.romcore.api.System
+import com.noryan.romcore.api.crash.AutoRetry
 import com.noryan.romcore.api.crash.CrashText
 import com.noryan.romcore.api.crash.RomCoreCrashGuard
 import com.noryan.romcore.api.save.SaveMigration
@@ -111,7 +112,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val reports = withContext(Dispatchers.IO) { runCatching { RomCoreCrashGuard.scan(ctx) }.getOrDefault(emptyList()) }
             val r = reports.firstOrNull() ?: return@launch
-            crashNotice.value = CrashText.title(r.marker) to CrashText.hint(r.reason)
+            val retryPrefs = ctx.getSharedPreferences("romcore_auto_retry", Context.MODE_PRIVATE)
+            val now = java.lang.System.currentTimeMillis()
+            val retry = AutoRetry.shouldRetry(r.reason, r.marker.startedAt, r.diedAt, r.marker.title,
+                retryPrefs.getString("title", null), retryPrefs.getLong("at", 0), now)
+            val game = if (retry) withContext(Dispatchers.IO) { dao.all().firstOrNull { it.title == r.marker.title } } else null
+            if (game != null) {
+                // Killed for low memory right after starting: try the same game once more, automatically.
+                retryPrefs.edit().putString("title", r.marker.title).putLong("at", now).apply()
+                crashNotice.value = CrashText.title(r.marker) to "Out of memory. Starting it again automatically..."
+                launch(ctx, game)
+            } else crashNotice.value = CrashText.title(r.marker) to CrashText.hint(r.reason)
         }
     }
 
@@ -427,6 +438,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 // Idempotent copy of the user's BIOS / keys / firmware into the cores before they start.
                 if (prefs.biosDir != null) withContext(Dispatchers.IO) { runCatching { BiosImporter.import(ctx, File(prefs.biosDir!!)) } }
+                if (core.id in LaunchMemory.HEAVY_CORES && LaunchMemory.isLow()) {
+                    toast(ctx, "Freeing up memory first...")
+                    LaunchMemory.awaitRoom() // gives up after a few seconds and launches anyway
+                }
                 val r = RomResolver.resolve(ctx, g)
                 if (r == null) { toast(ctx, "Can't open ROM file"); return@launch }
                 if (r.kind == "fd") { toast(ctx, "Turn on ALL FILES ACCESS in SETTINGS so this core can open the ROM"); return@launch }
@@ -439,6 +454,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val intent = SaveRoot.stamp(ctx, RomCoreCrashGuard.stamp(core.launchIntent(ctx, req), core.id, g.title), gameKey)
                 crashNotice.value = null
                 withContext(Dispatchers.IO) { dao.markPlayed(g.id, java.lang.System.currentTimeMillis()) }
+                if (ctx !is android.app.Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 ctx.startActivity(intent)
             } catch (t: Throwable) {
                 toast(ctx, "Launch failed: ${t.message ?: t.javaClass.simpleName}")
