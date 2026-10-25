@@ -2,6 +2,10 @@ package com.noryan.romcore.core.eden
 
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.SurfaceHolder
+import android.view.SurfaceView
+import android.view.View
+import android.view.ViewGroup
 import android.view.Window
 import androidx.appcompat.view.WindowCallbackWrapper
 import com.noryan.romcore.api.RomCoreCoreHost
@@ -39,12 +43,50 @@ object EdenHost {
             override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
                 h.dispatchMotion(event) || super.dispatchGenericMotionEvent(event)
         }
+        watchGameSurface(activity)
         // Eden's own Back handling (drawer) never runs: key Back is consumed by hooks.dispatchKey above and the
         // predictive/gesture back is taken by the PRIORITY_OVERLAY callback RomCoreMenu.attach registers.
     }
 
     /** Called from the lifecycle hook when the Activity pauses/destroys. */
-    fun onPause() { hooks?.onPause() }
+    fun onPause() { hooks?.onPause(); session?.onAway() }
+
+    /** Called from the lifecycle hook when the Activity resumes. */
+    fun onResume() { session?.onBack(hooks?.menu?.isOpen == true) }
+
+    /**
+     * Watches the game SurfaceView (Eden's fragment inflates it after the Activity is created, so look for it until it exists)
+     * to learn when its surface is destroyed and when a new one arrives.
+     */
+    private fun watchGameSurface(activity: EmulationActivity, tries: Int = 100) {
+        val view = findSurfaceView(activity.window.decorView)
+        if (view == null) {
+            if (tries > 0) activity.window.decorView.postDelayed({ if (!activity.isDestroyed) watchGameSurface(activity, tries - 1) }, 100)
+            return
+        }
+        // Switch games are 16:9: on a taller (more square) screen Eden centres the picture with a bar above and below. Pin the picture
+        // to the top edge instead, like the GBA picture, by sliding the surface up by the top bar's height (all the spare room is then
+        // below the picture).
+        fun hugTop() {
+            val bar = (view.height - view.width * 9 / 16) / 2
+            view.translationY = if (bar > 2) -bar.toFloat() else 0f
+        }
+        view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> hugTop() }
+        hugTop()
+        view.holder.addCallback(object : SurfaceHolder.Callback {
+            override fun surfaceCreated(holder: SurfaceHolder) {}
+            override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+                session?.onSurfaceBack(holder.surface, hooks?.menu?.isOpen == true)
+            }
+            override fun surfaceDestroyed(holder: SurfaceHolder) { session?.onSurfaceLost() }
+        })
+    }
+
+    private fun findSurfaceView(v: View): SurfaceView? {
+        if (v is SurfaceView) return v
+        if (v is ViewGroup) for (i in 0 until v.childCount) findSurfaceView(v.getChildAt(i))?.let { return it }
+        return null
+    }
 
     fun detach(@Suppress("UNUSED_PARAMETER") activity: EmulationActivity) {
         hooks?.onDestroy(); hooks = null; session = null

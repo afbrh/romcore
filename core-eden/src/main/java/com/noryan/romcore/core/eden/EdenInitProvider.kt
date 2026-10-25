@@ -52,7 +52,7 @@ class EdenInitProvider : ContentProvider() {
             }
             override fun onActivityCreated(a: Activity, s: Bundle?) {}
             override fun onActivityStarted(a: Activity) {}
-            override fun onActivityResumed(a: Activity) {}
+            override fun onActivityResumed(a: Activity) { if (a is EmulationActivity) EdenHost.onResume() }
             override fun onActivityPaused(a: Activity) { if (a is EmulationActivity) EdenHost.onPause() }
             override fun onActivityStopped(a: Activity) {}
             override fun onActivitySaveInstanceState(a: Activity, o: Bundle) {}

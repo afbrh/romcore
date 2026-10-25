@@ -35,6 +35,7 @@ object EdenCore : CoreDescriptor {
         // Eden resolves content:// URIs natively (its own FileUtil/openContentUri) and also accepts plain paths.
         val path = request.romUri ?: request.romPath
         val title = request.romPath.substringAfterLast('/').substringBeforeLast('.')
+        EdenMods.install(ctx)
         // EmulationFragment reads the game from the nav-graph argument "game" (populated from intent.extras), NOT from
         // EmulationActivity.EXTRA_SELECTED_GAME. Do not set intent.data: that routes through Eden's own library-scan metadata.
         return Intent(ctx, EmulationActivity::class.java).apply {

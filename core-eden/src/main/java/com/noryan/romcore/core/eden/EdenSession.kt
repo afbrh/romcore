@@ -29,7 +29,41 @@ class EdenSession(private val context: android.content.Context) : CoreSession, S
     private val stick = FloatArray(4) // lx, ly, rx, ry (y: up positive, as Eden's overlay joystick reports)
 
     override fun pause() { if (NativeLibrary.isRunning() && !NativeLibrary.isPaused()) NativeLibrary.pauseEmulation() }
-    override fun resume() { if (NativeLibrary.isPaused()) NativeLibrary.unpauseEmulation() }
+    override fun resume() {
+        // Never run the guest against a destroyed game surface: the renderer would present to a dead window and abort.
+        if (surfaceLost) { resumeWhenSurface = true; return }
+        if (NativeLibrary.isPaused()) NativeLibrary.unpauseEmulation()
+    }
+
+    // ---- screen off/on, app switch ----------------------------------------------------------------------------------
+    // Eden pauses its own state machine on Activity.onPause only the first time (and its paused-screen tap to resume is
+    // patched out), and its Surface callbacks leave the emulator holding the destroyed window. So: freeze the guest when the
+    // Activity goes away, hand the native renderer the NEW surface when the game surface comes back, and only then continue.
+    @Volatile private var surfaceLost = false
+    @Volatile private var resumeWhenSurface = false
+
+    /** Activity.onPause. */
+    fun onAway() {
+        if (NativeLibrary.isRunning() && !NativeLibrary.isPaused()) { NativeLibrary.pauseEmulation(); resumeWhenSurface = true }
+    }
+
+    /** The game SurfaceView's surface was destroyed (screen off / Activity stopped). */
+    fun onSurfaceLost() { surfaceLost = true }
+
+    /** The game SurfaceView has a (new) surface. [menuOpen]: the RomCore menu is up, so it keeps the guest paused until it closes. */
+    fun onSurfaceBack(surface: android.view.Surface, menuOpen: Boolean) {
+        if (surfaceLost && surface.isValid) { NativeLibrary.surfaceChanged(surface); surfaceLost = false }
+        continueIfAway(menuOpen)
+    }
+
+    /** Activity.onResume (the surface may still be gone: then [onSurfaceBack] continues later). */
+    fun onBack(menuOpen: Boolean) = continueIfAway(menuOpen)
+
+    private fun continueIfAway(menuOpen: Boolean) {
+        if (surfaceLost || !resumeWhenSurface) return
+        resumeWhenSurface = false
+        if (!menuOpen && NativeLibrary.isPaused()) NativeLibrary.unpauseEmulation()
+    }
 
     // Saved normal-speed state, valid while fast forward is on.
     private var ffOn = false
@@ -88,7 +122,29 @@ class EdenSession(private val context: android.content.Context) : CoreSession, S
         main.postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, 350)
     }
 
+    // Link's Awakening ignores the d-pad for walking (it only reads the stick), so there the d-pad drives the left stick.
+    private val dpadMovesStick = LINKS_AWAKENING.containsMatchIn(
+        (context as? android.app.Activity)?.intent?.getStringExtra("romcore.title").orEmpty())
+    private val dpad = IntArray(2) // x: left -1 / right +1, y: down -1 / up +1 (stick convention above)
+
+    private fun pushLeftStick() {
+        var x = if (dpad[0] != 0) dpad[0].toFloat() else stick[0]
+        var y = if (dpad[1] != 0) dpad[1].toFloat() else stick[1]
+        if (dpad[0] != 0 && dpad[1] != 0) { x *= DIAGONAL; y *= DIAGONAL } // stay on the unit circle like a real stick
+        NativeInput.onOverlayJoystickEvent(0, NativeAnalog.LStick, x, y)
+    }
+
     override fun injectButton(pad: Pad, pressed: Boolean) {
+        if (dpadMovesStick) {
+            when (pad) {
+                Pad.DPAD_LEFT -> dpad[0] = if (pressed) -1 else if (dpad[0] < 0) 0 else dpad[0]
+                Pad.DPAD_RIGHT -> dpad[0] = if (pressed) 1 else if (dpad[0] > 0) 0 else dpad[0]
+                Pad.DPAD_UP -> dpad[1] = if (pressed) 1 else if (dpad[1] > 0) 0 else dpad[1]
+                Pad.DPAD_DOWN -> dpad[1] = if (pressed) -1 else if (dpad[1] < 0) 0 else dpad[1]
+                else -> {}
+            }
+            if (pad == Pad.DPAD_LEFT || pad == Pad.DPAD_RIGHT || pad == Pad.DPAD_UP || pad == Pad.DPAD_DOWN) { pushLeftStick(); return }
+        }
         val state = if (pressed) NativeInput.ButtonState.PRESSED else NativeInput.ButtonState.RELEASED
         val b = button(pad) ?: return
         NativeInput.onOverlayButtonEvent(0, b, state)
@@ -105,14 +161,14 @@ class EdenSession(private val context: android.content.Context) : CoreSession, S
             Pad.R2 -> { NativeInput.onOverlayButtonEvent(0, NativeButton.ZR, if (v > 0.5f) 1 else 0); return }
             else -> return
         }
-        if (pad.name.startsWith("LS")) NativeInput.onOverlayJoystickEvent(0, NativeAnalog.LStick, stick[0], stick[1])
+        if (pad.name.startsWith("LS")) pushLeftStick()
         else NativeInput.onOverlayJoystickEvent(0, NativeAnalog.RStick, stick[2], stick[3])
     }
 
     /** Release everything (used when the menu opens so nothing stays held in the guest). */
     fun releaseAll() {
         Pad.entries.forEach { if (button(it) != null) injectButton(it, false) }
-        stick.fill(0f)
+        stick.fill(0f); dpad.fill(0)
         NativeInput.onOverlayJoystickEvent(0, NativeAnalog.LStick, 0f, 0f)
         NativeInput.onOverlayJoystickEvent(0, NativeAnalog.RStick, 0f, 0f)
     }
@@ -127,5 +183,10 @@ class EdenSession(private val context: android.content.Context) : CoreSession, S
         Pad.DPAD_LEFT -> NativeButton.DLeft; Pad.DPAD_RIGHT -> NativeButton.DRight
         Pad.HOME -> NativeButton.Home
         else -> null
+    }
+
+    private companion object {
+        val LINKS_AWAKENING = Regex("link'?s\\s*awakening", RegexOption.IGNORE_CASE)
+        const val DIAGONAL = 0.7071f
     }
 }
