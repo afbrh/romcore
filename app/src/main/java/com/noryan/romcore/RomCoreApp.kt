@@ -12,7 +12,7 @@ import dagger.hilt.android.HiltAndroidApp
 
 /**
  * One Application class serves every process of the app (the main shell and the per-core game processes
- * :dolphin, :ppsspp, ...). Only the main process builds the registry/database; core processes stay light.
+ * :dolphin, :eden, ...). Only the main process builds the registry/database; core processes stay light.
  */
 @HiltAndroidApp
 class RomCoreApp : RomCoreHiltApplication() {

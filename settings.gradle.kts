@@ -3,7 +3,7 @@ dependencyResolutionManagement { repositories { google(); mavenCentral() } }
 rootProject.name = "RomCore"
 include(":app", ":romcore-api")
 // Each core agent adds its own line here when its module first builds:
-// include(":core-retroarch", ":core-ppsspp", ":core-dolphin", ":core-primehack", ":core-cemu",
+// include(":core-retroarch", ":core-dolphin", ":core-primehack", ":core-cemu",
 //         ":core-eden", ":core-azahar", ":core-watermelonds", ":core-armsx2")
 
 // :core-eden (Switch). Eden's android project is consumed as a composite build (its :app was converted to a library).
@@ -62,9 +62,6 @@ includeBuild("../primehack-romcore-src/Source/Android") {
     name = "primehack"
     dependencySubstitution { substitute(module("romcore.primehack:app")).using(project(":app")) }
 }
-
-// :core-ppsspp (PSP). PPSSPP (GPL-2.0+) native + Java built in-module from ../ppsspp-src (branch `romcore`); see core-ppsspp/patches.
-include(":core-ppsspp")
 
 // :core-dusklight (GameCube, The Legend of Zelda: Twilight Princess ONLY). Dusklight (CC0-1.0, decomp-based native port)
 // from ../dusklight-src (local branch `romcore-local`, never pushed): its platforms/android module is a library

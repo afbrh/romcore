@@ -91,7 +91,7 @@ object CrashText {
         markers.filter { m -> alive.none { it.first == m.pid && it.second.endsWith(m.process) } }
 
     fun coreLabel(core: String): String = when (core) {
-        "retroarch" -> "RetroArch"; "ppsspp" -> "PPSSPP"; "primehack" -> "PrimeHack"; "armsx2" -> "ARMSX2"
+        "retroarch" -> "RetroArch"; "primehack" -> "PrimeHack"; "armsx2" -> "ARMSX2"
         "watermelonds" -> "WatermelonDS"; "" -> "core"; else -> core.replaceFirstChar { it.uppercase() }
     }
 

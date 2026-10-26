@@ -41,7 +41,7 @@ class CrashLogicTest {
         assertEquals(1, CrashText.stale(listOf(m(10)), setOf(10 to "com.noryan.romcore:dolphin")).size)
     }
     @Test fun texts() {
-        assertEquals("GAME CLOSED UNEXPECTEDLY: X (PPSSPP)", CrashText.title(RunMarker(":ppsspp", "i", 1, "ppsspp", "X", 0)))
+        assertEquals("GAME CLOSED UNEXPECTEDLY: X (Dolphin)", CrashText.title(RunMarker(":dolphin", "i", 1, "dolphin", "X", 0)))
         assertTrue(CrashText.hint("Native crash (signal 11)").startsWith("Native crash"))
     }
     @Test fun userKillsAreNotCrashes() {

@@ -17,7 +17,6 @@ object SystemDetector {
         put(System.WII, "wbfs", "wad")
         put(System.WIIU, "wux", "wud", "wua", "rpx")
         put(System.SWITCH, "nsp", "xci", "nsz", "xcz")
-        put(System.PSP, "pbp")
         put(System.GENESIS, "md", "gen", "smd", "32x")
         put(System.MASTER_SYSTEM, "sms", "gg")
         put(System.PCE, "pce", "sgx")
@@ -25,11 +24,11 @@ object SystemDetector {
     }
 
     /** Extensions that need folder/content hints. */
-    /** Compressed/disc containers shared by several systems: each core's sniff() decides (cso: PSP or PS2, gz: PS2/GC, ...). */
+    /** Compressed/disc containers shared by several systems: each core's sniff() decides (cso: PS2, gz: PS2/GC, ...). */
     val AMBIGUOUS = setOf("iso", "bin", "cue", "chd", "img", "mdf", "ciso", "rvz", "wia", "tgc", "zip", "7z", "dol", "elf", "gdi", "cdi",
         "cso", "zso", "gz")
     /** Detector revision: bump to re-detect already-scanned games after a detection change. */
-    const val VERSION = 3
+    const val VERSION = 4
 
     /** (normalised folder name -> system); exact match for short names, `contains` for long ones. */
     private val FOLDER_EXACT: List<Pair<Set<String>, System>> = listOf(
@@ -37,7 +36,6 @@ object SystemDetector {
         setOf("wii", "nintendowii") to System.WII,
         setOf("gc", "gcn", "gamecube", "ngc", "nintendogamecube", "dolphin") to System.GAMECUBE,
         setOf("ps2", "playstation2", "sonyplaystation2", "sonyps2", "pcsx2", "aethersx2", "armsx2") to System.PS2,
-        setOf("psp", "playstationportable", "sonyplaystationportable", "ppsspp") to System.PSP,
         setOf("psx", "ps1", "psone", "playstation", "sonyplaystation", "sonyps1") to System.PS1,
         setOf("n64", "nintendo64") to System.N64,
         setOf("nes", "famicom", "nintendoentertainmentsystem") to System.NES,
@@ -110,7 +108,6 @@ object SystemDetector {
             builtinSniff(h, ext, size)?.let { return it }
         }
         if (ext == "rvz" || ext == "ciso" || ext == "dol" || ext == "wia" || ext == "tgc") return System.GAMECUBE
-        if (ext == "cso" || ext == "zso") return System.PSP
         if (ext == "gz") return System.PS2
         return null
     }
@@ -130,7 +127,6 @@ object SystemDetector {
         if (h.size >= 4 && ascii(h, 0, 4) == "WBFS") return System.WII
         if (ascii(h, 0x8001, 5) == "CD001") {
             val sysId = ascii(h, 0x8008, 32)?.trim() ?: ""
-            if (sysId.startsWith("PSP GAME")) return System.PSP
             if (sysId.startsWith("PLAYSTATION")) return if (size > 750L * 1024 * 1024) System.PS2 else System.PS1
         }
         // Raw 2352-byte sector BIN images: sync pattern then ISO at offset 0x9319 or so.

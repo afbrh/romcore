@@ -11,12 +11,12 @@ import com.noryan.romcore.api.CoreRegistry
  */
 object CoreBootstrap {
     private const val TAG = "CoreBootstrap"
-    val CORE_IDS = listOf("retroarch", "ppsspp", "dolphin", "primehack", "cemu", "eden", "azahar", "watermelonds", "armsx2", "dusklight", "wwhd")
+    val CORE_IDS = listOf("retroarch", "dolphin", "primehack", "cemu", "eden", "azahar", "watermelonds", "armsx2", "dusklight", "wwhd")
 
     private val DISPLAY_CASE = mapOf(
         "retroarch" to listOf("RetroArch", "Retroarch"), "primehack" to listOf("PrimeHack", "Primehack"),
         "watermelonds" to listOf("WatermelonDs", "WatermelonDS", "Watermelonds"), "armsx2" to listOf("ArmSX2", "Armsx2"),
-        "ppsspp" to listOf("PPSSPP", "Ppsspp"), "wwhd" to listOf("Wwhd")
+        "wwhd" to listOf("Wwhd")
     )
 
     /** Name for an engine id when it has no registered descriptor (Settings "NOT INSTALLED" list). */
@@ -85,6 +85,6 @@ object CoreBootstrap {
         "azahar" to "Azahar 95db543",
         "armsx2" to "ARMSX2 0d7a2b9",
         "dusklight" to "Dusklight b245c6b (romcore patches)", "wwhd" to "WindWakerHD-Android-Plus 1.11.1 (romcore)",
-        "dolphin" to "Dolphin mainline", "eden" to "Eden v0.2.0-371", "ppsspp" to "PPSSPP", "watermelonds" to "WatermelonDS 0.8.0.rc2",
+        "dolphin" to "Dolphin mainline", "eden" to "Eden v0.2.0-371", "watermelonds" to "WatermelonDS 0.8.0.rc2",
     )
 }

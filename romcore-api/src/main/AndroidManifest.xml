@@ -24,13 +24,6 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a running game alive while the screen is off or the app is in the background" />
         </service>
         <service
-            android:name="com.noryan.romcore.api.keepalive.KeepAlivePpsspp"
-            android:process=":ppsspp"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a running game alive while the screen is off or the app is in the background" />
-        </service>
-        <service
             android:name="com.noryan.romcore.api.keepalive.KeepAliveArmsx2"
             android:process=":armsx2"
             android:exported="false"

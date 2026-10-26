@@ -44,7 +44,6 @@ open class KeepAliveService : Service() {
 class KeepAliveRetroarch : KeepAliveService()
 class KeepAliveDolphin : KeepAliveService()
 class KeepAliveAzahar : KeepAliveService()
-class KeepAlivePpsspp : KeepAliveService()
 class KeepAliveArmsx2 : KeepAliveService()
 class KeepAliveDusklight : KeepAliveService()
 class KeepAliveWwhd : KeepAliveService()
@@ -56,7 +55,7 @@ object KeepAlive {
     /** Service for a core process name such as "com.noryan.romcore:retroarch". Eden has its own foreground service. */
     fun serviceFor(process: String): Class<out KeepAliveService>? = when (process.substringAfter(':', "")) {
         "retroarch" -> KeepAliveRetroarch::class.java; "dolphin" -> KeepAliveDolphin::class.java
-        "azahar" -> KeepAliveAzahar::class.java; "ppsspp" -> KeepAlivePpsspp::class.java
+        "azahar" -> KeepAliveAzahar::class.java
         "armsx2" -> KeepAliveArmsx2::class.java; "dusklight" -> KeepAliveDusklight::class.java
         "wwhd" -> KeepAliveWwhd::class.java; "cemu" -> KeepAliveCemu::class.java
         "primehack" -> KeepAlivePrimehack::class.java; "melonds" -> KeepAliveMelonds::class.java
@@ -75,5 +74,5 @@ object KeepAlive {
     }
 
     /** Process names that have a service, for the manifest. */
-    val processes = listOf("retroarch", "dolphin", "azahar", "ppsspp", "armsx2", "dusklight", "wwhd", "cemu", "primehack", "melonds")
+    val processes = listOf("retroarch", "dolphin", "azahar", "armsx2", "dusklight", "wwhd", "cemu", "primehack", "melonds")
 }

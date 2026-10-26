@@ -77,7 +77,7 @@ interface ToggleOptionSupport {
 
 /** Static description of an embedded core, registered with CoreRegistry. */
 interface CoreDescriptor {
-    val id: String                       // "dolphin", "ppsspp", ...
+    val id: String                       // "dolphin", "eden", ...
     val displayName: String
     val systems: Set<System>
     /** Engine version string for Settings; override per core. */
