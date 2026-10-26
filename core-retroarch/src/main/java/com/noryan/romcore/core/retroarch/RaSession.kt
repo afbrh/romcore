@@ -181,8 +181,8 @@ internal class RaSession(
         }.apply { name = "romcore-ra-reaper"; isDaemon = true }.start()
     }
 
-    // Metroid Fusion: X fires B + R1 together (charge-beam / missile shortcut), nothing else is remapped.
-    private val xIsBPlusR1 = system == System.GBA && FUSION.containsMatchIn(romKey)
+    // Metroid Fusion and Zero Mission: X fires B + R1 together (charge-beam / missile shortcut), nothing else is remapped.
+    private val xIsBPlusR1 = system == System.GBA && XBR1_GAMES.containsMatchIn(romKey)
 
     override fun injectButton(pad: Pad, pressed: Boolean) {
         if (xIsBPlusR1 && pad == Pad.X) {
@@ -221,7 +221,7 @@ internal class RaSession(
 
     companion object {
         private const val TAG = "RomCoreRa"
-        private val FUSION = Regex("metroid\\s*-?\\s*fusion", RegexOption.IGNORE_CASE)
+        private val XBR1_GAMES = Regex("metroid\\s*-?\\s*(fusion|zero\\s*mission)", RegexOption.IGNORE_CASE)
 
         /** Canonical (Nintendo-label) pad -> RETRO_DEVICE_ID_JOYPAD_*. Face buttons are 1:1 for every family. */
         fun retroId(p: Pad): Int? = when (p) {
