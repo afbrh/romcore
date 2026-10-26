@@ -121,6 +121,21 @@ internal class RaSession(
         return ok
     }
 
+    /**
+     * Game went to the background (Home, screen off): keep a resume point so a system kill costs nothing. Written beside slot 0
+     * and renamed in, so a kill mid-write never leaves a torn state. Silent: no notices, no slot-list refresh.
+     */
+    fun autosaveForResume(): Boolean {
+        if (!ready) return false
+        val f = statePath(0)
+        f.parentFile?.mkdirs()
+        val tmp = File(f.parentFile, "slot0.tmp")
+        val ok = RaBridge.request(RaBridge.OP_SAVE, tmp.absolutePath, 4000) && tmp.length() > 0 && tmp.renameTo(f)
+        if (ok) com.noryan.romcore.api.menu.ResumePoint.set(context, coreId, romPath) else tmp.delete()
+        android.util.Log.i(TAG, "resume point ok=$ok size=${f.length()}")
+        return ok
+    }
+
     override fun loadState(slot: Int): Boolean = loadState(slot, true)
 
     fun loadState(slot: Int, notify: Boolean): Boolean {
@@ -168,6 +183,7 @@ internal class RaSession(
                 android.util.Log.i(TAG, "close: $name ok=$ok at +${android.os.SystemClock.uptimeMillis() - t0}ms")
             }
             if (ready) step("autosave") { RaBridge.request(RaBridge.OP_SAVE, statePath(0).also { it.parentFile?.mkdirs() }.absolutePath, 2500) }
+            com.noryan.romcore.api.menu.ResumePoint.clear(context, coreId, romPath) // clean close: nothing to restore after this
             step("flush") { RaBridge.request(RaBridge.OP_FLUSH, null, 1000) }
             step("quit") { RaBridge.request(RaBridge.OP_QUIT, null, 500) }
             runCatching { RaBridge.nativeReleaseAll() }

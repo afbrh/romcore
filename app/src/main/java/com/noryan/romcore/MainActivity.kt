@@ -28,6 +28,7 @@ class MainActivity : ComponentActivity() {
         // Controllers don't touch the screen; keep the display awake so input focus isn't lost.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         applyDebugRoots(intent)
+        if (savedInstanceState == null) returnToRunningGame(intent)
         setContent { RomCoreTheme { RomCoreRoot(vm) } }
         watchForAccessGrant()
     }
@@ -55,9 +56,16 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
-        super.onNewIntent(intent); applyDebugRoots(intent); vm.checkCrashes()
+        super.onNewIntent(intent); applyDebugRoots(intent); vm.checkCrashes(); returnToRunningGame(intent)
         // Home pressed while RomCore is the home app: come back to the plain games list, not a half-open Settings/editor.
         if (intent.hasCategory(android.content.Intent.CATEGORY_HOME)) vm.showHome()
+    }
+
+    /** The launcher icon (not Home) while a game is alive in the background takes you back to that game, not the list. */
+    private fun returnToRunningGame(i: android.content.Intent?) {
+        if (i?.action != android.content.Intent.ACTION_MAIN || !i.hasCategory(android.content.Intent.CATEGORY_LAUNCHER) ||
+            i.hasCategory(android.content.Intent.CATEGORY_HOME)) return
+        runCatching { com.noryan.romcore.api.crash.RomCoreCrashGuard.bringRunningGameToFront(this) }
     }
 
     override fun onResume() { super.onResume(); vm.checkCrashes() }

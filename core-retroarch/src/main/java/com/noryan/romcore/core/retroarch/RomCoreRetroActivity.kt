@@ -34,6 +34,8 @@ class RomCoreRetroActivity : RetroActivityFuture() {
         system = runCatching { System.valueOf(intent.getStringExtra(EXTRA_SYSTEM)!!) }.getOrDefault(System.OTHER)
         val romKey = intent.getStringExtra(EXTRA_ROM_KEY) ?: intent.getStringExtra("ROM").orEmpty()
         session = RaSession(applicationContext, romKey, system) { runOnUiThread { finishGame() } }
+        // A fresh start must not inherit an old session's resume point (only the shell's automatic restore sets EXTRA_RESUME).
+        if (!intent.getBooleanExtra(EXTRA_RESUME, false)) com.noryan.romcore.api.menu.ResumePoint.clear(applicationContext, "retroarch", romKey)
         super.onCreate(savedInstanceState) // loads libretroarch-activity.so, starts the native thread
 
         // Take input back from the native queue: events now come through dispatchKeyEvent & friends.
@@ -98,7 +100,7 @@ class RomCoreRetroActivity : RetroActivityFuture() {
         if (::hooks.isInitialized) hooks.onPause()
         // app backgrounded (or about to be killed): get battery saves onto the portable root now
         if (::session.isInitialized && session.ready && !closing)
-            Thread { RaBridge.request(RaBridge.OP_FLUSH, null, 1000) }.apply { isDaemon = true; name = "romcore-ra-flush" }.start()
+            Thread { session.autosaveForResume(); RaBridge.request(RaBridge.OP_FLUSH, null, 1000) }.apply { isDaemon = true; name = "romcore-ra-flush" }.start()
         super.onPause()
     }
 

@@ -59,7 +59,7 @@ object RomCoreCrashGuard {
                 // isFinishing is already true here for finish()/Close Game; some cores kill the process in onDestroy before
                 // the post-destroy callbacks run, so this is the reliable "clean close" point.
                 val id = a.intent?.getStringExtra(EXTRA_LAUNCH_ID) ?: return
-                if (a.isFinishing) runCatching { store(app).finishClean(proc, id) }
+                if (a.isFinishing) { runCatching { store(app).finishClean(proc, id) }; com.noryan.romcore.api.keepalive.KeepAlive.stop(app, proc) }
             }
             override fun onActivityCreated(a: Activity, b: Bundle?) {}
             override fun onActivityStarted(a: Activity) {}
@@ -94,6 +94,7 @@ object RomCoreCrashGuard {
             val core = intent.getStringExtra(EXTRA_CORE) ?: proc.trimStart(':')
             val title = intent.getStringExtra(EXTRA_TITLE) ?: RomCoreUi.guessTitle(intent)
             runCatching { store.prune(System.currentTimeMillis()); store.writeMarker(RunMarker(proc, id, myPid, core, title, System.currentTimeMillis())) }
+            com.noryan.romcore.api.keepalive.KeepAlive.start(app, proc, title)
             return
         }
         Log.w(TAG, "$proc: system re-created ${a.javaClass.simpleName} after the previous process died (launch $id, pid $myPid): not restarting the game")
@@ -107,6 +108,23 @@ object RomCoreCrashGuard {
         runCatching { a.finishAndRemoveTask() }
         // Nothing of the emulator has run in this fresh process yet: end it before onCreate can start the engine.
         Process.killProcess(myPid)
+    }
+
+    /**
+     * Shell side: is a game process alive right now? If so, bring its task back to the front (the launcher icon returns to the
+     * game instead of showing the list). Returns false when nothing is running.
+     */
+    @JvmStatic fun bringRunningGameToFront(ctx: Context): Boolean {
+        val am = ctx.getSystemService(ActivityManager::class.java)
+        val alive = am.runningAppProcesses.orEmpty().map { it.pid to it.processName }.toSet()
+        val running = store(ctx).allMarkers().filter { m -> alive.any { it.first == m.pid && it.second.endsWith(m.process) } }
+        if (running.isEmpty()) return false
+        val task = am.appTasks.firstOrNull { t ->
+            val info = t.taskInfo ?: return@firstOrNull false
+            val c = info.baseActivity ?: info.topActivity
+            c != null && !c.className.endsWith(".MainActivity")
+        } ?: return false
+        return runCatching { task.moveToFront(); true }.getOrDefault(false)
     }
 
     /** [diedAt]: wall-clock time the system recorded for the process exit, when it reported one. */

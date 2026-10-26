@@ -1,1 +1,76 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <application>
+        <service
+            android:name="com.noryan.romcore.api.keepalive.KeepAliveRetroarch"
+            android:process=":retroarch"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a running game alive while the screen is off or the app is in the background" />
+        </service>
+        <service
+            android:name="com.noryan.romcore.api.keepalive.KeepAliveDolphin"
+            android:process=":dolphin"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a running game alive while the screen is off or the app is in the background" />
+        </service>
+        <service
+            android:name="com.noryan.romcore.api.keepalive.KeepAliveAzahar"
+            android:process=":azahar"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a running game alive while the screen is off or the app is in the background" />
+        </service>
+        <service
+            android:name="com.noryan.romcore.api.keepalive.KeepAlivePpsspp"
+            android:process=":ppsspp"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a running game alive while the screen is off or the app is in the background" />
+        </service>
+        <service
+            android:name="com.noryan.romcore.api.keepalive.KeepAliveArmsx2"
+            android:process=":armsx2"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a running game alive while the screen is off or the app is in the background" />
+        </service>
+        <service
+            android:name="com.noryan.romcore.api.keepalive.KeepAliveDusklight"
+            android:process=":dusklight"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a running game alive while the screen is off or the app is in the background" />
+        </service>
+        <service
+            android:name="com.noryan.romcore.api.keepalive.KeepAliveWwhd"
+            android:process=":wwhd"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a running game alive while the screen is off or the app is in the background" />
+        </service>
+        <service
+            android:name="com.noryan.romcore.api.keepalive.KeepAliveCemu"
+            android:process=":cemu"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a running game alive while the screen is off or the app is in the background" />
+        </service>
+        <service
+            android:name="com.noryan.romcore.api.keepalive.KeepAlivePrimehack"
+            android:process=":primehack"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a running game alive while the screen is off or the app is in the background" />
+        </service>
+        <service
+            android:name="com.noryan.romcore.api.keepalive.KeepAliveMelonds"
+            android:process=":melonds"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a running game alive while the screen is off or the app is in the background" />
+        </service>
+    </application>
+</manifest>

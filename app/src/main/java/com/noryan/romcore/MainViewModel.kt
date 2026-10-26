@@ -16,6 +16,8 @@ import com.noryan.romcore.api.System
 import com.noryan.romcore.api.crash.AutoRetry
 import com.noryan.romcore.api.crash.CrashText
 import com.noryan.romcore.api.crash.RomCoreCrashGuard
+import com.noryan.romcore.api.crash.RunMarker
+import com.noryan.romcore.api.menu.ResumePoint
 import com.noryan.romcore.api.save.SaveMigration
 import com.noryan.romcore.api.save.SaveRoot
 import kotlinx.coroutines.sync.Mutex
@@ -122,8 +124,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 retryPrefs.edit().putString("title", r.marker.title).putLong("at", now).apply()
                 crashNotice.value = CrashText.title(r.marker) to "Out of memory. Starting it again automatically..."
                 launch(ctx, game)
-            } else crashNotice.value = CrashText.title(r.marker) to CrashText.hint(r.reason)
+            } else {
+                // The system took a backgrounded game away: put it back at the resume point written when it left the screen.
+                val lost = r.reason?.startsWith("Out of memory") == true || r.reason?.startsWith("Killed") == true
+                val back = if (lost) withContext(Dispatchers.IO) { resumableGame(ctx, r.marker) } else null
+                if (back != null) {
+                    ResumePoint.clear(ctx, r.marker.core, back.second)
+                    crashNotice.value = CrashText.title(r.marker) to "The system closed it in the background. Restoring where you left off..."
+                    launch(ctx, back.first, resume = true)
+                } else crashNotice.value = CrashText.title(r.marker) to CrashText.hint(r.reason)
+            }
         }
+    }
+
+    /** The library entry and ROM path of a dead game that left a resume point, or null. */
+    private suspend fun resumableGame(ctx: Context, m: RunMarker): Pair<GameEntity, String>? {
+        val g = dao.all().firstOrNull { it.title == m.title } ?: return null
+        val path = RomResolver.resolve(ctx, g)?.path ?: return null
+        return if (ResumePoint.exists(ctx, m.core, path)) g to path else null
     }
 
     fun dismissCrashNotice() { crashNotice.value = null }
@@ -427,7 +445,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun coreFor(g: GameEntity): CoreChoice? = CoreRouter.choose(g, prefs)
 
-    fun launch(ctx: Context, g: GameEntity) {
+    fun launch(ctx: Context, g: GameEntity, resume: Boolean = false) {
         if (launching.value) return
         val choice = coreFor(g)
         val core = choice?.core
@@ -447,7 +465,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (r.kind == "fd") { toast(ctx, "Turn on ALL FILES ACCESS in SETTINGS so this core can open the ROM"); return@launch }
                 // Real path: cores get the path alone (a null uri makes them use it). Only a cache copy keeps a uri fallback.
                 val req = LaunchRequest(romPath = r.path, romUri = if (r.kind == "real") null else g.uri, system = sys,
-                    subCoreId = choice.sub?.id)
+                    resumeState = resume, subCoreId = choice.sub?.id)
                 // The save folder must be decided before the core starts (a first-ever launch can race the discovery).
                 withTimeoutOrNull(8000) { saveJob?.join() }
                 val gameKey = withContext(Dispatchers.IO) { SaveRoot.gameKey(ctx, g.realPath ?: g.uri) }
@@ -455,6 +473,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 crashNotice.value = null
                 withContext(Dispatchers.IO) { dao.markPlayed(g.id, java.lang.System.currentTimeMillis()) }
                 if (ctx !is android.app.Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                // Restoring a game whose process died: its old task (a dead record of the same singleTask activity) would swallow this
+                // launch and re-create the dead one, which the crash guard refuses. Clear it so the restore starts fresh.
+                if (resume) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 ctx.startActivity(intent)
             } catch (t: Throwable) {
                 toast(ctx, "Launch failed: ${t.message ?: t.javaClass.simpleName}")
