@@ -27,7 +27,8 @@ class DolphinSession(
     context: Context,
     romPath: String,
     private val onClose: () -> Unit,
-) : CoreSessionBase(context.applicationContext, "dolphin", romPath), FastForwardSupport, com.noryan.romcore.api.OptionCycleSupport {
+) : CoreSessionBase(context.applicationContext, "dolphin", romPath), FastForwardSupport, com.noryan.romcore.api.OptionCycleSupport,
+    com.noryan.romcore.api.ToggleOptionSupport {
 
     private val resumeFile: File get() = File(stateDir, "resume")
 
@@ -123,6 +124,11 @@ class DolphinSession(
     override val optionAvailable get() = com.noryan.romcore.api.FourByThree.supports(gameId)
     override fun optionValue(): String = gameId?.let { com.noryan.romcore.api.FourByThree.optionValue(context, it, fourThreeAtLaunch) } ?: ""
     override fun cycleOption(): Boolean { val id = gameId ?: return false; com.noryan.romcore.api.FourByThree.toggle(context, id); return true }
+    // ---- optional menu toggle: Wind Waker (GameCube, US) 60 fps hack; the hack is applied at boot, so it changes on the next launch ----
+    override val toggleLabel = "60 FPS (next start)"
+    override val toggleAvailable get() = WindWakerFps.matches(gameId)
+    override fun toggleValue(): Boolean = WindWakerFps.isEnabled(context)
+    override fun toggle(): Boolean = WindWakerFps.setEnabled(context, !WindWakerFps.isEnabled(context))
     private var otherM: OtherM.Profile? = null
     private var lastOtherM: OtherM.Out? = null
     private var galaxy: Galaxy.Profile? = null

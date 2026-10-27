@@ -41,5 +41,5 @@ class WindWakerFpsTest {
 
     @Test fun onByDefault() { assertTrue(WindWakerFps.DEFAULT_ON) }
 
-    @Test fun prefKeyIsTheOneTheSettingsRowWrites() { assertEquals("ww_fps_hack", WindWakerFps.PREF_KEY); assertEquals("romcore", WindWakerFps.PREFS_FILE) }
+    @Test fun legacyPrefKeyIsUnchanged() { assertEquals("ww_fps_hack", WindWakerFps.PREF_KEY); assertEquals("romcore", WindWakerFps.PREFS_FILE) }
 }
