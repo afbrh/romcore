@@ -429,14 +429,14 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
             FocusLine("HOME SCREEN", right = if (isHome) "ROMCORE" else "OFF   OPEN TO CHANGE", onClick = { openHomeAppSettings(ctx) })
         }
         item { Note("Make RomCore the launcher: choose it as the Home app, and the Home button brings you back here.") }
-        item { Section("ABOUT") }
-        item { Note("RomCore ${BuildConfig.VERSION_NAME} - GPLv3. Embedded emulator cores keep their own licenses.") }
         // Every installed app that has a launcher icon, so RomCore still works as the device's home screen.
         item { Section("APPS (${apps.size})") }
         if (apps.isEmpty()) item { Note("No other apps found.") }
         items(apps, key = { it.component.flattenToString() }) { a ->
             FocusLine(a.label, onClick = { launchApp(ctx, a) })
         }
+        item { Section("ABOUT") }
+        item { Note("RomCore ${BuildConfig.VERSION_NAME} - GPLv3. Embedded emulator cores keep their own licenses.") }
     }
     }
     }
