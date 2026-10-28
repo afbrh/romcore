@@ -455,9 +455,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 // Idempotent copy of the user's BIOS / keys / firmware into the cores before they start.
                 if (prefs.biosDir != null) withContext(Dispatchers.IO) { runCatching { BiosImporter.import(ctx, File(prefs.biosDir!!)) } }
-                if (core.id in LaunchMemory.HEAVY_CORES && LaunchMemory.isLow()) {
-                    toast(ctx, "Freeing up memory first...")
-                    LaunchMemory.awaitRoom() // gives up after a few seconds and launches anyway
+                if (core.id in LaunchMemory.HEAVY_CORES) {
+                    if (LaunchMemory.isLow()) {
+                        toast(ctx, "Freeing up memory first...")
+                        LaunchMemory.awaitRoom() // gives up after a few seconds and launches anyway
+                    }
+                    LaunchMemory.prepare(ctx)
                 }
                 val r = RomResolver.resolve(ctx, g)
                 if (r == null) { toast(ctx, "Can't open ROM file"); return@launch }

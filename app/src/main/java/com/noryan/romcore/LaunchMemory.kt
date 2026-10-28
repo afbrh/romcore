@@ -1,5 +1,8 @@
 package com.noryan.romcore
 
+import android.app.ActivityManager
+import android.content.Context
+import android.content.Intent
 import kotlinx.coroutines.delay
 import java.io.File
 
@@ -32,5 +35,33 @@ object LaunchMemory {
             delay(POLL_MS); waited += POLL_MS
         }
         return true
+    }
+
+    /** Apps that hold memory in the background and restart on their own; stopped before a heavy launch to leave the game room. */
+    private val ALWAYS = listOf("com.google.android.gms", "com.android.vending", "com.google.android.googlequicksearchbox", "com.android.chrome")
+    /** Memory-stall level ("some avg10" in /proc/pressure/memory) under which the system counts as calm. */
+    const val CALM_STALL = 1.0
+    private const val CALM_WAIT_MS = 3_000L
+
+    /** `some avg10=` of a /proc/pressure/memory text (null if absent). */
+    fun parseStall(pressure: String): Double? =
+        Regex("(?m)^some\\s+avg10=([0-9.]+)").find(pressure)?.groupValues?.get(1)?.toDoubleOrNull()
+
+    private fun stall(): Double? = runCatching { parseStall(File("/proc/pressure/memory").readText()) }.getOrNull()
+
+    /**
+     * Gentler start for a heavy core: stop other apps' background processes (only ones Android already counts as background; the
+     * foreground app, the keyboard and the home app are untouched), hand back our own heap, then wait a moment for the memory stall
+     * to die down so the game's first few seconds of allocation do not land on top of it.
+     */
+    suspend fun prepare(ctx: Context) {
+        val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val pm = ctx.packageManager
+        val launcher = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+            .map { it.activityInfo.packageName }
+        (launcher + ALWAYS).distinct().filter { it != ctx.packageName }.forEach { runCatching { am.killBackgroundProcesses(it) } }
+        runCatching { Runtime.getRuntime().gc() }
+        var waited = 0L
+        while ((stall() ?: 0.0) > CALM_STALL && waited < CALM_WAIT_MS) { delay(POLL_MS); waited += POLL_MS }
     }
 }

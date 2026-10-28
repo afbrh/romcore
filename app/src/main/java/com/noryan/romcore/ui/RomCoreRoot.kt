@@ -218,6 +218,7 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
             // Right side of the top bar: scan counter, the keys for this screen, then the battery level in the corner.
             if (scanning) Text("SCANNING $n", Modifier.padding(end = 18.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, maxLines = 1, softWrap = false)
             Text(keyHint, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
+            rememberStorageText()?.let { Text(it, Modifier.padding(start = 18.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false) }
             if (battery != null) Text("$battery%", Modifier.padding(start = 18.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, softWrap = false)
         }
         tabOpts?.let { o -> cols.firstOrNull { it.id == o.id }?.let { c -> CollectionOptions(vm, c, o.mode, { tabOpts = o.copy(mode = it) }, { tabOpts = null }) } }
@@ -340,6 +341,23 @@ private fun rememberBatteryPercent(): Int? {
         onDispose { runCatching { ctx.unregisterReceiver(rx) } }
     }
     return value
+}
+
+/** "3.3G FREE / 101G" for the shared storage the games live on; re-read every 30 s. */
+@Composable
+private fun rememberStorageText(): String? {
+    val text by produceState<String?>(null) {
+        while (true) {
+            value = runCatching {
+                val st = android.os.StatFs(android.os.Environment.getExternalStorageDirectory().path)
+                fun g(b: Long) = b / 1e9
+                val free = g(st.availableBytes); val total = g(st.totalBytes)
+                String.format(java.util.Locale.US, "%.1fG FREE / %.0fG", free, total)
+            }.getOrNull()
+            kotlinx.coroutines.delay(30_000)
+        }
+    }
+    return text
 }
 
 /** True while RomCore is the device's chosen home app; re-read on every resume (the choice is made in a system screen). */

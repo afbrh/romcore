@@ -10,4 +10,6 @@ class LaunchMemoryTest {
     }
     @Test fun missingFieldIsNull() = assertNull(LaunchMemory.parseFreeKb("MemTotal: 1 kB\n"))
     @Test fun doesNotMistakeMemAvailable() = assertNull(LaunchMemory.parseFreeKb("MemAvailable:    5335020 kB\n"))
+    @Test fun readsStall() = assertEquals(0.32, LaunchMemory.parseStall("some avg10=0.32 avg60=1.21 avg300=1.19 total=1\nfull avg10=0.22 avg60=1 avg300=1 total=2\n")!!, 0.001)
+    @Test fun noStallLineIsNull() = assertNull(LaunchMemory.parseStall(""))
 }
