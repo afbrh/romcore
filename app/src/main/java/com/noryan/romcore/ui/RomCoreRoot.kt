@@ -18,6 +18,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalContext
@@ -131,6 +132,8 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
     // A saved collection tab is only trusted once the DB has answered; a deleted collection falls back to GAMES (never written back here).
     val tab = if (collections == null) saved else CollectionRules.resolveTab(saved, cols)
     var tabOpts by remember { mutableStateOf<TabOptions?>(null) }
+    // True while controller focus is somewhere in the top bar (a tab or the +), false when it is down on a game.
+    var tabsFocused by remember { mutableStateOf(false) }
     val tabFocus = remember { HashMap<Long, FocusRequester>() }
     val focusSeen = remember { mutableStateOf(false) }
     fun focusOf(id: Long) = tabFocus.getOrPut(id) { FocusRequester() }
@@ -190,13 +193,13 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
         }
     ) {
         // Top bar, all left-aligned: the key hint, then [GAMES] [+] and the collection tabs (they scroll when there are many; focus
-        // scrolls them into view). Visual order matches the L1/R1 cycle. X on any tab opens Settings; a long press on a collection
+        // scrolls them into view). Visual order matches the L1/R1 cycle. B (Back) opens Settings, X and Y do nothing on a tab; a long press on a collection
         // tab (touch) still opens that collection's own options.
         val newOpen = editor != null && editor?.collectionId == null
         val showSel = !settingsOpen && !newOpen
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).onFocusChanged { tabsFocused = it.hasFocus }, verticalAlignment = Alignment.CenterVertically) {
             TabButton("GAMES (${gameCount.size})", selected = showSel && tab == CollectionRules.GAMES_TAB, modifier = Modifier.focusRequester(focusOf(CollectionRules.GAMES_TAB)).widthIn(min = 130.dp),
-                onAlt = { tabOpts = null; vm.toggleSettings() }) {
+                onLongPress = { tabOpts = null; vm.toggleSettings() }) {
                 tabOpts = null; vm.selectTab(CollectionRules.GAMES_TAB)
             }
             Row(Modifier.weight(1f).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -206,14 +209,13 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
                     cols.forEach { c ->
                         TabButton(CollectionRules.tabLabel(c.name), selected = showSel && tab == c.id,
                             modifier = Modifier.focusRequester(focusOf(c.id)).widthIn(min = 90.dp, max = 200.dp),
-                            onAlt = { tabOpts = null; vm.toggleSettings() },
                             onLongPress = { tabOpts = if (tabOpts?.id == c.id) null else TabOptions(c.id, TabOptions.Mode.MENU) }) {
                             tabOpts = null; vm.selectTab(c.id)
                         }
                     }
                 }
             }
-            val keyHint = when { editor != null -> "A TOGGLE    B CANCEL"; settingsOpen -> "A SELECT    B BACK"; else -> "A SELECT    X OPTIONS" }
+            val keyHint = when { editor != null -> "A TOGGLE    B CANCEL"; settingsOpen -> "A SELECT    B BACK"; tabsFocused -> "A SELECT    B SETTINGS"; else -> "A SELECT    X OPTIONS" }
             val battery = rememberBatteryPercent()
             // Right side of the top bar: scan counter, the keys for this screen, then the battery level in the corner.
             if (scanning) Text("SCANNING $n", Modifier.padding(end = 18.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, maxLines = 1, softWrap = false)
