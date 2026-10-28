@@ -8,6 +8,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -110,6 +113,30 @@ fun RomCoreRoot(vm: MainViewModel) {
                 s is Setup.NotFound -> NotFoundScreen(s.cancellable, onPick = { romPicker.launch(null) }, onSearchAgain = { vm.startRomSearch() }, onCancel = vm::cancelSetup)
                 else -> MainScreen(vm, pickRom = { romPicker.launch(null) }, pickBios = { biosPicker.launch(null) }, pickSave = { savePicker.launch(null) })
             }
+            LaunchProgressScreen(vm)
+        }
+    }
+}
+
+/** Full-screen loading screen while a heavy core (Switch) gets memory ready: progress bar, the current step, and the steps so far. B cancels. */
+@Composable
+private fun LaunchProgressScreen(vm: MainViewModel) {
+    val p by vm.launchProgress.collectAsStateWithLifecycle()
+    val cur = p ?: return
+    BackHandler { vm.cancelLaunch() }
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).pointerInput(Unit) { detectTapGestures { } }, contentAlignment = Alignment.Center) {
+        Column(Modifier.fillMaxWidth(0.8f), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("LOADING", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            Text(cur.title.uppercase(), Modifier.padding(top = 6.dp, bottom = 24.dp), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 2)
+            Box(Modifier.fillMaxWidth().height(22.dp).border(2.dp, androidx.compose.ui.graphics.Color(0xFF2A2A31)).padding(3.dp)) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(cur.fraction.coerceIn(0f, 1f)).background(androidx.compose.ui.graphics.Color(0xFFFF6B4A)))
+            }
+            Text("${(cur.fraction * 100).toInt().coerceIn(0, 100)}%", Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(cur.message, Modifier.padding(top = 20.dp), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onBackground, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 2)
+            Column(Modifier.padding(top = 18.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                cur.steps.dropLast(1).forEach { Text("OK  $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1) }
+            }
+            Text(coloredKeyHint("B CANCEL"), Modifier.padding(top = 26.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

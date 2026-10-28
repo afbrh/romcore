@@ -45,6 +45,8 @@ sealed interface Setup {
     data object Ready : Setup
 }
 
+data class LaunchProgress(val title: String, val fraction: Float, val message: String, val steps: List<String>)
+
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val ra = app as RomCoreApp
     private val dao = ra.db.games()
@@ -73,6 +75,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val scanProgress = MutableStateFlow(0)
     val status = MutableStateFlow("")
     val launching = MutableStateFlow(false)
+    /** The pre-launch loading screen (heavy cores only): the game title, progress 0..1 and the steps so far; null when none is showing. */
+    val launchProgress = MutableStateFlow<LaunchProgress?>(null)
+    private var launchJob: Job? = null
+    /** Back/B on the loading screen: stop preparing and do not start the game. */
+    fun cancelLaunch() { launchJob?.cancel() }
     /** Quiet inline BIOS import results ("PS2 BIOS: IMPORTED ...") and a one-line note for the BIOS search. */
     val biosLines = MutableStateFlow<List<String>>(emptyList())
     val biosNote = MutableStateFlow("")
@@ -450,17 +457,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val core = choice?.core
         val sys = runCatching { System.valueOf(g.system) }.getOrNull()
         if (core == null || sys == null) { toast(ctx, "No core installed for ${g.system}"); return }
-        viewModelScope.launch {
+        launchJob = viewModelScope.launch {
             launching.value = true
+            var started = false
             try {
                 // Idempotent copy of the user's BIOS / keys / firmware into the cores before they start.
                 if (prefs.biosDir != null) withContext(Dispatchers.IO) { runCatching { BiosImporter.import(ctx, File(prefs.biosDir!!)) } }
                 if (core.id in LaunchMemory.HEAVY_CORES) {
-                    if (LaunchMemory.isLow()) {
-                        toast(ctx, "Freeing up memory first...")
-                        LaunchMemory.awaitRoom() // gives up after a few seconds and launches anyway
+                    val steps = ArrayList<String>()
+                    var last = ""
+                    LaunchMemory.prepare(ctx) { fraction, message, step ->
+                        // A new step adds a line to the log; more messages of the same step rewrite its line.
+                        if (step != last) { last = step; steps.add(message) } else if (steps.isNotEmpty()) steps[steps.lastIndex] = message
+                        launchProgress.value = LaunchProgress(g.title, fraction, message, steps.takeLast(6).toList())
                     }
-                    LaunchMemory.prepare(ctx)
                 }
                 val r = RomResolver.resolve(ctx, g)
                 if (r == null) { toast(ctx, "Can't open ROM file"); return@launch }
@@ -479,9 +489,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // launch and re-create the dead one, which the crash guard refuses. Clear it so the restore starts fresh.
                 if (resume) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 ctx.startActivity(intent)
+                started = true
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (t: Throwable) {
                 toast(ctx, "Launch failed: ${t.message ?: t.javaClass.simpleName}")
-            } finally { launching.value = false }
+            } finally {
+                // Keep the loading screen up a moment after the game's window is requested, so the list does not flash back first.
+                val p = launchProgress.value
+                if (p != null && started) {
+                    launchProgress.value = p.copy(fraction = 1f, message = "Starting ${p.title}...")
+                    kotlinx.coroutines.delay(1200)
+                }
+                launchProgress.value = null
+                launching.value = false
+            }
         }
     }
 
