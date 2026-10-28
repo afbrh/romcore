@@ -7,7 +7,6 @@ import android.os.Looper
 import com.armsx2.EmuState
 import com.armsx2.config.ConfigStore
 import com.armsx2.config.SettingsScope
-import com.armsx2.ext.copyWith
 import com.armsx2.ui.InGameOverlay
 import com.armsx2.runtime.MainActivityRuntime
 import com.noryan.romcore.api.FastForwardSupport
@@ -78,16 +77,16 @@ internal class Armsx2Session(private val activity: Armsx2Activity) :
         ?: runCatching { NativeApp.getPauseGameSerial() }.getOrNull()?.substringBefore(" (")?.trim()?.takeIf(String::isNotBlank)
 
     override fun optionValue(): String =
-        label(runCatching { ConfigStore.resolveForGame(gameSerial()).upscaleFloat }.getOrDefault(DEFAULT_SCALE))
+        label(runCatching { ConfigStore.resolveForGame(gameSerial()).output.upscaleFloat }.getOrDefault(DEFAULT_SCALE))
 
     override fun cycleOption(): Boolean = runCatching {
         val serial = gameSerial()
         val cur = ConfigStore.resolveForGame(serial)
-        val next = SCALES[(SCALES.indexOfFirst { kotlin.math.abs(it - cur.upscaleFloat) < 0.01f } + 1) % SCALES.size]
+        val next = SCALES[(SCALES.indexOfFirst { kotlin.math.abs(it - cur.output.upscaleFloat) < 0.01f } + 1) % SCALES.size]
         InGameOverlay.currentSerial.value = serial
         InGameOverlay.settingsScope.value = if (serial == null) SettingsScope.Global else SettingsScope.Game
         InGameOverlay.settingsState.value = cur
-        InGameOverlay.saveSettings(cur.copyWith(mapOf("upscaleFloat" to next)))   // saves + applies live
+        InGameOverlay.saveSettings(cur.copy(output = cur.output.copy(upscaleFloat = next)))   // saves + applies live
         true
     }.getOrDefault(false)
 

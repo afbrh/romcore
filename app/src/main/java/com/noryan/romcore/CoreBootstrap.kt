@@ -83,7 +83,7 @@ object CoreBootstrap {
         "primehack" to "PrimeHack 1.0.9-22 (romcore patches)",
         "cemu" to "Cemu 0.5-4 (SSimco android port)",
         "azahar" to "Azahar 95db543",
-        "armsx2" to "ARMSX2 0d7a2b9",
+        "armsx2" to "ARMSX2 2.9 (romcore patches)",
         "dusklight" to "Dusklight b245c6b (romcore patches)", "wwhd" to "WindWakerHD-Android-Plus 1.11.1 (romcore)",
         "dolphin" to "Dolphin mainline", "eden" to "Eden v0.2.0-371", "watermelonds" to "WatermelonDS 0.8.0.rc2",
     )
