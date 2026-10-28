@@ -26,7 +26,8 @@ import java.io.File
  * is exactly the 10 slots the shared menu shows. save/load are blocking and are called off the main thread by the menu.
  */
 internal class Armsx2Session(private val activity: Armsx2Activity) :
-    CoreSession, StateSlotProvider, FastForwardSupport, com.noryan.romcore.api.OptionCycleSupport {
+    CoreSession, StateSlotProvider, FastForwardSupport, com.noryan.romcore.api.OptionCycleSupport,
+    com.noryan.romcore.api.ToggleOptionSupport {
     private val main = Handler(Looper.getMainLooper())
 
     // ---- pause / resume ----------------------------------------------------------------------------------------------
@@ -60,6 +61,18 @@ internal class Armsx2Session(private val activity: Armsx2Activity) :
     // The default stays 2x (Armsx2Prefs). The choice is saved PER GAME through ARMSX2's own config layer, so other games keep 2x,
     // and applied live. ARMSX2's overlay normally prepares settingsState/scope/serial in open(), which RomCore never calls.
     override val optionLabel = "Resolution"
+
+    // ---- troubleshooting: ARMSX2's own on-screen counters (game FPS vs refresh rate, speed, CPU/GPU load). Off at every start, live only. ----
+    @Volatile private var perfOverlay = false
+    override val toggleLabel = "Perf Overlay"
+    override fun toggleValue() = perfOverlay
+    override fun toggle(): Boolean = runCatching {
+        val on = !perfOverlay
+        NativeApp.setHideAllOSD(!on)
+        // fps, vps, speed, cpu, gpu on; everything else off
+        NativeApp.osdApplyFlags(on, on, on, on, on, false, false, false, false, false, false, false)
+        perfOverlay = on
+    }.isSuccess
 
     private fun gameSerial(): String? = MainActivityRuntime.currentGame.value?.settingsKey
         ?: runCatching { NativeApp.getPauseGameSerial() }.getOrNull()?.substringBefore(" (")?.trim()?.takeIf(String::isNotBlank)
