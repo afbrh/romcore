@@ -6,3 +6,4 @@ local.properties
 .cxx/
 .externalNativeBuild/
 .kotlin/
+.DS_Store
