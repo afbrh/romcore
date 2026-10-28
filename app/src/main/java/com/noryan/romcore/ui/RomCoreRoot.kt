@@ -217,8 +217,7 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
             val battery = rememberBatteryPercent()
             // Right side of the top bar: scan counter, the keys for this screen, then the battery level in the corner.
             if (scanning) Text("SCANNING $n", Modifier.padding(end = 18.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, maxLines = 1, softWrap = false)
-            Text(keyHint, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
-            rememberStorageText()?.let { Text(it, Modifier.padding(start = 18.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false) }
+            Text(coloredKeyHint(keyHint), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
             if (battery != null) Text("$battery%", Modifier.padding(start = 18.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, softWrap = false)
         }
         tabOpts?.let { o -> cols.firstOrNull { it.id == o.id }?.let { c -> CollectionOptions(vm, c, o.mode, { tabOpts = o.copy(mode = it) }, { tabOpts = null }) } }
@@ -325,6 +324,20 @@ private fun GameList(vm: MainViewModel, collectionId: Long?) {
     }
 }
 
+/** PlayStation 2 face-button colours for the key hints: A = Cross (blue), B = Circle (red), Y = Triangle (green), X = Square (pink). */
+private val HINT_COLORS = mapOf(
+    'A' to androidx.compose.ui.graphics.Color(0xFF6C8FE0), 'B' to androidx.compose.ui.graphics.Color(0xFFE5566D),
+    'Y' to androidx.compose.ui.graphics.Color(0xFF3FC9A0), 'X' to androidx.compose.ui.graphics.Color(0xFFE08FC2),
+)
+
+/** Colours the button letters of a hint like "A SELECT    X OPTIONS" (a single letter standing alone as a word). */
+private fun coloredKeyHint(hint: String): androidx.compose.ui.text.AnnotatedString = androidx.compose.ui.text.buildAnnotatedString {
+    append(hint)
+    Regex("(?<![A-Z])[ABXY](?![A-Z])").findAll(hint).forEach { m ->
+        HINT_COLORS[m.value[0]]?.let { addStyle(androidx.compose.ui.text.SpanStyle(color = it), m.range.first, m.range.last + 1) }
+    }
+}
+
 /** Device battery level (0-100), kept current from the sticky battery broadcast; null if the device doesn't report one. */
 @Composable
 private fun rememberBatteryPercent(): Int? {
@@ -341,23 +354,6 @@ private fun rememberBatteryPercent(): Int? {
         onDispose { runCatching { ctx.unregisterReceiver(rx) } }
     }
     return value
-}
-
-/** "3.3G FREE / 101G" for the shared storage the games live on; re-read every 30 s. */
-@Composable
-private fun rememberStorageText(): String? {
-    val text by produceState<String?>(null) {
-        while (true) {
-            value = runCatching {
-                val st = android.os.StatFs(android.os.Environment.getExternalStorageDirectory().path)
-                fun g(b: Long) = b / 1e9
-                val free = g(st.availableBytes); val total = g(st.totalBytes)
-                String.format(java.util.Locale.US, "%.1fG FREE / %.0fG", free, total)
-            }.getOrNull()
-            kotlinx.coroutines.delay(30_000)
-        }
-    }
-    return text
 }
 
 /** True while RomCore is the device's chosen home app; re-read on every resume (the choice is made in a system screen). */
