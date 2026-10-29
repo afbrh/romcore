@@ -58,6 +58,8 @@ object EdenMods {
                 done += id
             }
             prefs.edit().putStringSet(KEY, done).apply()
+            // The 4:3 patches improve between versions: keep an installed copy current (the folder itself stays the on/off switch).
+            aspect43Dir(ctx)?.takeIf { it.isDirectory }?.let { copyTree(ctx, "$ROOT/$ASPECT43", it) }
         }
     }
 
