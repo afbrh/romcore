@@ -1,0 +1,19 @@
+@nsobid-FF773E90972D544EB79406EAA65396D53C43EFB9
+
+# Super Mario Bros. Wonder [010015100B514000] v1.2.1 - 4:3 Aspect Ratio
+
+@flag print_values
+@flag offset_shift 0x100
+
+// 4:3 Aspect Ratio
+// 1) 16:9 camera aspect float -> 4/3
+// 2) camera view width (15.5 * aspect) 27.5556 and its negative -> 20.6667
+// 3) camera half width 13.7778 and its negative -> 10.3333
+
+@enabled
+02AEEDB4 ABAAAA3F
+02AEE9E8 5555A541
+02AEEBD8 5555A5C1
+02AEE968 55552541
+02AEE834 555525C1
+@stop

@@ -29,9 +29,9 @@ class EdenSession(private val context: android.content.Context) : CoreSession, S
     // The Odyssey 4:3 mod is read by the game when it starts, so the row says so; only shown for that game.
     private val gameTitle = (context as? android.app.Activity)?.intent?.getStringExtra("romcore.title").orEmpty()
     override val toggleLabel = "4:3 (next start)"
-    override val toggleAvailable get() = EdenMods.isOdyssey(gameTitle)
-    override fun toggleValue() = EdenMods.aspect43On(context)
-    override fun toggle() = EdenMods.setAspect43(context, !EdenMods.aspect43On(context))
+    override val toggleAvailable get() = EdenMods.hasAspect43(gameTitle)
+    override fun toggleValue() = EdenMods.aspect43On(context, gameTitle)
+    override fun toggle() = EdenMods.setAspect43(context, gameTitle, !EdenMods.aspect43On(context, gameTitle))
 
     private val main = Handler(Looper.getMainLooper())
     private val stick = FloatArray(4) // lx, ly, rx, ry (y: up positive, as Eden's overlay joystick reports)

@@ -18,29 +18,37 @@ object EdenMods {
     private const val PREFS = "romcore_eden_mods"
     private const val KEY = "installed_mods"
 
+    /** A game with a shipped "4:3 Aspect Ratio" mod: [title] matches the library title, [dir] is the mod folder under load/. */
+    private class AspectGame(val title: Regex, val dir: String)
+
+    private val ASPECT_GAMES = listOf(
+        AspectGame(Regex("mario\\s*odyssey", RegexOption.IGNORE_CASE), "0100000000010000/4-3 Aspect Ratio"),
+        AspectGame(Regex("mario\\s*bros\\.?\\s*wonder", RegexOption.IGNORE_CASE), "010015100B514000/4-3 Aspect Ratio"),
+    )
+
+    private fun aspectGame(gameTitle: String) = ASPECT_GAMES.firstOrNull { it.title.containsMatchIn(gameTitle) }
+    private fun aspectDir(ctx: Context, g: AspectGame) = ctx.getExternalFilesDir(null)?.let { File(it, "load/${g.dir}") }
+
     /**
-     * True while the "4:3 Aspect Ratio" mod for Super Mario Odyssey is installed (its folder is still there) and [gameTitle] is Odyssey.
-     * The patch makes the game draw a 4:3 view into Eden's fixed 16:9 picture, which looks stretched sideways; the host stretches the
-     * picture back up to the full screen height so the proportions are right again.
+     * True while the 4:3 mod for [gameTitle] is installed (its folder is still there). The patch makes the game draw a 4:3 view into
+     * Eden's fixed 16:9 picture, which looks stretched sideways; the host stretches the picture back up to the full screen height so
+     * the proportions are right again.
      */
-    fun fillsScreen(ctx: Context, gameTitle: String): Boolean = isOdyssey(gameTitle) && aspect43On(ctx)
+    fun fillsScreen(ctx: Context, gameTitle: String): Boolean = aspect43On(ctx, gameTitle)
 
-    fun isOdyssey(gameTitle: String) = ODYSSEY.containsMatchIn(gameTitle)
+    fun hasAspect43(gameTitle: String) = aspectGame(gameTitle) != null
 
-    private const val ASPECT43 = "0100000000010000/4-3 Aspect Ratio"
-    private fun aspect43Dir(ctx: Context) = ctx.getExternalFilesDir(null)?.let { File(it, "load/$ASPECT43") }
+    /** The 4:3 mod is on while its folder is in Eden's mod folder (the game reads it when it starts). */
+    fun aspect43On(ctx: Context, gameTitle: String): Boolean =
+        aspectGame(gameTitle)?.let { aspectDir(ctx, it)?.isDirectory == true } == true
 
-    /** The Odyssey 4:3 mod is on while its folder is in Eden's mod folder (the game reads it when it starts). */
-    fun aspect43On(ctx: Context): Boolean = aspect43Dir(ctx)?.isDirectory == true
-
-    /** Turns the Odyssey 4:3 mod on (copies it in) or off (removes the folder); it takes effect the next time the game starts. */
-    fun setAspect43(ctx: Context, on: Boolean): Boolean = runCatching {
-        val dir = aspect43Dir(ctx) ?: return false
-        if (on) { if (!dir.isDirectory) copyTree(ctx, "$ROOT/$ASPECT43", dir) } else dir.deleteRecursively()
-        aspect43On(ctx) == on
+    /** Turns the 4:3 mod on (copies it in) or off (removes the folder); it takes effect the next time the game starts. */
+    fun setAspect43(ctx: Context, gameTitle: String, on: Boolean): Boolean = runCatching {
+        val g = aspectGame(gameTitle) ?: return false
+        val dir = aspectDir(ctx, g) ?: return false
+        if (on) { if (!dir.isDirectory) copyTree(ctx, "$ROOT/${g.dir}", dir) } else dir.deleteRecursively()
+        aspect43On(ctx, gameTitle) == on
     }.getOrDefault(false)
-
-    private val ODYSSEY = Regex("mario\\s*odyssey", RegexOption.IGNORE_CASE)
 
     fun install(ctx: Context) {
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -59,7 +67,7 @@ object EdenMods {
             }
             prefs.edit().putStringSet(KEY, done).apply()
             // The 4:3 patches improve between versions: keep an installed copy current (the folder itself stays the on/off switch).
-            aspect43Dir(ctx)?.takeIf { it.isDirectory }?.let { copyTree(ctx, "$ROOT/$ASPECT43", it) }
+            for (g in ASPECT_GAMES) aspectDir(ctx, g)?.takeIf { it.isDirectory }?.let { copyTree(ctx, "$ROOT/${g.dir}", it) }
         }
     }
 
