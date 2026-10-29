@@ -1,0 +1,11 @@
+@nsobid-B424BE150A8E7D78701CBE7A439D9EBF
+# Super Mario Odyssey v1.3.0 - 4:3 Aspect Ratio (by M&M & theboy181)
+# Based off theboy181's Ultrawide patch for SM3DW
+
+@flag print_values
+@flag offset_shift 0x100
+
+// 4:3 Aspect Ratio
+@enabled
+0074D2EC 00B02E1E
+@stop

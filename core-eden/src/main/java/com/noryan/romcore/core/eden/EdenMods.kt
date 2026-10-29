@@ -18,6 +18,17 @@ object EdenMods {
     private const val PREFS = "romcore_eden_mods"
     private const val KEY = "installed_mods"
 
+    /**
+     * True while the "4:3 Aspect Ratio" mod for Super Mario Odyssey is installed (its folder is still there) and [gameTitle] is Odyssey.
+     * The patch makes the game draw a 4:3 view into Eden's fixed 16:9 picture, which looks stretched sideways; the host stretches the
+     * picture back up to the full screen height so the proportions are right again.
+     */
+    fun fillsScreen(ctx: Context, gameTitle: String): Boolean =
+        ODYSSEY.containsMatchIn(gameTitle) &&
+            File(ctx.getExternalFilesDir(null) ?: return false, "load/0100000000010000/4-3 Aspect Ratio").isDirectory
+
+    private val ODYSSEY = Regex("mario\\s*odyssey", RegexOption.IGNORE_CASE)
+
     fun install(ctx: Context) {
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         runCatching {

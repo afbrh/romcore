@@ -67,9 +67,20 @@ object EdenHost {
         // Switch games are 16:9: on a taller (more square) screen Eden centres the picture with a bar above and below. Pin the picture
         // to the top edge instead, like the GBA picture, by sliding the surface up by the top bar's height (all the spare room is then
         // below the picture).
+        val title = activity.intent?.getStringExtra("romcore.title").orEmpty()
+        val fill = EdenMods.fillsScreen(activity, title)
         fun hugTop() {
-            val bar = (view.height - view.width * 9 / 16) / 2
-            view.translationY = if (bar > 2) -bar.toFloat() else 0f
+            val pic = view.width * 9 / 16
+            val bar = (view.height - pic) / 2
+            if (fill && pic > 0 && bar > 2) {
+                // Stretch the 16:9 picture (drawn centred, bars above and below) over the whole surface height.
+                val s = view.height.toFloat() / pic
+                view.pivotX = view.width / 2f; view.pivotY = 0f
+                view.scaleY = s; view.translationY = -bar * s
+            } else {
+                view.scaleY = 1f
+                view.translationY = if (bar > 2) -bar.toFloat() else 0f
+            }
         }
         view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> hugTop() }
         hugTop()
