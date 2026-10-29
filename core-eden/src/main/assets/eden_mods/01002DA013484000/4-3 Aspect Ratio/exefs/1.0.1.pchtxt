@@ -1,47 +1,35 @@
 @nsobid-5441AF3C89F97E1D25A8CCF14C742BF82336D8A8
 
-# The Legend of Zelda Skyward Sword HD [01002DA013484000] v1.0.1 - 4:3 aspect + HUD un-stretch
+# The Legend of Zelda Skyward Sword HD [01002DA013484000] v1.0.1 - 4:3 aspect + HUD un-stretch + 3D aspect
 
 @flag print_values
 @flag offset_shift 0x100
 
-// 4:3: game renders 960x720 (3 hard-coded 1080p setups, 3-entry resolution table, initial size)
-// HUD: ui2d root pane Y scale x0.7488 (0x016997dc = 0.8444*0.7488) so the 812x456 UI space is not stretched in 4:3,
-//      code cave at 0105c950 multiplies the translate-Y of the top-most positioned pane by 1.3355 (edge anchoring)
+// 4:3: game renders 960x720 (3 hard-coded 1080p setups, resolution table, initial size)
+// HUD: ui2d root-pane Y scale (0x016997dc) x0.7488; cave at 0105c950 anchors top-level pane translate-Y (hook 01007150)
+// 3D: camera projection aspect (view w/h = 812/456 UI units) multiplied by 0.7488 = (4/3)/(812/456), vertical FOV unchanged:
+//     hooks at 00ee718c (s20 = w/h) and 00ee70b8 (camera aspect field) -> caves after the HUD cave
 
 @enabled
-// mov w2,#720
 010456c0 025A8052
-// mov w1,#960
 010456c8 01788052
-// mov w2,#720
 010458b8 025A8052
-// mov w1,#960
 010458c0 01788052
-// mov w2,#720
 01045ab0 025A8052
-// mov w1,#960
 01045ab8 01788052
-// table width
 013a915c C0030000
-// table height
 013a9160 D0020000
-// table width
 013a9164 C0030000
-// table height
 013a9168 D0020000
-// table width
 013a916c C0030000
-// table height
 013a9170 D0020000
-// initial width
 016cac94 C0030000
-// initial height
 016cac98 D0020000
-// UI root Y scale (float)
 016997dc FBDD213F
-// cave: anchor top-level pane translate Y
 0105c950 290200B470564139F0010034F00309AA110E40F9D10000B41E5E40BDC823201E21010054F00311AAFAFFFF17F0509E5250F5A7727E01271E1F02271EDE0B3F1ECB03261E8B9E00B9EFA9FE17
-// b cave (replaces str w11,[x20,#0x9c])
 01007150 00560114
+0105c99c 141A311E50E99552F0E7A7721F02271E940A3F1EF829FA17
+0105c9b4 0018211E50E99552F0E7A7721F02271E00083F1EBD29FA17
+00ee718c 04D60514
+00ee70b8 3FD60514
 @stop
