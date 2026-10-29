@@ -23,9 +23,22 @@ object EdenMods {
      * The patch makes the game draw a 4:3 view into Eden's fixed 16:9 picture, which looks stretched sideways; the host stretches the
      * picture back up to the full screen height so the proportions are right again.
      */
-    fun fillsScreen(ctx: Context, gameTitle: String): Boolean =
-        ODYSSEY.containsMatchIn(gameTitle) &&
-            File(ctx.getExternalFilesDir(null) ?: return false, "load/0100000000010000/4-3 Aspect Ratio").isDirectory
+    fun fillsScreen(ctx: Context, gameTitle: String): Boolean = isOdyssey(gameTitle) && aspect43On(ctx)
+
+    fun isOdyssey(gameTitle: String) = ODYSSEY.containsMatchIn(gameTitle)
+
+    private const val ASPECT43 = "0100000000010000/4-3 Aspect Ratio"
+    private fun aspect43Dir(ctx: Context) = ctx.getExternalFilesDir(null)?.let { File(it, "load/$ASPECT43") }
+
+    /** The Odyssey 4:3 mod is on while its folder is in Eden's mod folder (the game reads it when it starts). */
+    fun aspect43On(ctx: Context): Boolean = aspect43Dir(ctx)?.isDirectory == true
+
+    /** Turns the Odyssey 4:3 mod on (copies it in) or off (removes the folder); it takes effect the next time the game starts. */
+    fun setAspect43(ctx: Context, on: Boolean): Boolean = runCatching {
+        val dir = aspect43Dir(ctx) ?: return false
+        if (on) { if (!dir.isDirectory) copyTree(ctx, "$ROOT/$ASPECT43", dir) } else dir.deleteRecursively()
+        aspect43On(ctx) == on
+    }.getOrDefault(false)
 
     private val ODYSSEY = Regex("mario\\s*odyssey", RegexOption.IGNORE_CASE)
 
