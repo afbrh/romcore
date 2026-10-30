@@ -119,7 +119,8 @@ class MenuModel(
 
     fun open() {
         if (isOpen) return
-        isOpen = true; expanded = null; cursor = 0; lastPair = 0; status = ""; capturingPad = null; capturingHotkey = null
+        isOpen = true; expanded = null; cursor = 1; lastPair = 1;   // starts on Save State (row 1)
+        status = ""; capturingPad = null; capturingHotkey = null
         gate.setMenuOpen(true)
         refreshUndo()
         session.pause(); wasPausedByUs = true

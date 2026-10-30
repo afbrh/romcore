@@ -56,10 +56,9 @@ class MenuRouterIntegrationTest {
 
     @Test fun canonicalNavigationAAndB() {
         model.open()
-        assertEquals(0, model.cursor)                       // Load State | Save State share the top line
-        tap(Pad.DPAD_RIGHT); assertEquals(1, model.cursor)
+        assertEquals(1, model.cursor)                       // Load State | Save State share the bottom line; it opens on Save State
         tap(Pad.DPAD_LEFT); assertEquals(0, model.cursor)
-        tap(Pad.DPAD_RIGHT)
+        tap(Pad.DPAD_RIGHT); assertEquals(1, model.cursor)
         tap(Pad.DPAD_UP); assertEquals(2, model.cursor)   // one UP leaves the pair (Controller Mapping)
         tap(Pad.DPAD_DOWN); assertEquals(1, model.cursor)     // and DOWN returns to the pair button it left from
         tap(Pad.A)                                          // Save State saves directly, no slot list
@@ -71,7 +70,7 @@ class MenuRouterIntegrationTest {
 
     @Test fun leftStickNavigatesWithHysteresis() {
         model.open()
-        router.dispatch(listOf(PadEvent(Pad.LS_UP, 0.4f)), sys); assertEquals(0, model.cursor)
+        router.dispatch(listOf(PadEvent(Pad.LS_UP, 0.4f)), sys); assertEquals(1, model.cursor)
         router.dispatch(listOf(PadEvent(Pad.LS_UP, 0.9f)), sys); assertEquals(2, model.cursor)
         router.dispatch(listOf(PadEvent(Pad.LS_UP, 0.5f)), sys); assertEquals(2, model.cursor)
         router.dispatch(listOf(PadEvent(Pad.LS_UP, 0.1f)), sys)
