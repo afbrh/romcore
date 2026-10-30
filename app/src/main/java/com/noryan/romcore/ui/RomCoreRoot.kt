@@ -225,7 +225,9 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
         val newOpen = editor != null && editor?.collectionId == null
         val showSel = !settingsOpen && !newOpen
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).onFocusChanged { tabsFocused = it.hasFocus }, verticalAlignment = Alignment.CenterVertically) {
-            Row(Modifier.weight(1f).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val keyHint = when { editor != null -> "A TOGGLE    B CANCEL"; settingsOpen -> "A SELECT    B BACK"; else -> "A SELECT    B SETTINGS" }
+            Text(coloredKeyHint(keyHint), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
+            Row(Modifier.weight(1f).padding(start = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     cols.forEach { c ->
@@ -237,11 +239,9 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
                     }
                 }
             }
-            val keyHint = when { editor != null -> "A TOGGLE    B CANCEL"; settingsOpen -> "A SELECT    B BACK"; tabsFocused -> "A SELECT    B SETTINGS"; else -> "A SELECT    X OPTIONS    B SETTINGS" }
             val battery = rememberBatteryPercent()
             // Right side of the top bar: scan counter, the keys for this screen, then the battery level in the corner.
             if (scanning) Text("SCANNING $n", Modifier.padding(end = 18.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, maxLines = 1, softWrap = false)
-            Text(coloredKeyHint(keyHint), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
             if (battery != null) Text("$battery%", Modifier.padding(start = 18.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, softWrap = false)
         }
         tabOpts?.let { o -> cols.firstOrNull { it.id == o.id }?.let { c -> CollectionOptions(vm, c, o.mode, { tabOpts = o.copy(mode = it) }, { tabOpts = null }) } }
@@ -276,6 +276,12 @@ private fun GameList(vm: MainViewModel, collectionId: Long?) {
     val scanning by vm.scanning.collectAsStateWithLifecycle()
     val launching by vm.launching.collectAsStateWithLifecycle()
     var expanded by remember(collectionId) { mutableStateOf<Long?>(null) }
+    // The A-press choice (PLAY GAME / GAME OPTIONS) under a game; GAME OPTIONS turns it into [expanded].
+    var choice by remember(collectionId) { mutableStateOf<Long?>(null) }
+    val playFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val optFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(choice) { if (choice != null) runCatching { playFocus.requestFocus() } }
+    LaunchedEffect(expanded) { if (expanded != null) runCatching { optFocus.requestFocus() } }
     var addOpen by remember(collectionId) { mutableStateOf<Long?>(null) }
     var coreOpen by remember(collectionId) { mutableStateOf<Long?>(null) }
     val games = if (collectionId == null) all else CollectionRules.gamesOf(all, members[collectionId].orEmpty())
@@ -301,9 +307,15 @@ private fun GameList(vm: MainViewModel, collectionId: Long?) {
                 FocusLine(
                     (if (g.favorite) "* " else "") + g.title + if (core == null) " (NO CORE)" else "",
                     dim = core == null,
-                    onAlt = { expanded = if (expanded == g.id) null else g.id; addOpen = null; coreOpen = null },
-                    onClick = { vm.launch(ctx, g) }
+                    onAlt = { choice = null; expanded = if (expanded == g.id) null else g.id; addOpen = null; coreOpen = null },
+                    onClick = { choice = if (choice == g.id) null else g.id; expanded = null; addOpen = null; coreOpen = null }
                 )
+                if (choice == g.id) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopStart) {
+                    Column(Modifier.padding(start = 16.dp, top = 4.dp, bottom = 10.dp).widthIn(max = 296.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OptionButton("PLAY GAME", Modifier.focusRequester(playFocus)) { choice = null; vm.launch(ctx, g) }
+                        OptionButton("GAME OPTIONS") { choice = null; expanded = g.id }
+                    }
+                }
                 if (expanded == g.id) {
                     val cands = sys?.let { CoreRouter.candidatesFor(it, g.gameId, title = g.title) }.orEmpty()
                     val auto = sys?.let { CoreRouter.autoChoice(it, g.title, gameId = g.gameId) }
@@ -312,11 +324,10 @@ private fun GameList(vm: MainViewModel, collectionId: Long?) {
                     // A narrow, centered stack of in-game-menu-style buttons under the game's name.
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopStart) {
                         Column(Modifier.padding(start = 16.dp, top = 4.dp, bottom = 10.dp).widthIn(max = 296.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OptionButton("PLAY") { vm.launch(ctx, g) }
                             if (collectionId != null)
-                                OptionButton("REMOVE FROM COLLECTION") { vm.setMember(collectionId, g.id, false); expanded = null }
+                                OptionButton("REMOVE FROM COLLECTION", Modifier.focusRequester(optFocus)) { vm.setMember(collectionId, g.id, false); expanded = null }
                             if (cols.isNotEmpty()) {
-                                OptionButton("ADD TO COLLECTION", selected = addOpen == g.id) { addOpen = if (addOpen == g.id) null else g.id }
+                                OptionButton("ADD TO COLLECTION", if (collectionId == null) Modifier.focusRequester(optFocus) else Modifier, selected = addOpen == g.id) { addOpen = if (addOpen == g.id) null else g.id }
                                 if (addOpen == g.id) SubMenu {
                                     cols.forEach { c ->
                                         val inIt = g.id in members[c.id].orEmpty()
@@ -328,7 +339,7 @@ private fun GameList(vm: MainViewModel, collectionId: Long?) {
                             // and every other core that can run this game listed under it.
                             val current = "CORE: " + (chosen?.displayName ?: autoLabel)
                             if (coreOpen != g.id) {
-                                OptionButton(current) { coreOpen = g.id }
+                                OptionButton(current, if (collectionId == null && cols.isEmpty()) Modifier.focusRequester(optFocus) else Modifier) { coreOpen = g.id }
                             } else ExpandBox(
                                 header = { OptionButton(current, selected = true, flat = true) { coreOpen = null } },
                             ) {
