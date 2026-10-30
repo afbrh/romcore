@@ -21,7 +21,7 @@ import java.util.concurrent.Executors
  * menu toggle / quick save / quick load / close, and FLAG_KEEP_SCREEN_ON.
  */
 object RomCoreCoreHost {
-    private const val BACK_TAP_WINDOW_MS = 320L
+    private const val BACK_TAP_WINDOW_MS = 200L
     private const val BACK_HOLD_MS = 450L
 
     /** State slot used by the Save/Load State hotkeys. */
