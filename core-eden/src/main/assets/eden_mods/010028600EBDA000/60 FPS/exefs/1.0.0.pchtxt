@@ -1,0 +1,24 @@
+@nsobid-891687F016A18F1773D4A88EBF8A973C8E33ECC1
+
+# Super Mario 3D World + Bowser's Fury [010028600EBDA000] (base game v1.0.0, main NSO build id above)
+# 60 FPS in Bowser's Fury while Eden runs in handheld mode - RomCore.
+#
+# Bowser's Fury is capped at 30 fps in handheld and runs at 60 fps docked. The game keeps its own copy of the
+# applet operation mode in a small status object (field +8 = "is docked", field +0xc = "boost performance mode"),
+# filled by nn::oe::GetOperationMode() at start-up (function 0x8d9330) and refreshed on the operation-mode-changed
+# message (function 0x8d93d0, case 0x8d9450). Fury picks its 30 fps handheld pacing from that flag.
+# Eden reports handheld, so the flag is 0 -> 30 fps. The patch makes the game believe it is docked (flag = 1);
+# the rest of the system (Eden, controls, display layer) still sees handheld.
+#
+# 1) 008D934C (code 0x8d934c, start-up read):   cset w8, eq  ->  mov w8, #1
+# 2) 008D9460 (code 0x8d9460, mode-change msg): cset w8, eq  ->  mov w8, #1
+# The performance-mode flag (+0xc, 0x8d9360 / 0x8d9484) is left alone.
+# No code caves, no overlap with the "4:3 Aspect Ratio" mod (0040B818, 0069D120, 00738678, caves 009C4A80/009C4D00).
+
+@flag print_values
+@flag offset_shift 0x100
+
+@enabled
+008D934C 28008052
+008D9460 28008052
+@stop
