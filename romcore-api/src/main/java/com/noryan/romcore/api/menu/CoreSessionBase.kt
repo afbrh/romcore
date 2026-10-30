@@ -22,6 +22,59 @@ interface StateSlotProvider {
 }
 
 /**
+ * Optional: a CoreSession whose save states are plain files can keep the state a save overwrites, so the menu can offer "Undo
+ * Save State". Call [prepareUndo] before a save and [commitUndo] after it (see [saveStateKeepingUndo]); [undoSave] puts the previous
+ * state back (one level; it does not load it).
+ */
+interface StateUndoSupport {
+    fun prepareUndo(slot: Int)
+    fun commitUndo(slot: Int, saved: Boolean)
+    fun canUndoSave(slot: Int): Boolean
+    fun undoSave(slot: Int): Boolean
+}
+
+/** Saves to [slot], first keeping the state it replaces for [StateUndoSupport]. */
+fun CoreSession.saveStateKeepingUndo(slot: Int): Boolean {
+    val u = this as? StateUndoSupport
+    runCatching { u?.prepareUndo(slot) }
+    val ok = saveState(slot)
+    runCatching { u?.commitUndo(slot, ok) }
+    return ok
+}
+
+/** The file side of [StateUndoSupport]: `<state>.bak` (and `<thumb>.bak`) hold the previous save; `.tmp` is the copy in flight. */
+object StateBackup {
+    private fun sib(f: File, ext: String) = File(f.parentFile, f.name + ext)
+    fun prepare(state: File, thumb: File?) {
+        sib(state, ".tmp").delete(); thumb?.let { sib(it, ".tmp").delete() }
+        if (state.exists()) {
+            state.copyTo(sib(state, ".tmp"), overwrite = true)
+            if (thumb != null && thumb.exists()) thumb.copyTo(sib(thumb, ".tmp"), overwrite = true)
+        }
+    }
+    /** A good save makes the copy the new undo point (or clears it when there was nothing before); a failed save drops it. */
+    fun commit(state: File, thumb: File?, saved: Boolean) {
+        val tmp = sib(state, ".tmp"); val bak = sib(state, ".bak")
+        val tmpT = thumb?.let { sib(it, ".tmp") }; val bakT = thumb?.let { sib(it, ".bak") }
+        if (saved) {
+            bak.delete(); bakT?.delete()
+            if (tmp.exists()) tmp.renameTo(bak)
+            if (tmpT != null && tmpT.exists()) tmpT.renameTo(bakT!!)
+        } else { tmp.delete(); tmpT?.delete() }
+    }
+    fun canUndo(state: File) = sib(state, ".bak").exists()
+    fun undo(state: File, thumb: File?): Boolean {
+        val bak = sib(state, ".bak")
+        if (!bak.exists()) return false
+        return runCatching {
+            bak.copyTo(state, overwrite = true); bak.delete()
+            if (thumb != null) { val bt = sib(thumb, ".bak"); if (bt.exists()) { bt.copyTo(thumb, overwrite = true); bt.delete() } else thumb.delete() }
+            true
+        }.getOrDefault(false)
+    }
+}
+
+/**
  * Optional helper base for every core's CoreSession. Standard state location = the PORTABLE save root (see [SaveRoot]):
  *   <saveRoot>/states/<coreId>/<gameKey>/slotN   (+ slotN.png thumbnail, optional)
  * where gameKey = the ROM file name without extension ([SaveRoot.gameKey]). (Older builds used
@@ -33,7 +86,7 @@ abstract class CoreSessionBase(
     protected val context: Context,
     val coreId: String,
     val romPath: String,
-) : CoreSession, StateSlotProvider {
+) : CoreSession, StateSlotProvider, StateUndoSupport {
     companion object {
         const val SLOTS = 10
         /** Legacy path hash (only the migration needs it). */
@@ -53,6 +106,11 @@ abstract class CoreSessionBase(
 
     override fun saveState(slot: Int): Boolean = writeState(slot, statePath(slot))
     override fun loadState(slot: Int): Boolean = statePath(slot).exists() && readState(slot, statePath(slot))
+
+    override fun prepareUndo(slot: Int) = StateBackup.prepare(statePath(slot), thumbnailPath(slot))
+    override fun commitUndo(slot: Int, saved: Boolean) = StateBackup.commit(statePath(slot), thumbnailPath(slot), saved)
+    override fun canUndoSave(slot: Int) = StateBackup.canUndo(statePath(slot))
+    override fun undoSave(slot: Int) = StateBackup.undo(statePath(slot), thumbnailPath(slot))
 
     override fun slotInfo(slot: Int): SlotInfo {
         val f = statePath(slot)

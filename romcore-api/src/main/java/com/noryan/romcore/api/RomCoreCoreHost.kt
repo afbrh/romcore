@@ -1,5 +1,6 @@
 package com.noryan.romcore.api
 
+import com.noryan.romcore.api.menu.saveStateKeepingUndo
 import android.app.Activity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -116,7 +117,7 @@ object RomCoreCoreHost {
                 MenuAction.FAST_FORWARD -> setFastForward(true)
                 MenuAction.CLOSE_GAME -> session.close()
                 MenuAction.SAVE_STATE -> worker.execute {
-                    val ok = runCatching { session.saveState(QUICK_SLOT) }.getOrDefault(false)
+                    val ok = runCatching { session.saveStateKeepingUndo(QUICK_SLOT) }.getOrDefault(false)
                     toast(if (ok) "State saved" else "Save failed")
                 }
                 MenuAction.LOAD_STATE -> worker.execute {

@@ -14,6 +14,8 @@ import java.util.concurrent.Executors
 /** One visible row in the flattened menu list. */
 sealed interface MenuRowModel {
     data class Top(val action: MenuAction) : MenuRowModel
+    /** "Undo Save State": puts back the state the last save replaced. Shown only while there is one. */
+    object Undo : MenuRowModel
     data class Slot(val slot: Int) : MenuRowModel
     data class Bind(val pad: Pad) : MenuRowModel
     data class Hot(val action: MenuAction) : MenuRowModel
@@ -56,6 +58,12 @@ class MenuModel(
     var capturingHotkey by mutableStateOf<MenuAction?>(null); private set
     /** Bumped whenever slot/binding data may have changed so rows re-read it. */
     var revision by mutableStateOf(0); private set
+    /** True while the last save left a previous state that "Undo Save State" can put back (read off the main thread, see [refreshUndo]). */
+    private var undoOk by mutableStateOf(false)
+    private fun refreshUndo() {
+        val u = session as? StateUndoSupport ?: return
+        worker.execute { val ok = runCatching { u.canUndoSave(com.noryan.romcore.api.RomCoreCoreHost.QUICK_SLOT) }.getOrDefault(false); main.post { undoOk = ok } }
+    }
     /** True while a capture runs that must see RAW events (backend without live capture); router-routed otherwise. */
     val capturingRaw get() = (capturingPad != null && !mapping.liveCapture) || (capturingHotkey != null && !hotkeys.liveCapture)
     val capturing get() = capturingPad != null || capturingHotkey != null
@@ -69,6 +77,7 @@ class MenuModel(
 
     val rows: List<MenuRowModel> get() = buildList {
         for (a in TOP) {
+            if (a == MenuAction.FAST_FORWARD && undoOk && stateUnavailableReason == null) add(MenuRowModel.Undo)
             if (a == MenuAction.FAST_FORWARD && session !is com.noryan.romcore.api.FastForwardSupport) continue
             if (a == MenuAction.CLOSE_GAME && option != null) add(MenuRowModel.Option)
             if (a == MenuAction.CLOSE_GAME && toggle != null) add(MenuRowModel.Toggle)
@@ -91,7 +100,7 @@ class MenuModel(
         val list = rows
         val groups = mutableListOf<MutableList<Int>>()
         list.forEachIndexed { i, r ->
-            val starts = r == MenuRowModel.Option || r == MenuRowModel.Toggle || r is MenuRowModel.Top
+            val starts = r == MenuRowModel.Option || r == MenuRowModel.Toggle || r == MenuRowModel.Undo || r is MenuRowModel.Top
             if (i == 1 && list[0] is MenuRowModel.Top && r is MenuRowModel.Top) return@forEachIndexed   // Load State is drawn on Save State's line
             if (starts || groups.isEmpty()) groups += mutableListOf(i) else groups.last() += i
         }
@@ -110,7 +119,7 @@ class MenuModel(
         if (isOpen) return
         isOpen = true; expanded = null; cursor = 0; lastPair = 0; status = ""; capturingPad = null; capturingHotkey = null
         gate.setMenuOpen(true)
-        onOpened()
+        onOpened(); refreshUndo()
         session.pause(); wasPausedByUs = true
     }
 
@@ -201,6 +210,16 @@ class MenuModel(
                     if (capturingHotkey == act) { capturingHotkey = null; revision++; status = if (ok) "Hotkey set" else "Cancelled" }
                 }
             }
+            MenuRowModel.Undo -> {
+                status = "Restoring..."
+                worker.execute {
+                    val ok = runCatching { (session as? StateUndoSupport)?.undoSave(com.noryan.romcore.api.RomCoreCoreHost.QUICK_SLOT) == true }.getOrDefault(false)
+                    main.post {
+                        revision++; refreshUndo(); cursor = 0
+                        status = if (ok) "Previous save restored (Load State to use it)" else "Nothing to undo"
+                    }
+                }
+            }
             MenuRowModel.Option -> option?.let {
                 val ok = runCatching { it.cycleOption() }.getOrDefault(false)
                 revision++
@@ -221,9 +240,9 @@ class MenuModel(
         if (isDisabled(if (saving) MenuAction.SAVE_STATE else MenuAction.LOAD_STATE)) { status = stateUnavailableReason.orEmpty(); return }
         status = if (saving) "Saving..." else "Loading..."
         worker.execute {
-            val ok = runCatching { if (saving) session.saveState(slot) else session.loadState(slot) }.getOrDefault(false)
+            val ok = runCatching { if (saving) session.saveStateKeepingUndo(slot) else session.loadState(slot) }.getOrDefault(false)
             main.post {
-                revision++
+                revision++; if (saving) refreshUndo()
                 if (ok && (!saving || closeAfter)) { close() }
                 else status = when { ok -> "State saved"; saving -> "Save failed"; else -> "No saved state" }
             }

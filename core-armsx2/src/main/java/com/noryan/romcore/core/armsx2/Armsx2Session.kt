@@ -26,7 +26,7 @@ import java.io.File
  */
 internal class Armsx2Session(private val activity: Armsx2Activity) :
     CoreSession, StateSlotProvider, FastForwardSupport, com.noryan.romcore.api.OptionCycleSupport,
-    com.noryan.romcore.api.ToggleOptionSupport {
+    com.noryan.romcore.api.ToggleOptionSupport, com.noryan.romcore.api.menu.StateUndoSupport {
     private val main = Handler(Looper.getMainLooper())
 
     // ---- pause / resume ----------------------------------------------------------------------------------------------
@@ -103,6 +103,13 @@ internal class Armsx2Session(private val activity: Armsx2Activity) :
         }
         return false
     }
+
+    // The slot's .p2s file (screenshot is inside it), kept as .bak across a save for "Undo Save State".
+    private fun slotFile(slot: Int) = if (!vmUp()) null else runCatching { NativeApp.getGamePathSlot(slot) }.getOrNull()?.let { java.io.File(it) }
+    override fun prepareUndo(slot: Int) { slotFile(slot)?.let { com.noryan.romcore.api.menu.StateBackup.prepare(it, null) } }
+    override fun commitUndo(slot: Int, saved: Boolean) { slotFile(slot)?.let { com.noryan.romcore.api.menu.StateBackup.commit(it, null, saved) } }
+    override fun canUndoSave(slot: Int) = slotFile(slot)?.let { com.noryan.romcore.api.menu.StateBackup.canUndo(it) } == true
+    override fun undoSave(slot: Int) = slotFile(slot)?.let { com.noryan.romcore.api.menu.StateBackup.undo(it, null) } == true
 
     override fun loadState(slot: Int): Boolean =
         vmUp() && runCatching { NativeApp.loadStateFromSlot(slot) }.getOrDefault(false)
