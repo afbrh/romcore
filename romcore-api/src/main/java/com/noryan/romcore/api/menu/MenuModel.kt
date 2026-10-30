@@ -240,7 +240,7 @@ class MenuModel(
     }
 
     /** There is a single save state: Save/Load State act directly on the one slot. */
-    private fun doState(saving: Boolean, slot: Int = com.noryan.romcore.api.RomCoreCoreHost.QUICK_SLOT, closeAfter: Boolean = false) {
+    private fun doState(saving: Boolean, slot: Int = com.noryan.romcore.api.RomCoreCoreHost.QUICK_SLOT) {
         if (isDisabled(if (saving) MenuAction.SAVE_STATE else MenuAction.LOAD_STATE)) { status = stateUnavailableReason.orEmpty(); return }
         // Saving minimizes the menu at once; the game stays paused until the state is written, then the result is a banner.
         if (saving) close(resume = false) else status = "Loading..."
@@ -291,9 +291,6 @@ class MenuModel(
         when (pad) {
             Pad.A -> nav(MenuNav.SELECT)
             Pad.B -> nav(MenuNav.BACK)
-            // Shoulder shortcuts shown on the Save / Load buttons: act on the quick slot and close the menu.
-            Pad.R1 -> if (!capturing) doState(true, closeAfter = true)
-            Pad.L1 -> if (!capturing) doState(false, closeAfter = true)
             Pad.X -> (rows.getOrNull(cursor) as? MenuRowModel.Hot)?.let { hotkeys.clear(it.action); revision++; status = "Cleared" }
             Pad.DPAD_UP, Pad.LS_UP, Pad.DPAD_DOWN, Pad.LS_DOWN -> {
                 padNav(pad); repeatPad = pad; main.removeCallbacks(repeater); main.postDelayed(repeater, REPEAT_DELAY_MS)
@@ -352,7 +349,7 @@ class MenuModel(
         const val CAPTURE_TIMEOUT_MS = 12_000L
         private const val REPEAT_DELAY_MS = 350L
         private const val REPEAT_MS = 90L
-        /** Row order. The first two ([PAIR]) are drawn side by side on one line: Load State (left, L1), Save State (right, R1). */
+        /** Row order. The first two ([PAIR]) are drawn side by side on one line: Load State (left), Save State (right). */
         val TOP = listOf(MenuAction.LOAD_STATE, MenuAction.SAVE_STATE, MenuAction.FAST_FORWARD, MenuAction.CHANGE_CONTROLLER_MAPPING, MenuAction.CLOSE_GAME)
         const val PAIR = 2
         fun title(a: MenuAction) = when (a) {
