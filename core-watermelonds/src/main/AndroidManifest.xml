@@ -13,7 +13,8 @@
             android:taskAffinity="com.noryan.romcore.melonds"
             android:exported="false"
             tools:node="merge"
-            tools:replace="android:exported">
+            android:screenOrientation="landscape"
+            tools:replace="android:exported,android:screenOrientation">
             <intent-filter tools:node="removeAll" />
         </activity>
 

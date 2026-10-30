@@ -20,7 +20,7 @@
             android:exported="false"
             android:process=":dolphin"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|navigation|uiMode|smallestScreenSize|density"
-            android:screenOrientation="userLandscape"
+            android:screenOrientation="landscape"
             android:launchMode="singleTask"
             android:taskAffinity="com.noryan.romcore.dolphin"
             android:preferMinimalPostProcessing="true"

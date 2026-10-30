@@ -8,6 +8,7 @@
             android:process=":retroarch"
             android:exported="false"
             android:launchMode="singleTask"
+            android:screenOrientation="landscape"
             android:taskAffinity="com.noryan.romcore.retroarch"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|fontScale|density">

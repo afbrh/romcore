@@ -20,7 +20,7 @@
             android:launchMode="singleTask"
             android:exported="false"
             android:alwaysRetainTaskState="true"
-            android:screenOrientation="sensorLandscape"
+            android:screenOrientation="landscape"
             android:preferMinimalPostProcessing="true"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
             android:configChanges="layoutDirection|locale|grammaticalGender|fontScale|fontWeightAdjustment|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|density" />

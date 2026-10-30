@@ -12,7 +12,8 @@
             android:exported="false"
             tools:node="merge"
             android:theme="@style/Theme.RomCoreEden"
-            tools:replace="android:exported,android:theme">
+            android:screenOrientation="landscape"
+            tools:replace="android:exported,android:theme,android:screenOrientation">
             <!-- RomCore launches this explicitly; drop the public VIEW/NFC filters of the stock app. -->
             <intent-filter tools:node="removeAll" />
         </activity>

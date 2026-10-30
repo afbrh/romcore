@@ -4,6 +4,7 @@
     <application>
         <activity
             android:name="com.noryan.romcore.core.primehack.PrimeHackActivity"
+            android:screenOrientation="landscape"
             android:process=":primehack"
             android:exported="false"
             android:theme="@style/Theme.RomCorePH"

@@ -31,7 +31,7 @@
             android:launchMode="singleTask"
             android:exported="false"
             android:hardwareAccelerated="true"
-            android:screenOrientation="sensorLandscape"
+            android:screenOrientation="landscape"
             android:resizeableActivity="true"
             android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density"
             android:theme="@style/Theme.ARMSX2.Boot" />
@@ -39,6 +39,7 @@
         <!-- Shown (in the main process) instead of the game when no PS2 BIOS is installed yet. -->
         <activity
             android:name="com.noryan.romcore.core.armsx2.Armsx2NoticeActivity"
+            android:screenOrientation="landscape"
             android:exported="false"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
     </application>
