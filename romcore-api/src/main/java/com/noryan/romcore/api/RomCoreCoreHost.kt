@@ -54,6 +54,8 @@ object RomCoreCoreHost {
         fun setTargetFps(fps: Int) { if (fps in 10..240) perf.targetFps = fps }
 
         init {
+            menu.model.onOpened = { setFastForward(false) }
+            menu.model.onFastForward = { setFastForward(true) }
             ui.attachTopLayer()
             ui.onErrorShown = {
                 if (menu.isOpen) menu.model.close()

@@ -41,12 +41,15 @@ class MenuModel(
     var gate: MenuInputGate = NoopMenuInputGate,
     /** Called when the menu should be dismissed (host hides the view). */
     var onDismiss: () -> Unit = {},
+    /** Called when the menu opens (host: fast forward always starts off) and when its Fast Forward row is picked (host: turn it on). */
+    var onOpened: () -> Unit = {},
+    var onFastForward: () -> Unit = {},
     val slots: Int = CoreSessionBase.SLOTS,
 ) {
     var isOpen by mutableStateOf(false); private set
     var expanded by mutableStateOf<MenuAction?>(null); private set
     var cursor by mutableStateOf(0); private set
-    /** Which of the side-by-side pair (0 = Save, 1 = Load) the cursor last sat on, so UP/DOWN return to it. */
+    /** Which of the side-by-side pair (0 = Load, 1 = Save) the cursor last sat on, so UP/DOWN return to it. */
     private var lastPair = 0
     var status by mutableStateOf(""); private set
     var capturingPad by mutableStateOf<Pad?>(null); private set
@@ -66,6 +69,7 @@ class MenuModel(
 
     val rows: List<MenuRowModel> get() = buildList {
         for (a in TOP) {
+            if (a == MenuAction.FAST_FORWARD && session !is com.noryan.romcore.api.FastForwardSupport) continue
             if (a == MenuAction.CLOSE_GAME && option != null) add(MenuRowModel.Option)
             if (a == MenuAction.CLOSE_GAME && toggle != null) add(MenuRowModel.Toggle)
             add(MenuRowModel.Top(a))
@@ -106,6 +110,7 @@ class MenuModel(
         if (isOpen) return
         isOpen = true; expanded = null; cursor = 0; lastPair = 0; status = ""; capturingPad = null; capturingHotkey = null
         gate.setMenuOpen(true)
+        onOpened()
         session.pause(); wasPausedByUs = true
     }
 
@@ -174,6 +179,7 @@ class MenuModel(
     private fun activate(row: MenuRowModel) {
         when (row) {
             is MenuRowModel.Top -> if (isDisabled(row.action)) status = stateUnavailableReason.orEmpty()
+            else if (row.action == MenuAction.FAST_FORWARD) { close(); onFastForward() }
             else if (row.action == MenuAction.SAVE_STATE || row.action == MenuAction.LOAD_STATE) doState(row.action == MenuAction.SAVE_STATE)
             else if (expanded == row.action) collapse() else {
                 expanded = row.action; status = ""
@@ -211,13 +217,14 @@ class MenuModel(
     }
 
     /** There is a single save state: Save/Load State act directly on the one slot. */
-    private fun doState(saving: Boolean, slot: Int = com.noryan.romcore.api.RomCoreCoreHost.QUICK_SLOT) {
+    private fun doState(saving: Boolean, slot: Int = com.noryan.romcore.api.RomCoreCoreHost.QUICK_SLOT, closeAfter: Boolean = false) {
+        if (isDisabled(if (saving) MenuAction.SAVE_STATE else MenuAction.LOAD_STATE)) { status = stateUnavailableReason.orEmpty(); return }
         status = if (saving) "Saving..." else "Loading..."
         worker.execute {
             val ok = runCatching { if (saving) session.saveState(slot) else session.loadState(slot) }.getOrDefault(false)
             main.post {
                 revision++
-                if (ok && !saving) { close() }
+                if (ok && (!saving || closeAfter)) { close() }
                 else status = when { ok -> "State saved"; saving -> "Save failed"; else -> "No saved state" }
             }
         }
@@ -257,6 +264,9 @@ class MenuModel(
         when (pad) {
             Pad.A -> nav(MenuNav.SELECT)
             Pad.B -> nav(MenuNav.BACK)
+            // Shoulder shortcuts shown on the Save / Load buttons: act on the quick slot and close the menu.
+            Pad.R1 -> if (!capturing) doState(true, closeAfter = true)
+            Pad.L1 -> if (!capturing) doState(false, closeAfter = true)
             Pad.X -> (rows.getOrNull(cursor) as? MenuRowModel.Hot)?.let { hotkeys.clear(it.action); revision++; status = "Cleared" }
             Pad.DPAD_UP, Pad.LS_UP, Pad.DPAD_DOWN, Pad.LS_DOWN -> {
                 padNav(pad); repeatPad = pad; main.removeCallbacks(repeater); main.postDelayed(repeater, REPEAT_DELAY_MS)
@@ -315,8 +325,8 @@ class MenuModel(
         const val CAPTURE_TIMEOUT_MS = 12_000L
         private const val REPEAT_DELAY_MS = 350L
         private const val REPEAT_MS = 90L
-        /** Row order. The first two ([PAIR]) are drawn side by side on one line: Save State (left), Load State (right). */
-        val TOP = listOf(MenuAction.SAVE_STATE, MenuAction.LOAD_STATE, MenuAction.CHANGE_CONTROLLER_MAPPING, MenuAction.SET_HOTKEYS, MenuAction.CLOSE_GAME)
+        /** Row order. The first two ([PAIR]) are drawn side by side on one line: Load State (left, L1), Save State (right, R1). */
+        val TOP = listOf(MenuAction.LOAD_STATE, MenuAction.SAVE_STATE, MenuAction.FAST_FORWARD, MenuAction.CHANGE_CONTROLLER_MAPPING, MenuAction.SET_HOTKEYS, MenuAction.CLOSE_GAME)
         const val PAIR = 2
         fun title(a: MenuAction) = when (a) {
             MenuAction.CLOSE_GAME -> "Close Game"

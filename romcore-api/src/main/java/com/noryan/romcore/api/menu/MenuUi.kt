@@ -94,7 +94,7 @@ private fun MenuPanelContent(model: MenuModel) {
                     val click = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { model.select(i) }
                     when {
                         i == 0 && rows.size > 1 && row is MenuRowModel.Top && rows[1] is MenuRowModel.Top -> {
-                            // Save State and Load State share one line (their own rows 0 and 1), half the width each.
+                            // Load State and Save State share one line (their own rows 0 and 1), half the width each.
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Box(Modifier.weight(1f)) { RowItem(model, row, model.cursor == 0, click) }
                                 Box(Modifier.weight(1f)) { RowItem(model, rows[1], model.cursor == 1,
@@ -137,12 +137,18 @@ private fun RowItem(model: MenuModel, row: MenuRowModel, focused: Boolean, click
             val label = if (focused) OnAccent else if (disabled) Dim else if (row.action == MenuAction.CLOSE_GAME) MenuStyle.Danger else Color(0xFFE6E6EA)
             val pair = row.action == MenuAction.LOAD_STATE || row.action == MenuAction.SAVE_STATE
             Box(click.button(focused).padding(if (pair) 6.dp else MenuStyle.RowPaddingHorizontal, 12.dp)) {
-                BasicText(if (row.action == MenuAction.CHANGE_CONTROLLER_MAPPING) "Controller Mapping" else MenuModel.title(row.action),
+                BasicText(when (row.action) {
+                    MenuAction.CHANGE_CONTROLLER_MAPPING -> "Controller Mapping"
+                    MenuAction.FAST_FORWARD -> "Fast Forward"
+                    MenuAction.SAVE_STATE -> "Save State\n(R1)"
+                    MenuAction.LOAD_STATE -> "Load State\n(L1)"
+                    else -> MenuModel.title(row.action) },
                     Modifier.align(if (pair) Alignment.Center else Alignment.CenterStart), style = style(label, if (pair) 13.sp else MenuStyle.FontSize).copy(textAlign = if (pair) TextAlign.Center else TextAlign.Start, textDecoration = if (focused) TextDecoration.Underline else TextDecoration.None), maxLines = 2)
                 // The half-width Save / Load buttons have no room for a tail: when disabled they are just dimmed, and the note under the
                 // menu says why (an "N/A" there was drawn on top of the label).
                 val tail = if (pair) ""                                                                           // plain actions, no arrow
                     else if (disabled) "N/A"
+                    else if (row.action == MenuAction.FAST_FORWARD) ""
                     else if (row.action != MenuAction.CLOSE_GAME || open) (if (open) "v" else ">") else ""
                 if (tail.isNotEmpty()) BasicText(tail, Modifier.align(Alignment.CenterEnd), style = style(if (focused) OnAccent else Dim))
             }
