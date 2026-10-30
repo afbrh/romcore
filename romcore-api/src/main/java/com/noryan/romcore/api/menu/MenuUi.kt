@@ -141,8 +141,8 @@ private fun RowItem(model: MenuModel, row: MenuRowModel, focused: Boolean, click
                 BasicText(when (row.action) {
                     MenuAction.CHANGE_CONTROLLER_MAPPING -> "Controller Mapping"
                     MenuAction.FAST_FORWARD -> "Fast Forward"
-                    MenuAction.SAVE_STATE -> "Save State\n(R1)"
-                    MenuAction.LOAD_STATE -> "Load State\n(L1)"
+                    MenuAction.SAVE_STATE -> "Save State"
+                    MenuAction.LOAD_STATE -> "Load State"
                     else -> MenuModel.title(row.action) },
                     Modifier.align(if (pair) Alignment.Center else Alignment.CenterStart), style = style(label, if (pair) 13.sp else MenuStyle.FontSize).copy(textAlign = if (pair) TextAlign.Center else TextAlign.Start, textDecoration = if (focused) TextDecoration.Underline else TextDecoration.None), maxLines = 2)
                 // The half-width Save / Load buttons have no room for a tail: when disabled they are just dimmed, and the note under the
