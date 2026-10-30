@@ -46,6 +46,8 @@ class MenuModel(
     /** Fast Forward row: [onFastForward] flips fast forward (host), [isFastForwarding] says whether it is on (the row is highlighted). */
     var onFastForward: () -> Unit = {},
     var isFastForwarding: () -> Boolean = { false },
+    /** A short banner for results shown after the menu has gone (host: RomCoreUi notice). */
+    var notice: (String) -> Unit = {},
     val slots: Int = CoreSessionBase.SLOTS,
 ) {
     var isOpen by mutableStateOf(false); private set
@@ -123,13 +125,14 @@ class MenuModel(
         session.pause(); wasPausedByUs = true
     }
 
-    fun close() {
+    /** [resume] false keeps the game paused (a save in flight), [resumeAfterSave] lets it go once the state is written. */
+    fun close(resume: Boolean = true) {
         if (!isOpen) return
         isOpen = false; expanded = null; capturingPad = null; capturingHotkey = null
         main.removeCallbacks(timeout); repeatPad = null; main.removeCallbacks(repeater)
         mapping.cancelCapture(); hotkeys.cancelCapture()
         gate.setMenuOpen(false)
-        if (wasPausedByUs) { wasPausedByUs = false; session.resume() }
+        if (resume && wasPausedByUs) { wasPausedByUs = false; session.resume() }
         onDismiss()
     }
 
@@ -238,13 +241,17 @@ class MenuModel(
     /** There is a single save state: Save/Load State act directly on the one slot. */
     private fun doState(saving: Boolean, slot: Int = com.noryan.romcore.api.RomCoreCoreHost.QUICK_SLOT, closeAfter: Boolean = false) {
         if (isDisabled(if (saving) MenuAction.SAVE_STATE else MenuAction.LOAD_STATE)) { status = stateUnavailableReason.orEmpty(); return }
-        status = if (saving) "Saving..." else "Loading..."
+        // Saving minimizes the menu at once; the game stays paused until the state is written, then the result is a banner.
+        if (saving) close(resume = false) else status = "Loading..."
         worker.execute {
             val ok = runCatching { if (saving) session.saveStateKeepingUndo(slot) else session.loadState(slot) }.getOrDefault(false)
             main.post {
                 revision++; if (saving) refreshUndo()
-                if (ok && (!saving || closeAfter)) { close() }
-                else status = when { ok -> "State saved"; saving -> "Save failed"; else -> "No saved state" }
+                if (saving) {
+                    if (!isOpen && wasPausedByUs) { wasPausedByUs = false; session.resume() }
+                    notice(if (ok) "State saved" else "Save failed")
+                } else if (ok) close()
+                else status = "No saved state"
             }
         }
     }

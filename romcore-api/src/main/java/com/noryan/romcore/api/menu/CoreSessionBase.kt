@@ -42,20 +42,20 @@ fun CoreSession.saveStateKeepingUndo(slot: Int): Boolean {
     return ok
 }
 
-/** The file side of [StateUndoSupport]: `<state>.bak` (and `<thumb>.bak`) hold the previous save; `.tmp` is the copy in flight. */
+/** The file side of [StateUndoSupport]: `<state>.bak` (and `<thumb>.bak`) hold the previous save; `.prev` is the copy in flight (not `.tmp`, which RetroArch seems to use for its own writes). */
 object StateBackup {
     private fun sib(f: File, ext: String) = File(f.parentFile, f.name + ext)
     fun prepare(state: File, thumb: File?) {
-        sib(state, ".tmp").delete(); thumb?.let { sib(it, ".tmp").delete() }
+        sib(state, ".prev").delete(); thumb?.let { sib(it, ".prev").delete() }
         if (state.exists()) {
-            state.copyTo(sib(state, ".tmp"), overwrite = true)
-            if (thumb != null && thumb.exists()) thumb.copyTo(sib(thumb, ".tmp"), overwrite = true)
+            state.copyTo(sib(state, ".prev"), overwrite = true)
+            if (thumb != null && thumb.exists()) thumb.copyTo(sib(thumb, ".prev"), overwrite = true)
         }
     }
     /** A good save makes the copy the new undo point (or clears it when there was nothing before); a failed save drops it. */
     fun commit(state: File, thumb: File?, saved: Boolean) {
-        val tmp = sib(state, ".tmp"); val bak = sib(state, ".bak")
-        val tmpT = thumb?.let { sib(it, ".tmp") }; val bakT = thumb?.let { sib(it, ".bak") }
+        val tmp = sib(state, ".prev"); val bak = sib(state, ".bak")
+        val tmpT = thumb?.let { sib(it, ".prev") }; val bakT = thumb?.let { sib(it, ".bak") }
         if (saved) {
             bak.delete(); bakT?.delete()
             if (tmp.exists()) tmp.renameTo(bak)

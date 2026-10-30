@@ -57,6 +57,7 @@ object RomCoreCoreHost {
         init {
             menu.model.onFastForward = { setFastForward(!fastForwarding) }
             menu.model.isFastForwarding = { fastForwarding }
+            menu.model.notice = { toast(it) }
             ui.attachTopLayer()
             ui.onErrorShown = {
                 if (menu.isOpen) menu.model.close()
