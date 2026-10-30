@@ -55,8 +55,8 @@ object RomCoreCoreHost {
         fun setTargetFps(fps: Int) { if (fps in 10..240) perf.targetFps = fps }
 
         init {
-            menu.model.onOpened = { setFastForward(false) }
-            menu.model.onFastForward = { setFastForward(true) }
+            menu.model.onFastForward = { setFastForward(!fastForwarding) }
+            menu.model.isFastForwarding = { fastForwarding }
             ui.attachTopLayer()
             ui.onErrorShown = {
                 if (menu.isOpen) menu.model.close()
@@ -88,7 +88,7 @@ object RomCoreCoreHost {
 
         private fun onHotkey(ev: HotkeyEvent) {
             when (ev) {
-                HotkeyEvent.ToggleMenu -> { setFastForward(false); menu.toggle() }
+                HotkeyEvent.ToggleMenu -> menu.toggle()
                 is HotkeyEvent.Run -> if (!menu.isOpen) runAction(ev.action)
                 is HotkeyEvent.Release -> setFastForward(false)
             }

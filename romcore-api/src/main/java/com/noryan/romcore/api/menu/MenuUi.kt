@@ -117,11 +117,11 @@ private fun style(color: Color, size: androidx.compose.ui.unit.TextUnit = MenuSt
     TextStyle(color = color, fontFamily = Silkscreen, fontSize = size)
 
 /** Home-screen "Games" button look: dark plate + grey border; focused = orange plate, dark label. */
-private fun Modifier.button(focused: Boolean, indent: Boolean = false): Modifier {
+private fun Modifier.button(focused: Boolean, indent: Boolean = false, on: Boolean = false): Modifier {
     val shape = RoundedCornerShape(8.dp)
     return this.padding(start = if (indent) 12.dp else 0.dp).fillMaxWidth().clip(shape)
         .background(if (focused) Accent else Plate0)
-        .border(BorderStroke(if (focused) 3.dp else 2.dp, if (focused) Color.White else Plate), shape)
+        .border(BorderStroke(if (focused) 3.dp else 2.dp, if (focused) Color.White else if (on) Accent else Plate), shape)
 }
 private val Accent = Color(0xFFFF6B4A)
 private val Plate0 = Color(0xFF0B0B0E)
@@ -134,9 +134,10 @@ private fun RowItem(model: MenuModel, row: MenuRowModel, focused: Boolean, click
         is MenuRowModel.Top -> {
             val open = model.expanded == row.action
             val disabled = model.isDisabled(row.action)
-            val label = if (focused) OnAccent else if (disabled) Dim else if (row.action == MenuAction.CLOSE_GAME) MenuStyle.Danger else Color(0xFFE6E6EA)
+            val ffOn = row.action == MenuAction.FAST_FORWARD && model.isFastForwarding()
+            val label = if (focused) OnAccent else if (disabled) Dim else if (row.action == MenuAction.CLOSE_GAME) MenuStyle.Danger else if (ffOn) Accent else Color(0xFFE6E6EA)
             val pair = row.action == MenuAction.LOAD_STATE || row.action == MenuAction.SAVE_STATE
-            Box(click.button(focused).padding(if (pair) 6.dp else MenuStyle.RowPaddingHorizontal, 12.dp)) {
+            Box(click.button(focused, on = ffOn).padding(if (pair) 6.dp else MenuStyle.RowPaddingHorizontal, 12.dp)) {
                 BasicText(when (row.action) {
                     MenuAction.CHANGE_CONTROLLER_MAPPING -> "Controller Mapping"
                     MenuAction.FAST_FORWARD -> "Fast Forward"

@@ -43,9 +43,9 @@ class MenuModel(
     var gate: MenuInputGate = NoopMenuInputGate,
     /** Called when the menu should be dismissed (host hides the view). */
     var onDismiss: () -> Unit = {},
-    /** Called when the menu opens (host: fast forward always starts off) and when its Fast Forward row is picked (host: turn it on). */
-    var onOpened: () -> Unit = {},
+    /** Fast Forward row: [onFastForward] flips fast forward (host), [isFastForwarding] says whether it is on (the row is highlighted). */
     var onFastForward: () -> Unit = {},
+    var isFastForwarding: () -> Boolean = { false },
     val slots: Int = CoreSessionBase.SLOTS,
 ) {
     var isOpen by mutableStateOf(false); private set
@@ -119,7 +119,7 @@ class MenuModel(
         if (isOpen) return
         isOpen = true; expanded = null; cursor = 0; lastPair = 0; status = ""; capturingPad = null; capturingHotkey = null
         gate.setMenuOpen(true)
-        onOpened(); refreshUndo()
+        refreshUndo()
         session.pause(); wasPausedByUs = true
     }
 
