@@ -26,6 +26,7 @@ object EdenMods {
         AspectGame(Regex("mario\\s*bros\\.?\\s*wonder", RegexOption.IGNORE_CASE), "010015100B514000/4-3 Aspect Ratio"),
         AspectGame(Regex("skyward\\s*sword", RegexOption.IGNORE_CASE), "01002DA013484000/4-3 Aspect Ratio"),
         AspectGame(Regex("mario\\s*3d\\s*world", RegexOption.IGNORE_CASE), "010028600EBDA000/4-3 Aspect Ratio"),
+        AspectGame(Regex("link.?s\\s*awakening", RegexOption.IGNORE_CASE), "01006BB00C6F0000/4-3 Aspect Ratio"),
     )
 
     private fun aspectGame(gameTitle: String) = ASPECT_GAMES.firstOrNull { it.title.containsMatchIn(gameTitle) }
