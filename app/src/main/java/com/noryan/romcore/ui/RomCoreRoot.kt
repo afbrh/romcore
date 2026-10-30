@@ -14,6 +14,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -159,6 +160,8 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
     // A saved collection tab is only trusted once the DB has answered; a deleted collection falls back to GAMES (never written back here).
     val tab = if (collections == null) saved else CollectionRules.resolveTab(saved, cols)
     var tabOpts by remember { mutableStateOf<TabOptions?>(null) }
+    // The device's launcher apps, opened with X from the home screen (B closes it).
+    var appsOpen by remember { mutableStateOf(false) }
     // True while controller focus is somewhere in the top bar (a tab or the +), false when it is down on a game.
     var tabsFocused by remember { mutableStateOf(false) }
     val tabFocus = remember { HashMap<Long, FocusRequester>() }
@@ -180,6 +183,9 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
     var sawEditor by remember { mutableStateOf(false) }
     LaunchedEffect(settingsOpen) { if (settingsOpen) sawSettings = true else if (sawSettings) { sawSettings = false; closedSettings = true } }
     LaunchedEffect(editor != null) { if (editor != null) sawEditor = true else if (sawEditor) { sawEditor = false; closedEditor = true } }
+    var sawApps by remember { mutableStateOf(false) }
+    LaunchedEffect(appsOpen) { if (appsOpen) sawApps = true else if (sawApps) { sawApps = false; runCatching { focusOf(tab).requestFocus() } } }
+    LaunchedEffect(settingsOpen, editor) { if (settingsOpen || editor != null) appsOpen = false }
     LaunchedEffect(closedSettings) { if (closedSettings) { closedSettings = false; runCatching { focusOf(tab).requestFocus() } } }
     LaunchedEffect(closedEditor, tab, cols) {
         if (closedEditor) {
@@ -202,6 +208,7 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
         when {
             editor != null -> vm.cancelEditor()
             tabOpts != null -> tabOpts = null
+            appsOpen -> appsOpen = false
             else -> vm.toggleSettings()
         }
     }
@@ -216,6 +223,9 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
                     runCatching { focusOf(to).requestFocus() }
                 }
                 true
+            } else if (e.type == KeyEventType.KeyUp && e.key == Key.ButtonX && editor == null && !settingsOpen && tabOpts == null) {
+                appsOpen = !appsOpen
+                true
             } else false
         }
     ) {
@@ -225,7 +235,7 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
         val newOpen = editor != null && editor?.collectionId == null
         val showSel = !settingsOpen && !newOpen
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).onFocusChanged { tabsFocused = it.hasFocus }, verticalAlignment = Alignment.CenterVertically) {
-            val keyHint = when { editor != null -> "A TOGGLE    B CANCEL"; settingsOpen -> "A SELECT    B BACK"; else -> "A SELECT    B SETTINGS" }
+            val keyHint = when { editor != null -> "A TOGGLE    B CANCEL"; settingsOpen || appsOpen -> "A SELECT    B BACK"; else -> "A SELECT    B SETTINGS    X APPS" }
             Text(coloredKeyHint(keyHint), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
             Row(Modifier.weight(1f).padding(start = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
@@ -256,6 +266,7 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
             when {
                 editor != null -> CollectionEditorScreen(vm)
                 settingsOpen -> SettingsTab(vm, pickRom, pickBios, pickSave)
+                appsOpen -> AppsScreen()
                 tab == CollectionRules.GAMES_TAB -> GameList(vm, null)
                 else -> GameList(vm, tab)
             }
@@ -298,7 +309,7 @@ private fun GameList(vm: MainViewModel, collectionId: Long?) {
     LazyColumn(Modifier.fillMaxSize()) {
         if (launching) item { Text("PREPARING ROM...", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium) }
         if (collectionId != null && games.isEmpty()) item(key = "empty") {
-            FocusLine("NO GAMES - PRESS X TO EDIT", dim = true, onAlt = { vm.editCollection(collectionId) }, onClick = { vm.editCollection(collectionId) })
+            FocusLine("NO GAMES - PRESS A TO EDIT", dim = true, onClick = { vm.editCollection(collectionId) })
         }
         items(games, key = { it.id }) { g ->
             val sys = sysOf(g)
@@ -307,7 +318,6 @@ private fun GameList(vm: MainViewModel, collectionId: Long?) {
                 FocusLine(
                     (if (g.favorite) "* " else "") + g.title + if (core == null) " (NO CORE)" else "",
                     dim = core == null,
-                    onAlt = { choice = null; expanded = if (expanded == g.id) null else g.id; addOpen = null; coreOpen = null },
                     onClick = { choice = if (choice == g.id) null else g.id; expanded = null; addOpen = null; coreOpen = null }
                 )
                 if (choice == g.id) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopStart) {
@@ -430,7 +440,6 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
     var open by remember { mutableStateOf<String?>(null) }
     fun toggle(k: String) { open = if (open == k) null else k }
     val allFiles by rememberAllFilesGranted()
-    val apps = remember { launchableApps(ctx) }   // re-read each time Settings opens
     // Menu-style buttons in one narrow, centered column (like the in-game menu). A row that is open grows into ONE bordered
     // box: its current value as the header, its options and notes inside.
     CompositionLocalProvider(LocalButtonLook provides 1) {
@@ -478,14 +487,29 @@ private fun SettingsTab(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> 
             FocusLine("HOME SCREEN", right = if (isHome) "ROMCORE" else "OFF   OPEN TO CHANGE", onClick = { openHomeAppSettings(ctx) })
         }
         item { Note("Make RomCore the launcher: choose it as the Home app, and the Home button brings you back here.") }
-        // Every installed app that has a launcher icon, so RomCore still works as the device's home screen.
-        item { Section("APPS (${apps.size})") }
-        if (apps.isEmpty()) item { Note("No other apps found.") }
-        items(apps, key = { it.component.flattenToString() }) { a ->
-            FocusLine(a.label, onClick = { launchApp(ctx, a) })
-        }
         item { Section("ABOUT") }
         item { Note("RomCore ${BuildConfig.VERSION_NAME} - GPLv3. Embedded emulator cores keep their own licenses.") }
+    }
+    }
+    }
+}
+
+/** Every installed app that has a launcher icon (X on the home screen), so RomCore still works as the device's home screen. */
+@Composable
+private fun AppsScreen() {
+    val ctx = LocalContext.current
+    val apps = remember { launchableApps(ctx) }   // re-read each time the list opens
+    val first = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(50); runCatching { first.requestFocus() } }
+    CompositionLocalProvider(LocalButtonLook provides 1) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val side = ((maxWidth - 400.dp) / 2).coerceAtLeast(12.dp)
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = side, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item { Section("APPS (${apps.size})") }
+        if (apps.isEmpty()) item { Note("No other apps found.") }
+        itemsIndexed(apps, key = { _, a -> a.component.flattenToString() }) { i, a ->
+            FocusLine(a.label, if (i == 0) Modifier.focusRequester(first) else Modifier, onClick = { launchApp(ctx, a) })
+        }
     }
     }
     }
