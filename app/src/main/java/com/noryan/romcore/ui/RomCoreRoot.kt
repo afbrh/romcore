@@ -235,7 +235,7 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
         val newOpen = editor != null && editor?.collectionId == null
         val showSel = !settingsOpen && !newOpen
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).onFocusChanged { tabsFocused = it.hasFocus }, verticalAlignment = Alignment.CenterVertically) {
-            val keyHint = when { editor != null -> "A TOGGLE    B CANCEL"; settingsOpen || appsOpen -> "A SELECT    B BACK"; else -> "A SELECT    B SETTINGS    X APPS" }
+            val keyHint = when { editor != null -> "A TOGGLE    B CANCEL"; settingsOpen || appsOpen -> "A SELECT    B BACK"; else -> "A SELECT    B SETTINGS    X APPS    Y GAME OPTIONS" }
             Text(coloredKeyHint(keyHint), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
             Row(Modifier.weight(1f).padding(start = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
@@ -287,11 +287,7 @@ private fun GameList(vm: MainViewModel, collectionId: Long?) {
     val scanning by vm.scanning.collectAsStateWithLifecycle()
     val launching by vm.launching.collectAsStateWithLifecycle()
     var expanded by remember(collectionId) { mutableStateOf<Long?>(null) }
-    // The A-press choice (PLAY GAME / GAME OPTIONS) under a game; GAME OPTIONS turns it into [expanded].
-    var choice by remember(collectionId) { mutableStateOf<Long?>(null) }
-    val playFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     val optFocus = remember { androidx.compose.ui.focus.FocusRequester() }
-    LaunchedEffect(choice) { if (choice != null) runCatching { playFocus.requestFocus() } }
     LaunchedEffect(expanded) { if (expanded != null) runCatching { optFocus.requestFocus() } }
     var addOpen by remember(collectionId) { mutableStateOf<Long?>(null) }
     var coreOpen by remember(collectionId) { mutableStateOf<Long?>(null) }
@@ -315,17 +311,15 @@ private fun GameList(vm: MainViewModel, collectionId: Long?) {
             val sys = sysOf(g)
             val core = remember(g, tick, all.size, g.coreOverride) { vm.coreFor(g) }
             Column {
+                // A / tap launches the game; Y opens its options (Game Options).
                 FocusLine(
                     (if (g.favorite) "* " else "") + g.title + if (core == null) " (NO CORE)" else "",
+                    Modifier.onKeyEvent { e ->
+                        if (e.type == KeyEventType.KeyUp && e.key == Key.ButtonY) { expanded = if (expanded == g.id) null else g.id; addOpen = null; coreOpen = null; true } else false
+                    },
                     dim = core == null,
-                    onClick = { choice = if (choice == g.id) null else g.id; expanded = null; addOpen = null; coreOpen = null }
+                    onClick = { expanded = null; addOpen = null; coreOpen = null; vm.launch(ctx, g) }
                 )
-                if (choice == g.id) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopStart) {
-                    Column(Modifier.padding(start = 16.dp, top = 4.dp, bottom = 10.dp).widthIn(max = 296.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OptionButton("PLAY GAME", Modifier.focusRequester(playFocus)) { choice = null; vm.launch(ctx, g) }
-                        OptionButton("GAME OPTIONS") { choice = null; expanded = g.id }
-                    }
-                }
                 if (expanded == g.id) {
                     val cands = sys?.let { CoreRouter.candidatesFor(it, g.gameId, title = g.title) }.orEmpty()
                     val auto = sys?.let { CoreRouter.autoChoice(it, g.title, gameId = g.gameId) }
