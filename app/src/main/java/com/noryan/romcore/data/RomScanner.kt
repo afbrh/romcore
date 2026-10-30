@@ -46,7 +46,7 @@ object RomScanner {
                 val dirs = ArrayList<File>(); val here = ArrayList<Raw>()
                 for (k in kids) {
                     if (k.isDirectory) { if (!isIgnoredDir(k.name)) dirs += k }
-                    else if (k.extension.lowercase() in wanted) here += Raw(k, folders)
+                    else if (!k.name.startsWith(".") && k.extension.lowercase() in wanted) here += Raw(k, folders) // ._* AppleDouble files from macOS
                 }
                 // An unpacked Wii U title (code + content + meta) is ONE game; its code/*.rpx is not listed on its own.
                 if (kids.isNotEmpty() && CoreSetup.cemuPresent() && CoreSetup.isWiiUTitleFolder(kids.map { it.name })) {
