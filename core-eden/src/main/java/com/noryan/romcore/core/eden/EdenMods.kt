@@ -32,25 +32,12 @@ object EdenMods {
     private fun aspectDir(ctx: Context, g: AspectGame) = ctx.getExternalFilesDir(null)?.let { File(it, "load/${g.dir}") }
 
     /**
-     * True while the 4:3 mod for [gameTitle] is installed (its folder is still there). The patch makes the game draw a 4:3 view into
-     * Eden's fixed 16:9 picture, which looks stretched sideways; the host stretches the picture back up to the full screen height so
-     * the proportions are right again.
+     * True when [gameTitle] has its 4:3 mod installed (always the case for a game in [ASPECT_GAMES], see [install]). The patch makes the
+     * game draw a 4:3 view into Eden's fixed 16:9 picture, which looks stretched sideways; the host stretches the picture back up to the
+     * full screen height so the proportions are right again.
      */
-    fun fillsScreen(ctx: Context, gameTitle: String): Boolean = aspect43On(ctx, gameTitle)
-
-    fun hasAspect43(gameTitle: String) = aspectGame(gameTitle) != null
-
-    /** The 4:3 mod is on while its folder is in Eden's mod folder (the game reads it when it starts). */
-    fun aspect43On(ctx: Context, gameTitle: String): Boolean =
+    fun fillsScreen(ctx: Context, gameTitle: String): Boolean =
         aspectGame(gameTitle)?.let { aspectDir(ctx, it)?.isDirectory == true } == true
-
-    /** Turns the 4:3 mod on (copies it in) or off (removes the folder); it takes effect the next time the game starts. */
-    fun setAspect43(ctx: Context, gameTitle: String, on: Boolean): Boolean = runCatching {
-        val g = aspectGame(gameTitle) ?: return false
-        val dir = aspectDir(ctx, g) ?: return false
-        if (on) { if (!dir.isDirectory) copyTree(ctx, "$ROOT/${g.dir}", dir) } else dir.deleteRecursively()
-        aspect43On(ctx, gameTitle) == on
-    }.getOrDefault(false)
 
     fun install(ctx: Context) {
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -62,14 +49,14 @@ object EdenMods {
             val assets = ctx.assets
             for (title in assets.list(ROOT).orEmpty()) for (mod in assets.list("$ROOT/$title").orEmpty()) {
                 val id = "$title/$mod"
-                if (id in done) continue
+                if (id in done || ASPECT_GAMES.any { it.dir == id }) continue
                 val dest = File(load, id)
                 if (!dest.exists()) copyTree(ctx, "$ROOT/$title/$mod", dest)
                 done += id
             }
             prefs.edit().putStringSet(KEY, done).apply()
-            // The 4:3 patches improve between versions: keep an installed copy current (the folder itself stays the on/off switch).
-            for (g in ASPECT_GAMES) aspectDir(ctx, g)?.takeIf { it.isDirectory }?.let { copyTree(ctx, "$ROOT/${g.dir}", it) }
+            // The 4:3 patches are always on and improve between versions: refresh them on every start.
+            for (g in ASPECT_GAMES) aspectDir(ctx, g)?.let { copyTree(ctx, "$ROOT/${g.dir}", it) }
         }
     }
 
