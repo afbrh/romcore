@@ -34,10 +34,11 @@ data class HotkeyConfig(val combos: Map<HotkeyAction, List<Set<Pad>>>) {
         /** Back opens the menu; the other actions are optional and unbound by default. SELECT+START does NOT open it. */
         val DEFAULT = HotkeyConfig(mapOf(
             HotkeyAction.OPEN_MENU to listOf(BACK_ONLY),
-            HotkeyAction.SAVE_STATE to listOf(setOf(Pad.L3, Pad.R1)),
-            HotkeyAction.LOAD_STATE to listOf(setOf(Pad.L3, Pad.L1)),
+            // Save / load / fast forward / close live in the quick menu now (L1 / R1 inside it), so no combos are bound.
+            HotkeyAction.SAVE_STATE to emptyList(),
+            HotkeyAction.LOAD_STATE to emptyList(),
             HotkeyAction.CLOSE_GAME to emptyList(),
-            HotkeyAction.FAST_FORWARD to listOf(setOf(Pad.L3, Pad.R2), setOf(Pad.L3, Pad.L2)),
+            HotkeyAction.FAST_FORWARD to emptyList(),
         ))
         /**
          * Stored-config migration: an Open Menu list equal to the old default (HOME | SELECT+START) becomes the new
@@ -70,10 +71,9 @@ class HotkeyStore(private val kv: KeyValueStore) {
             }
         }
         m[HotkeyAction.OPEN_MENU] = HotkeyConfig.normalizeOpenMenu(m[HotkeyAction.OPEN_MENU].orEmpty())
-        // One-time: configs saved while Save/Load/Fast Forward had no default hold them as "unset"; give those the new defaults.
+        // One-time: the quick menu replaced the hotkeys, so every stored combo except Open Menu is cleared.
         if (kv.get(DEFAULTS_KEY) == null) {
-            for (a in listOf(HotkeyAction.SAVE_STATE, HotkeyAction.LOAD_STATE, HotkeyAction.FAST_FORWARD))
-                if (m[a].isNullOrEmpty()) m[a] = HotkeyConfig.DEFAULT.combos.getValue(a)
+            for (a in HotkeyAction.entries) if (a != HotkeyAction.OPEN_MENU) m[a] = emptyList()
             val migrated = HotkeyConfig(m)
             save(migrated)
             return migrated
@@ -83,12 +83,12 @@ class HotkeyStore(private val kv: KeyValueStore) {
 
     fun save(c: HotkeyConfig) {
         kv.put(KEY, c.combos.entries.joinToString(";") { (a, l) -> "${a.name}=" + l.joinToString("|") { s -> s.sortedBy { it.ordinal }.joinToString("+") { it.name } } })
-        kv.put(DEFAULTS_KEY, "1")   // from now on an empty list means the user cleared it
+        kv.put(DEFAULTS_KEY, "1")   // from now on an empty list means unset
         revision++
     }
 
     fun reset() { kv.remove(KEY); revision++ }
-    private companion object { const val KEY = "hotkeys"; const val DEFAULTS_KEY = "hotkeys_defaults_v2" }
+    private companion object { const val KEY = "hotkeys"; const val DEFAULTS_KEY = "hotkeys_defaults_v3" }
 }
 
 class HotkeyResult(val event: HotkeyEvent?, val swallow: Boolean, val toRelease: Set<Pad>) {

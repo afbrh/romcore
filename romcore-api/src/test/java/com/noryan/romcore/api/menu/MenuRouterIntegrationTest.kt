@@ -114,30 +114,14 @@ class MenuRouterIntegrationTest {
         val b = RouterHotkeyBackend(router)
         assertEquals("Open Menu", b.title(MenuAction.SET_HOTKEYS))
         assertEquals("BACK", b.describe(MenuAction.SET_HOTKEYS))
-        assertEquals("R1 + L3", b.describe(MenuAction.SAVE_STATE))
-        assertEquals("L1 + L3", b.describe(MenuAction.LOAD_STATE))
-        assertEquals("R2 + L3 / L2 + L3", b.describe(MenuAction.FAST_FORWARD))
-        b.clear(MenuAction.SAVE_STATE)
-        assertEquals("Unset", b.describe(MenuAction.SAVE_STATE))      // a cleared hotkey stays cleared
+        // The quick menu replaced the save / load / fast forward combos: nothing but Open Menu is bound.
+        assertEquals("Unset", b.describe(MenuAction.SAVE_STATE))
+        assertEquals("Unset", b.describe(MenuAction.LOAD_STATE))
+        assertEquals("Unset", b.describe(MenuAction.FAST_FORWARD))
         b.clear(MenuAction.SET_HOTKEYS)
         assertEquals("BACK", b.describe(MenuAction.SET_HOTKEYS))   // menu can never be locked out
         b.resetToDefaults()
         assertEquals("BACK", b.describe(MenuAction.SET_HOTKEYS))
-    }
-
-    @Test fun liveHotkeyCaptureFromMenu() {
-        model.open()
-        repeat(2) { tap(Pad.DPAD_UP) }; tap(Pad.A)       // Set Hotkeys expanded, cursor on first row (Open Menu)
-        assertEquals(MenuAction.SET_HOTKEYS, model.expanded)
-        tap(Pad.DPAD_DOWN); tap(Pad.A)                      // Save State row
-        assertEquals(MenuAction.SAVE_STATE, model.capturingHotkey)
-        press(Pad.L1); press(Pad.R1); release(Pad.R1); release(Pad.L1)
-        assertNull(model.capturingHotkey)
-        assertEquals("L1 + R1", RouterHotkeyBackend(router).describe(MenuAction.SAVE_STATE))
-        // after close the combo fires Run(SAVE_STATE)
-        model.close(); events.clear(); router.refresh()
-        press(Pad.L1); press(Pad.R1)
-        assertEquals(listOf<HotkeyEvent>(HotkeyEvent.Run(MenuAction.SAVE_STATE)), events)
     }
 
     @Test fun openMenuCaptureKeepsBackFallback() {
@@ -145,15 +129,5 @@ class MenuRouterIntegrationTest {
         b.beginCapture(MenuAction.SET_HOTKEYS) { }
         press(Pad.L3); press(Pad.R3); release(Pad.L3); release(Pad.R3)
         assertEquals("L3 + R3 / BACK", b.describe(MenuAction.SET_HOTKEYS))
-    }
-
-    @Test fun xClearsFocusedHotkey() {
-        RouterHotkeyBackend(router).let { it.assign(MenuAction.LOAD_STATE, emptySet()) }
-        router.hotkeyStore.save(router.hotkeyStore.load().with(HotkeyAction.LOAD_STATE, listOf(setOf(Pad.L1, Pad.START))))
-        model.open()
-        repeat(2) { tap(Pad.DPAD_UP) }; tap(Pad.A)
-        repeat(2) { tap(Pad.DPAD_DOWN) }                   // Load State row
-        tap(Pad.X)
-        assertEquals("Unset", model.hotkeys.describe(MenuAction.LOAD_STATE))
     }
 }

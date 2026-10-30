@@ -345,7 +345,7 @@ class MenuModel(
         private const val REPEAT_DELAY_MS = 350L
         private const val REPEAT_MS = 90L
         /** Row order. The first two ([PAIR]) are drawn side by side on one line: Load State (left, L1), Save State (right, R1). */
-        val TOP = listOf(MenuAction.LOAD_STATE, MenuAction.SAVE_STATE, MenuAction.FAST_FORWARD, MenuAction.CHANGE_CONTROLLER_MAPPING, MenuAction.SET_HOTKEYS, MenuAction.CLOSE_GAME)
+        val TOP = listOf(MenuAction.LOAD_STATE, MenuAction.SAVE_STATE, MenuAction.FAST_FORWARD, MenuAction.CHANGE_CONTROLLER_MAPPING, MenuAction.CLOSE_GAME)
         const val PAIR = 2
         fun title(a: MenuAction) = when (a) {
             MenuAction.CLOSE_GAME -> "Close Game"
