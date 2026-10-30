@@ -363,10 +363,10 @@ private fun GameList(vm: MainViewModel, collectionId: Long?) {
     }
 }
 
-/** PlayStation 2 face-button colours for the key hints: A = Cross (blue), B = Circle (red), Y = Triangle (green), X = Square (pink). */
+/** PlayStation 2 face-button colours for the key hints: A = red, B = blue, X = green, Y = pink (swapped from the PS2 colours). */
 private val HINT_COLORS = mapOf(
-    'A' to androidx.compose.ui.graphics.Color(0xFF6C8FE0), 'B' to androidx.compose.ui.graphics.Color(0xFFE5566D),
-    'Y' to androidx.compose.ui.graphics.Color(0xFF3FC9A0), 'X' to androidx.compose.ui.graphics.Color(0xFFE08FC2),
+    'A' to androidx.compose.ui.graphics.Color(0xFFE5566D), 'B' to androidx.compose.ui.graphics.Color(0xFF6C8FE0),
+    'X' to androidx.compose.ui.graphics.Color(0xFF3FC9A0), 'Y' to androidx.compose.ui.graphics.Color(0xFFE08FC2),
 )
 
 /** Colours the button letters of a hint like "A SELECT    X OPTIONS" (a single letter standing alone as a word). */
