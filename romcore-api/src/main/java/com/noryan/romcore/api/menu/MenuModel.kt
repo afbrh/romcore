@@ -78,6 +78,22 @@ class MenuModel(
         }
     }
 
+    /**
+     * Row indices in the order they are drawn, top to bottom: the menu is bottom-anchored with Close Game on top and Save/Load State
+     * (one slot, index 0 stands for the pair) at the bottom. Whole groups (a row plus the rows it expanded into) are reversed, the
+     * rows inside a group keep their natural order. UP/DOWN walk this order.
+     */
+    val displayOrder: List<Int> get() {
+        val list = rows
+        val groups = mutableListOf<MutableList<Int>>()
+        list.forEachIndexed { i, r ->
+            val starts = r == MenuRowModel.Option || r == MenuRowModel.Toggle || r is MenuRowModel.Top
+            if (i == 1 && list[0] is MenuRowModel.Top && r is MenuRowModel.Top) return@forEachIndexed   // Load State is drawn on Save State's line
+            if (starts || groups.isEmpty()) groups += mutableListOf(i) else groups.last() += i
+        }
+        return groups.asReversed().flatten()
+    }
+
     private val option get() = (session as? com.noryan.romcore.api.OptionCycleSupport)?.takeIf { it.optionAvailable }
     /** Row text for the optional setting, e.g. "Resolution: 2x"; null when the session has none. */
     val optionText: String? get() { @Suppress("UNUSED_EXPRESSION") revision; return option?.let { "${it.optionLabel}: ${it.optionValue()}" } }
@@ -126,10 +142,13 @@ class MenuModel(
         val list = rows
         when (n) {
             // The first PAIR rows share a line, so UP/DOWN treat them as one row and LEFT/RIGHT switch between them.
-            MenuNav.UP -> { if (cursor < PAIR) lastPair = cursor
-                cursor = when { cursor < PAIR -> list.lastIndex; cursor == PAIR -> lastPair; else -> cursor - 1 } }
-            MenuNav.DOWN -> { if (cursor < PAIR) lastPair = cursor
-                cursor = when { cursor < PAIR -> PAIR.coerceAtMost(list.lastIndex); cursor >= list.lastIndex -> lastPair; else -> cursor + 1 } }
+            MenuNav.UP, MenuNav.DOWN -> {
+                if (cursor < PAIR) lastPair = cursor
+                val order = displayOrder
+                val at = order.indexOf(if (cursor < PAIR) 0 else cursor).coerceAtLeast(0)
+                val to = order[(at + (if (n == MenuNav.UP) -1 else 1) + order.size) % order.size]
+                cursor = if (to == 0) lastPair else to
+            }
             MenuNav.LEFT -> if (cursor < PAIR) { cursor = 0; lastPair = 0 } else stepOption(list.getOrNull(cursor), false)
             MenuNav.RIGHT -> if (cursor < PAIR) { cursor = 1; lastPair = 1 } else stepOption(list.getOrNull(cursor), true)
             MenuNav.BACK -> if (expanded != null) collapse() else close()

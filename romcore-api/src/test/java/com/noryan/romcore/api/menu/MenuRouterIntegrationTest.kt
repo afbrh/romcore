@@ -60,8 +60,8 @@ class MenuRouterIntegrationTest {
         tap(Pad.DPAD_RIGHT); assertEquals(1, model.cursor)
         tap(Pad.DPAD_LEFT); assertEquals(0, model.cursor)
         tap(Pad.DPAD_RIGHT)
-        tap(Pad.DPAD_DOWN); assertEquals(2, model.cursor)   // one DOWN leaves the pair (Controller Mapping)
-        tap(Pad.DPAD_UP); assertEquals(1, model.cursor)     // and UP returns to the pair button it left from
+        tap(Pad.DPAD_UP); assertEquals(2, model.cursor)   // one UP leaves the pair (Controller Mapping)
+        tap(Pad.DPAD_DOWN); assertEquals(1, model.cursor)     // and DOWN returns to the pair button it left from
         tap(Pad.A)                                          // Save State saves directly, no slot list
         assertNull(model.expanded)
         tap(Pad.B)                                         // close
@@ -71,11 +71,11 @@ class MenuRouterIntegrationTest {
 
     @Test fun leftStickNavigatesWithHysteresis() {
         model.open()
-        router.dispatch(listOf(PadEvent(Pad.LS_DOWN, 0.4f)), sys); assertEquals(0, model.cursor)
-        router.dispatch(listOf(PadEvent(Pad.LS_DOWN, 0.9f)), sys); assertEquals(2, model.cursor)
-        router.dispatch(listOf(PadEvent(Pad.LS_DOWN, 0.5f)), sys); assertEquals(2, model.cursor)
-        router.dispatch(listOf(PadEvent(Pad.LS_DOWN, 0.1f)), sys)
-        router.dispatch(listOf(PadEvent(Pad.LS_DOWN, 0.9f)), sys); assertEquals(3, model.cursor)
+        router.dispatch(listOf(PadEvent(Pad.LS_UP, 0.4f)), sys); assertEquals(0, model.cursor)
+        router.dispatch(listOf(PadEvent(Pad.LS_UP, 0.9f)), sys); assertEquals(2, model.cursor)
+        router.dispatch(listOf(PadEvent(Pad.LS_UP, 0.5f)), sys); assertEquals(2, model.cursor)
+        router.dispatch(listOf(PadEvent(Pad.LS_UP, 0.1f)), sys)
+        router.dispatch(listOf(PadEvent(Pad.LS_UP, 0.9f)), sys); assertEquals(3, model.cursor)
     }
 
     @Test fun backHotkeyTogglesViaListener() {
@@ -101,7 +101,7 @@ class MenuRouterIntegrationTest {
 
     @Test fun mappingCaptureCancelledByBack() {
         model.open()
-        repeat(1) { tap(Pad.DPAD_DOWN) }; tap(Pad.A)       // Change Controller Mapping expanded
+        repeat(1) { tap(Pad.DPAD_UP) }; tap(Pad.A)       // Change Controller Mapping expanded
         assertEquals(MenuAction.CHANGE_CONTROLLER_MAPPING, model.expanded)
         tap(Pad.A)                                         // cursor is on first pad row (A) -> capture
         assertEquals(Pad.A, model.capturingPad)
@@ -127,7 +127,7 @@ class MenuRouterIntegrationTest {
 
     @Test fun liveHotkeyCaptureFromMenu() {
         model.open()
-        repeat(2) { tap(Pad.DPAD_DOWN) }; tap(Pad.A)       // Set Hotkeys expanded, cursor on first row (Open Menu)
+        repeat(2) { tap(Pad.DPAD_UP) }; tap(Pad.A)       // Set Hotkeys expanded, cursor on first row (Open Menu)
         assertEquals(MenuAction.SET_HOTKEYS, model.expanded)
         tap(Pad.DPAD_DOWN); tap(Pad.A)                      // Save State row
         assertEquals(MenuAction.SAVE_STATE, model.capturingHotkey)
@@ -151,7 +151,7 @@ class MenuRouterIntegrationTest {
         RouterHotkeyBackend(router).let { it.assign(MenuAction.LOAD_STATE, emptySet()) }
         router.hotkeyStore.save(router.hotkeyStore.load().with(HotkeyAction.LOAD_STATE, listOf(setOf(Pad.L1, Pad.START))))
         model.open()
-        repeat(2) { tap(Pad.DPAD_DOWN) }; tap(Pad.A)
+        repeat(2) { tap(Pad.DPAD_UP) }; tap(Pad.A)
         repeat(2) { tap(Pad.DPAD_DOWN) }                   // Load State row
         tap(Pad.X)
         assertEquals("Unset", model.hotkeys.describe(MenuAction.LOAD_STATE))

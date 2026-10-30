@@ -6,7 +6,7 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
@@ -72,21 +72,23 @@ fun RomCoreMenuContent(model: MenuModel, modifier: Modifier = Modifier) {
 private fun MenuPanelContent(model: MenuModel) {
     val rows = model.rows
     val listState = rememberLazyListState()
-    LaunchedEffect(model.cursor, rows.size) { listState.animateScrollToItem(((if (model.cursor >= 2) model.cursor - 1 else 0) - 2).coerceAtLeast(0)) }
+    val order = model.displayOrder
+    LaunchedEffect(model.cursor, rows.size) { listState.animateScrollToItem((order.indexOf(if (model.cursor < 2) 0 else model.cursor).coerceAtLeast(0) - 2).coerceAtLeast(0)) }
     // Composition restarts on every open (RomCoreMenuContent returns early while closed), so the slide plays each time.
     val shown = remember { MutableTransitionState(false).apply { targetState = true } }
-    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        AnimatedVisibility(shown, enter = slideInVertically(tween(180)) { it } + fadeIn(tween(120)), exit = fadeOut(tween(80))) {
+    // Comes out of the bottom-right corner (slides in from the right edge); Close Game on top, Save / Load State at the bottom.
+    BoxWithConstraints(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.BottomEnd) {
+        AnimatedVisibility(shown, enter = slideInHorizontally(tween(180)) { it } + fadeIn(tween(120)), exit = fadeOut(tween(80))) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier.widthIn(max = MenuStyle.SheetMaxWidth).fillMaxWidth().heightIn(max = maxHeight * 0.85f)
+                modifier = Modifier.widthIn(max = MenuStyle.SheetMaxWidth).fillMaxWidth().heightIn(max = maxHeight)
                     .clip(RoundedCornerShape(16.dp)).background(MenuStyle.Background)
                     .border(BorderStroke(2.dp, Plate), RoundedCornerShape(16.dp)),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // Row 1 (Load State) is drawn on row 0's line, so it gets no item of its own.
-                items(rows.indices.filter { it != 1 || rows.size < 2 }.toList()) { i ->
+                // Row 1 (Load State) is drawn on row 0's line, so it is not in the display order.
+                items(order) { i ->
                     val row = rows[i]
                     @Suppress("UNUSED_EXPRESSION") model.revision
                     val click = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { model.select(i) }
@@ -136,7 +138,7 @@ private fun RowItem(model: MenuModel, row: MenuRowModel, focused: Boolean, click
             val pair = row.action == MenuAction.LOAD_STATE || row.action == MenuAction.SAVE_STATE
             Box(click.button(focused).padding(if (pair) 6.dp else MenuStyle.RowPaddingHorizontal, 12.dp)) {
                 BasicText(if (row.action == MenuAction.CHANGE_CONTROLLER_MAPPING) "Controller Mapping" else MenuModel.title(row.action),
-                    Modifier.align(Alignment.Center), style = style(label, if (pair) 13.sp else MenuStyle.FontSize).copy(textAlign = TextAlign.Center, textDecoration = if (focused) TextDecoration.Underline else TextDecoration.None), maxLines = 2)
+                    Modifier.align(if (pair) Alignment.Center else Alignment.CenterStart), style = style(label, if (pair) 13.sp else MenuStyle.FontSize).copy(textAlign = if (pair) TextAlign.Center else TextAlign.Start, textDecoration = if (focused) TextDecoration.Underline else TextDecoration.None), maxLines = 2)
                 // The half-width Save / Load buttons have no room for a tail: when disabled they are just dimmed, and the note under the
                 // menu says why (an "N/A" there was drawn on top of the label).
                 val tail = if (pair) ""                                                                           // plain actions, no arrow
@@ -159,15 +161,15 @@ private fun RowItem(model: MenuModel, row: MenuRowModel, focused: Boolean, click
         MenuRowModel.Option -> {
             @Suppress("UNUSED_EXPRESSION") model.revision
             Box(click.button(focused).padding(MenuStyle.RowPaddingHorizontal, 12.dp)) {
-                BasicText(model.optionText.orEmpty(), Modifier.align(Alignment.Center),
-                    style = style(if (focused) OnAccent else Color(0xFFE6E6EA)).copy(textAlign = TextAlign.Center, textDecoration = if (focused) TextDecoration.Underline else TextDecoration.None), maxLines = 2)
+                BasicText(model.optionText.orEmpty(), Modifier.align(Alignment.CenterStart),
+                    style = style(if (focused) OnAccent else Color(0xFFE6E6EA)).copy(textAlign = TextAlign.Start, textDecoration = if (focused) TextDecoration.Underline else TextDecoration.None), maxLines = 2)
             }
         }
         MenuRowModel.Toggle -> {
             @Suppress("UNUSED_EXPRESSION") model.revision
             Box(click.button(focused).padding(MenuStyle.RowPaddingHorizontal, 12.dp)) {
-                BasicText(model.toggleText.orEmpty(), Modifier.align(Alignment.Center),
-                    style = style(if (focused) OnAccent else Color(0xFFE6E6EA)).copy(textAlign = TextAlign.Center, textDecoration = if (focused) TextDecoration.Underline else TextDecoration.None), maxLines = 2)
+                BasicText(model.toggleText.orEmpty(), Modifier.align(Alignment.CenterStart),
+                    style = style(if (focused) OnAccent else Color(0xFFE6E6EA)).copy(textAlign = TextAlign.Start, textDecoration = if (focused) TextDecoration.Underline else TextDecoration.None), maxLines = 2)
             }
         }
         MenuRowModel.Reset -> Sub(click, focused, "Reset defaults", "", MenuStyle.Danger)
