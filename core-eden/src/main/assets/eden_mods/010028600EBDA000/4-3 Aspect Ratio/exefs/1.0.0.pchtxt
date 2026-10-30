@@ -1,0 +1,26 @@
+@nsobid-891687F016A18F1773D4A88EBF8A973C8E33ECC1
+
+# Super Mario 3D World + Bowser's Fury [010028600EBDA000] (base game, main NSO build id above; XCI boots with "Update v0.0.0" = v1.0.0)
+# 4:3 Aspect Ratio + HUD fit - RomCore. Eden handheld mode (guest 16:9 picture), RomCore stretches the picture 4/3 vertically.
+#
+# 1) 0040B818 (code 0x40b918): swapchain/render size 1920x1080 -> 960x720 (mov x28,#0x3c0 ; movk x28,#0x2d0,lsl #32).
+# 2) 00738678 -> cave 009C4D00: sead PerspectiveProjection::set() (0x738720) stores its aspect at [obj+0xb0]; when the value is ~16/9
+#    it is replaced by 4/3 (vertical FOV unchanged). Only set() is patched: the ui2d layout renderer builds its own projection through
+#    the ctor (0x738640, called from 0x9702dc) and must keep 16:9 or the HUD gets stretched sideways.
+# 3) 0069D120 -> cave 009C4A80: hook at the entry of nn::ui2d::Pane::CalculateMtx (0x69d220), runs the original and then post-processes:
+#    - root pane (no parent, height 680..1000, i.e. the 1280x720 layouts): height := 960, Y scale := 0.75 (undistorted after the host's 4/3 stretch)
+#    - full-screen panes (width >= 1200, height 690..760) inside such a layout: height := 960, width x4/3 (cover-crop for backgrounds/art)
+#    - top/bottom anchoring: a pane whose parent is near the layout centre (|y| < 108) and whose own world |y| is large is moved outward by
+#      up to 90 units (ramp 60..210), so edge-anchored HUD stays on the real screen edges. Panes named "Base" are left alone (char-select).
+# Caves live in the zero padding at the end of .text (image 0x9c4a80..0x9c4fff).
+
+@flag print_values
+@flag offset_shift 0x100
+
+@enabled
+0040B818 1C7880D21C5AC0F2
+009C4A80 FD7BBDA9F35301A9F30300AA0B0C40F9AB0200B51C5440BD0D0080524D85A872BD01271E80233D1E0B0200540D0080524D8FA872BD01271E80233D1E6A0100540D0080520D8EA872BE01271E1E5400BD0D0080520DE8A772BF01271E1F4C00BD020000140D0C40F98F61F3976B0E40F92B0A00B4ED030BAA0E018052AF0D40F9AF0000B4ED030FAACE05007181FFFF5449000014BC5540BD0D0080520D8EA872BD01271E80233D1E610800547C5640BD0D0090528D85A872BD01271E80233D1ECB0200540D008052CD87A872BD01271E80233D1E2A0200547C5240BD0D008052CD92A872BD01271E80233D1E6B0100540D0080520D8EA872BE01271E7E5600BD7C5240BD6D5595524DF5A772BD01271E9C0B3D1E7C5200BD7C8D40BD9CC3201E0D0080520D5BA872BD01271E80233D1E2A04005470B240B951288C5271AEAC721F02116B6100005470D24239500300347D8E40BDBEC3201E0D0080520D4EA872BC01271EDE3B3C1ECD818E524D7BA772BC01271EDE0B3C1EFC03271EDE6B3C1E0D0080520DF0A772BC01271EDE7B3C1E0D0080528D56A872BC01271EDE0B3C1EA823201EDF43211EDECF3F1EBD2B3E1E7D8E00BDF35341A9FD7BC3A8C0035FD6
+0069D120 589E0C14
+009C4D00 30C7915270FCA7721E02271E1F393E1EFFC3201E50E19A527084A7721D02271EE0233D1E8A0000547055955250F5A7720802271E68B200BD51CEF517
+00738678 A2310A14
+@stop
