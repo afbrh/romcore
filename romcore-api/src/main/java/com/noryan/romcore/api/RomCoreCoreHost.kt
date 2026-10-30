@@ -21,6 +21,9 @@ import java.util.concurrent.Executors
  * menu toggle / quick save / quick load / close, and FLAG_KEEP_SCREEN_ON.
  */
 object RomCoreCoreHost {
+    private const val BACK_TAP_WINDOW_MS = 320L
+    private const val BACK_HOLD_MS = 450L
+
     /** State slot used by the Save/Load State hotkeys. */
     const val QUICK_SLOT = 1
 
@@ -136,9 +139,46 @@ object RomCoreCoreHost {
             // Back is the shared menu's key in EVERY core: handled (opened on key down) and always consumed, whatever
             // the source (hardware, adb) or the user's mapping, so it can never reach the emulator or the Activity.
             if (ui.isErrorShowing) return errorKey(e)
-            if (e.keyCode == KeyEvent.KEYCODE_BACK) { menu.dispatchKeyEvent(e); return true }
+            if (e.keyCode == KeyEvent.KEYCODE_BACK) { if (menu.isOpen && !backTracked) menu.dispatchKeyEvent(e) else backGesture(e); return true }
             if (menu.isOpen) return menu.dispatchKeyEvent(e)
             return router.onKeyEvent(e, system) || menu.dispatchKeyEvent(e)
+        }
+
+        private val main = android.os.Handler(android.os.Looper.getMainLooper())
+        private var backTracked = false // this press began while the menu was closed, so it belongs to the gesture
+        private var backHeld = false
+        private var backLong = false
+        private var backTaps = 0
+        private val backHold = Runnable { if (backHeld) { backLong = true; backTaps = 0; toggleFastForward() } }
+        private val backResolve = Runnable {
+            val n = backTaps; backTaps = 0
+            when { n == 1 -> menu.open(); n == 2 -> runAction(MenuAction.SAVE_STATE); n >= 3 -> runAction(MenuAction.LOAD_STATE) }
+        }
+
+        /**
+         * Back while in a game: 1 tap = quick menu, 2 = Save State, 3 = Load State, hold = toggle Fast Forward. The menu waits
+         * out [BACK_TAP_WINDOW_MS] after a tap so a second/third tap can still arrive. While the menu is open Back closes it at once.
+         */
+        private fun backGesture(e: KeyEvent) {
+            menu.lastBackKeyMs = android.os.SystemClock.uptimeMillis()
+            if (e.action == KeyEvent.ACTION_DOWN) {
+                if (e.repeatCount != 0) { if (backHeld && !backLong) { main.removeCallbacks(backHold); backHold.run() }; return } // system key-repeat / long-press flag also counts as a hold
+                if (menu.isOpen) { menu.dispatchKeyEvent(e); return } // closes it; the matching UP is not a tap
+                backTracked = true; backHeld = true; backLong = false
+                main.removeCallbacks(backResolve)
+                main.postDelayed(backHold, BACK_HOLD_MS)
+            } else if (e.action == KeyEvent.ACTION_UP && backTracked) {
+                backTracked = false; backHeld = false
+                main.removeCallbacks(backHold)
+                if (backLong) return
+                backTaps++
+                main.postDelayed(backResolve, BACK_TAP_WINDOW_MS)
+            }
+        }
+
+        private fun toggleFastForward() {
+            setFastForward(!fastForwarding)
+            if ((session as? FastForwardSupport) != null) toast(if (fastForwarding) "Fast forward on" else "Fast forward off")
         }
 
         /** Call first in Activity.dispatchGenericMotionEvent. */
@@ -161,6 +201,6 @@ object RomCoreCoreHost {
         fun onPause() { router.releaseAll() }
 
         /** Activity.onDestroy. */
-        fun onDestroy() { perf.stop(); menu.detach(); ui.destroy(); RomCoreUi.unregister(activity); router.releaseAll(); worker.shutdown() }
+        fun onDestroy() { perf.stop(); menu.detach(); ui.destroy(); RomCoreUi.unregister(activity); router.releaseAll(); worker.shutdown(); main.removeCallbacks(backHold); main.removeCallbacks(backResolve) }
     }
 }
