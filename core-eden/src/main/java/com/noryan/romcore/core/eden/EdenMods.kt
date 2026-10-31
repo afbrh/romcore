@@ -31,6 +31,7 @@ object EdenMods {
         AspectGame(Regex("metroid.*prime\\s*4", RegexOption.IGNORE_CASE), "010019A01E2F2000/4-3 Aspect Ratio"),
         AspectGame(Regex("breath\\s*of\\s*the\\s*wild", RegexOption.IGNORE_CASE), "01007EF00011E000/4-3 Aspect Ratio"),
         AspectGame(Regex("tears\\s*of\\s*the\\s*kingdom", RegexOption.IGNORE_CASE), "0100F2C0115B6000/4-3 Aspect Ratio"),
+        AspectGame(Regex("animal\\s*crossing", RegexOption.IGNORE_CASE), "01006F8002326000/4-3 Aspect Ratio"),
     )
 
     private fun aspectGame(gameTitle: String) = ASPECT_GAMES.firstOrNull { it.title.containsMatchIn(gameTitle) }
