@@ -65,6 +65,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val selectedTab = MutableStateFlow(prefs.selectedTab)
     /** The Settings screen replaces the games area while true. */
     val settingsOpen = MutableStateFlow(false)
+    /** The device's launcher apps list (X on the home screen). */
+    val appsOpen = MutableStateFlow(false)
     /** The NEW COLLECTION / EDIT GAMES screen; null = closed. */
     val editor = MutableStateFlow<CollectionEditor?>(null)
     val accessGranted = MutableStateFlow(Environment.isExternalStorageManager())
@@ -390,8 +392,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // ---- collections ----
     fun selectTab(id: Long) { selectedTab.value = id; prefs.selectedTab = id; settingsOpen.value = false }
     fun toggleSettings() { settingsOpen.value = !settingsOpen.value }
+    /** X: show/hide the apps list, only from the plain home screen (not over Settings or the collection editor). */
+    fun toggleApps(): Boolean {
+        if (settingsOpen.value || editor.value != null) return false
+        appsOpen.value = !appsOpen.value
+        return true
+    }
     /** The Home button while RomCore is the home app: back to the games list. */
-    fun showHome() { settingsOpen.value = false; editor.value = null }
+    fun showHome() { settingsOpen.value = false; appsOpen.value = false; editor.value = null }
 
     private fun names(except: Long? = null) = collections.value.orEmpty().filter { it.id != except }.map { it.name }
 

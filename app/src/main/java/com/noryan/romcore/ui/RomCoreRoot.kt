@@ -14,6 +14,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -161,7 +162,7 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
     val tab = if (collections == null) saved else CollectionRules.resolveTab(saved, cols)
     var tabOpts by remember { mutableStateOf<TabOptions?>(null) }
     // The device's launcher apps, opened with X from the home screen (B closes it).
-    var appsOpen by remember { mutableStateOf(false) }
+    val appsOpen by vm.appsOpen.collectAsStateWithLifecycle()
     // True while controller focus is somewhere in the top bar (a tab or the +), false when it is down on a game.
     var tabsFocused by remember { mutableStateOf(false) }
     val tabFocus = remember { HashMap<Long, FocusRequester>() }
@@ -185,7 +186,7 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
     LaunchedEffect(editor != null) { if (editor != null) sawEditor = true else if (sawEditor) { sawEditor = false; closedEditor = true } }
     var sawApps by remember { mutableStateOf(false) }
     LaunchedEffect(appsOpen) { if (appsOpen) sawApps = true else if (sawApps) { sawApps = false; runCatching { focusOf(tab).requestFocus() } } }
-    LaunchedEffect(settingsOpen, editor) { if (settingsOpen || editor != null) appsOpen = false }
+    LaunchedEffect(settingsOpen, editor) { if (settingsOpen || editor != null) vm.appsOpen.value = false }
     LaunchedEffect(closedSettings) { if (closedSettings) { closedSettings = false; runCatching { focusOf(tab).requestFocus() } } }
     LaunchedEffect(closedEditor, tab, cols) {
         if (closedEditor) {
@@ -208,7 +209,7 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
         when {
             editor != null -> vm.cancelEditor()
             tabOpts != null -> tabOpts = null
-            appsOpen -> appsOpen = false
+            appsOpen -> vm.appsOpen.value = false
             else -> vm.toggleSettings()
         }
     }
@@ -223,9 +224,6 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
                     runCatching { focusOf(to).requestFocus() }
                 }
                 true
-            } else if (e.type == KeyEventType.KeyUp && e.key == Key.ButtonX && editor == null && !settingsOpen && tabOpts == null) {
-                appsOpen = !appsOpen
-                true
             } else false
         }
     ) {
@@ -236,7 +234,19 @@ private fun MainScreen(vm: MainViewModel, pickRom: () -> Unit, pickBios: () -> U
         val showSel = !settingsOpen && !newOpen
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).onFocusChanged { tabsFocused = it.hasFocus }, verticalAlignment = Alignment.CenterVertically) {
             val keyHint = when { editor != null -> "A TOGGLE    B CANCEL"; settingsOpen || appsOpen -> "A SELECT    B BACK"; else -> "A SELECT    B SETTINGS    X APPS    Y GAME OPTIONS" }
-            Text(coloredKeyHint(keyHint), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
+            // Each hint is also a touch button: B = Settings / Back, X = the Apps list.
+            Row(horizontalArrangement = Arrangement.spacedBy(26.dp)) {
+                keyHint.split("    ").forEach { part ->
+                    val tap: (() -> Unit)? = when {
+                        editor != null -> null
+                        part.startsWith("B ") -> { { if (appsOpen) vm.appsOpen.value = false else vm.toggleSettings() } }
+                        part.startsWith("X ") -> { { vm.toggleApps() } }
+                        else -> null
+                    }
+                    Text(coloredKeyHint(part), if (tap != null) Modifier.clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = tap) else Modifier,
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
+                }
+            }
             Row(Modifier.weight(1f).padding(start = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {

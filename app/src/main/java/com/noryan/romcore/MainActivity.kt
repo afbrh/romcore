@@ -55,6 +55,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** X opens the apps list wherever focus happens to be (a controller press must work even before anything is focused). */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.keyCode == android.view.KeyEvent.KEYCODE_BUTTON_X && vm.settingsOpen.value.not() && vm.editor.value == null) {
+            if (event.action == android.view.KeyEvent.ACTION_UP) vm.toggleApps()
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent); applyDebugRoots(intent); vm.checkCrashes(); returnToRunningGame(intent)
         // Home pressed while RomCore is the home app: come back to the plain games list, not a half-open Settings/editor.
