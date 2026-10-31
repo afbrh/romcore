@@ -1,0 +1,19 @@
+@nsobid-94CEAE325C205C4B9D6F7235552F28FD
+
+# e2 res960 + canvas width + blackcam
+
+@flag offset_shift 0x100
+
+@enabled
+00605224 09008052 // mov w9,#0
+00605228 035A8052 // mov w3,#720
+00605234 02788052 // mov w2,#960
+0060630C 17788052 // mov w23,#960
+00606310 165A8052 // mov w22,#720
+006063C4 08788052 // mov w8,#960
+006063CC 085A8052 // mov w8,#720
+0061A724 01788052 // mov w1,#960
+0061A728 025A8052 // mov w2,#720
+02263734 02E4002F // CanvasScaler match w
+022ED5F8 1F2003D5 // keep full-screen black-clear camera
+@stop
