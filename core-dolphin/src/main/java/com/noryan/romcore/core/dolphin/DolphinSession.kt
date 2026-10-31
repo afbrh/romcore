@@ -27,7 +27,7 @@ class DolphinSession(
     context: Context,
     romPath: String,
     private val onClose: () -> Unit,
-) : CoreSessionBase(context.applicationContext, "dolphin", romPath), FastForwardSupport, com.noryan.romcore.api.OptionCycleSupport,
+) : CoreSessionBase(context.applicationContext, "dolphin", romPath), FastForwardSupport, com.noryan.romcore.api.menu.NativeBootState, com.noryan.romcore.api.OptionCycleSupport,
     com.noryan.romcore.api.ToggleOptionSupport {
 
     private val resumeFile: File get() = File(stateDir, "resume")
@@ -103,6 +103,10 @@ class DolphinSession(
         }
         return file.exists() && file.length() > 0 && file.lastModified() != before
     }
+
+    /** The Save State slot's file when it holds a state: Dolphin boots straight into it (NativeLibrary.Run's state argument). */
+    fun quickStatePath(): String? = statePath(com.noryan.romcore.api.RomCoreCoreHost.QUICK_SLOT).takeIf { it.exists() && it.length() > 0 }?.path
+    @Volatile override var bootedIntoState = false
 
     fun hasResumeState(): Boolean = resumeFile.let { it.exists() && it.length() > 0 }
     fun resumeStatePath(): String = resumeFile.path

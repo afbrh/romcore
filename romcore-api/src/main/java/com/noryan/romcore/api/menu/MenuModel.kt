@@ -48,8 +48,6 @@ class MenuModel(
     var isFastForwarding: () -> Boolean = { false },
     /** A short banner for results shown after the menu has gone (host: RomCoreUi notice). */
     var notice: (String) -> Unit = {},
-    /** Close Game confirmed: the host may save an auto-state first. Default closes the session at once. */
-    var closeGame: () -> Unit = { session.close() },
     val slots: Int = CoreSessionBase.SLOTS,
 ) {
     var isOpen by mutableStateOf(false); private set
@@ -200,7 +198,7 @@ class MenuModel(
                 expanded = row.action; status = ""
                 cursor = rowIndex(row.action) + 1
             }
-            is MenuRowModel.Confirm -> if (row.yes) { status = "Closing..."; close(); closeGame() } else collapse()
+            is MenuRowModel.Confirm -> if (row.yes) { status = "Closing..."; val s = session; close(); s.close() } else collapse()
             is MenuRowModel.Slot -> doState(expanded == MenuAction.SAVE_STATE, row.slot)
             is MenuRowModel.Bind -> {
                 val pad = row.pad

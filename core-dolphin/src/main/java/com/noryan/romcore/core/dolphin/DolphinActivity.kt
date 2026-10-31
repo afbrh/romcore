@@ -138,9 +138,11 @@ class DolphinActivity : Activity(), NativeLibrary.EmulationHost, SurfaceHolder.C
         if (!ready || !booted.compareAndSet(false, true)) return
         val path = intent.getStringExtra(EXTRA_PATH) ?: return
         val resume = intent.getBooleanExtra(EXTRA_RESUME_STATE, false) && session.hasResumeState()
+        val boot = if (resume) session.resumeStatePath() else session.quickStatePath()   // straight into the saved moment, no fresh boot first
+        session.bootedIntoState = boot != null
         NativeLibrary.SetIsBooting()
         emuThread = Thread({
-            if (resume) NativeLibrary.Run(arrayOf(path), false, session.resumeStatePath(), false)
+            if (boot != null) NativeLibrary.Run(arrayOf(path), false, boot, false)
             else NativeLibrary.Run(arrayOf(path), false)
             // Run() returns when emulation ended (game quit, crash-to-menu, StopEmulation).
             runOnUiThread { closeGame() }

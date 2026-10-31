@@ -16,6 +16,11 @@ interface StateSupport {
     val stateUnavailableReason: String?
 }
 
+/** Optional: a CoreSession whose engine was started straight from the Save State slot, so the host must not load it again. */
+interface NativeBootState {
+    val bootedIntoState: Boolean
+}
+
 /** Optional: a CoreSession that can describe its slots. [CoreSessionBase] implements it from the file convention. */
 interface StateSlotProvider {
     fun slotInfo(slot: Int): SlotInfo
