@@ -1,0 +1,27 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 2 Ship 2 Harkinian's own application attributes must not leak into (or clash inside) RomCore's merged manifest. -->
+    <application tools:remove="android:hardwareAccelerated">
+
+        <!-- SDL hints the stock app sets through manifest meta-data; the core sets the ones it needs itself (TwoshipActivity). -->
+        <meta-data android:name="SDL_ENV.SDL_ANDROID_TRAP_BACK_BUTTON" tools:node="remove" />
+        <meta-data android:name="SDL_ENV.SDL_IOS_ORIENTATIONS" tools:node="remove" />
+
+        <!-- The stock launcher Activity (touch overlay, setup dialogs, ImGui menu) is dropped; RomCore's subclass replaces it. -->
+        <activity android:name="com.twoshipfork.mm.MainActivity" tools:node="remove" />
+
+        <!-- The whole runtime lives in its own process so lib2ship.so / libSDL2twoship.so and their GL context never share an
+             address space with the other RomCore cores (Ship of Harkinian included). The process is ended on Close Game. -->
+        <activity
+            android:name="com.noryan.romcore.core.twoship.TwoshipActivity"
+            android:process=":twoship"
+            android:taskAffinity="com.noryan.romcore.twoship"
+            android:launchMode="singleTask"
+            android:exported="false"
+            android:alwaysRetainTaskState="true"
+            android:screenOrientation="sensorLandscape"
+            android:preferMinimalPostProcessing="true"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
+            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|density" />
+    </application>
+</manifest>

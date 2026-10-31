@@ -67,7 +67,7 @@ dependencies {
     // CoreBootstrap.kt finds and registers them reflectively, so nothing here is referenced from code directly.
     // Override with -Promcore.cores=none or -Promcore.cores=dolphin,eden to link a subset (e.g. while a core is mid-work).
     val wanted = (findProperty("romcore.cores") as String?)?.split(",")?.map { it.trim() }
-    listOf("retroarch", "dolphin", "primehack", "cemu", "eden", "azahar", "watermelonds", "armsx2", "dusklight", "shipwright", "wwhd").forEach { id ->
+    listOf("retroarch", "dolphin", "primehack", "cemu", "eden", "azahar", "watermelonds", "armsx2", "dusklight", "shipwright", "twoship", "wwhd").forEach { id ->
         if ((wanted == null || id in wanted) && rootProject.findProject(":core-$id") != null) implementation(project(":core-$id"))
     }
 

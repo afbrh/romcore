@@ -1,0 +1,202 @@
+From b4dddccb4378b7ccc136e16d3d2af59b556d0921 Mon Sep 17 00:00:00 2001
+From: Ry <noryanfound@gmail.com>
+Date: Fri, 30 Oct 2026 21:42:22 -0500
+Subject: [PATCH] RomCore embedding: SHIP_HOME on Android, embed API (events,
+ pause, ready), no ImGui menu toggle when embedded, SDL2 Java package
+ relocation (org.libsdl.apptwoship) + libSDL2twoship.so
+
+---
+ cmake/dependencies/android.cmake              |  3 +
+ .../patches/romcore-sdl2-java-package.cmake   | 12 ++++
+ include/ship/port/mobile/MobileImpl.h         |  9 +++
+ src/ship/Context.cpp                          |  7 ++
+ src/ship/port/mobile/MobileImpl.cpp           | 71 +++++++++++++++++++
+ src/ship/window/gui/Gui.cpp                   | 11 ++-
+ 6 files changed, 110 insertions(+), 3 deletions(-)
+ create mode 100644 cmake/dependencies/patches/romcore-sdl2-java-package.cmake
+
+diff --git a/cmake/dependencies/android.cmake b/cmake/dependencies/android.cmake
+index 97f5971f..9340b1f7 100644
+--- a/cmake/dependencies/android.cmake
++++ b/cmake/dependencies/android.cmake
+@@ -9,8 +9,11 @@ if (NOT ${SDL2_FOUND})
+         GIT_TAG release-2.32.10
+         GIT_SHALLOW TRUE
+         OVERRIDE_FIND_PACKAGE
++        PATCH_COMMAND ${CMAKE_COMMAND} -DSDL_SRC=<SOURCE_DIR> -P ${CMAKE_CURRENT_LIST_DIR}/patches/romcore-sdl2-java-package.cmake
+     )
+     FetchContent_MakeAvailable(SDL2)
++    # RomCore: the shared library is libSDL2twoship.so (Ship of Harkinian's libSDL2.so lives in the same APK).
++    set_target_properties(SDL2 PROPERTIES OUTPUT_NAME SDL2twoship)
+ endif()
+ 
+ #=================== nlohmann-json ===================
+diff --git a/cmake/dependencies/patches/romcore-sdl2-java-package.cmake b/cmake/dependencies/patches/romcore-sdl2-java-package.cmake
+new file mode 100644
+index 00000000..2401299b
+--- /dev/null
++++ b/cmake/dependencies/patches/romcore-sdl2-java-package.cmake
+@@ -0,0 +1,12 @@
++# RomCore: relocate SDL2's Android Java package org.libsdl.app -> org.libsdl.apptwoship so it cannot clash with the (different) SDL2
++# Java classes other RomCore cores already ship (org.libsdl.app: Eden/Azahar, org.libsdl.appsoh: Ship of Harkinian).
++# Run as: cmake -DSDL_SRC=<sdl2 source dir> -P romcore-sdl2-java-package.cmake
++# (idempotent: already-renamed sources are left alone).
++foreach(f src/core/android/SDL_android.c src/video/android/SDL_androidevents.c src/hidapi/android/hid.cpp)
++    set(path "${SDL_SRC}/${f}")
++    file(READ "${path}" content)
++    string(REPLACE "org_libsdl_app_" "org_libsdl_apptwoship_" content "${content}")
++    string(REGEX REPLACE "org_libsdl_app([^s_a-zA-Z0-9t])" "org_libsdl_apptwoship\\1" content "${content}")
++    string(REPLACE "org/libsdl/app/" "org/libsdl/apptwoship/" content "${content}")
++    file(WRITE "${path}" "${content}")
++endforeach()
+diff --git a/include/ship/port/mobile/MobileImpl.h b/include/ship/port/mobile/MobileImpl.h
+index fa57dd8a..010a8202 100644
+--- a/include/ship/port/mobile/MobileImpl.h
++++ b/include/ship/port/mobile/MobileImpl.h
+@@ -23,6 +23,15 @@ class Mobile {
+     static void SetCrashContext(const char* context);
+     static void InitThreadDiagnostics();
+     static void LogMemorySample(size_t combinerCount);
++
++    // ---- RomCore embedding (env ROMCORE_EMBED=1): the host app owns every pixel that is not the game ----
++    // True when 2Ship runs inside RomCore: no ImGui menu, no extraction popups, no touch overlay, no Java dialogs.
++    static bool RomCoreEmbedded();
++    // Native -> host event (MainActivity.onRomCoreEvent): 0 = first frames on screen, 1 = notice(a), 2 = fatal(a=title,b=message),
++    // 3 = progress(a = loading text, b = 0..1).
++    static void RomCoreEvent(int kind, const std::string& a, const std::string& b);
++    // Called once per game frame from the game thread: fires the "ready" event and blocks while the host has the game paused.
++    static void RomCoreOnGameFrame();
+ #endif
+ };
+ }; // namespace Ship
+diff --git a/src/ship/Context.cpp b/src/ship/Context.cpp
+index d806cf7d..88dc0d85 100644
+--- a/src/ship/Context.cpp
++++ b/src/ship/Context.cpp
+@@ -1,5 +1,6 @@
+ #include "ship/Context.h"
+ #include "ship/controller/controldevice/controller/mapping/keyboard/KeyboardScancodes.h"
++#include <cstdlib>
+ #include <cstring>
+ #include <iostream>
+ #include <SDL2/SDL.h>
+@@ -40,6 +41,12 @@ Context* Context::GetRawInstance() {
+ static std::string sAndroidDataRootPath = "/storage/emulated/0/2S2H";
+ 
+ static std::string GetAndroidDataRootPath() {
++    // RomCore: the host points the whole data directory (config, 2ship.o2r, mm.o2r, assets/, Save/, mods/) at its own folder.
++    if (const char* shipHome = std::getenv("SHIP_HOME")) {
++        if (shipHome[0] != '\0') {
++            return shipHome;
++        }
++    }
+     return sAndroidDataRootPath;
+ }
+ #endif
+diff --git a/src/ship/port/mobile/MobileImpl.cpp b/src/ship/port/mobile/MobileImpl.cpp
+index ab735ccf..1184ffc1 100644
+--- a/src/ship/port/mobile/MobileImpl.cpp
++++ b/src/ship/port/mobile/MobileImpl.cpp
+@@ -474,6 +474,77 @@ extern "C" void JNICALL Java_com_twoshipfork_mm_MainActivity_setAxis(JNIEnv *env
+     SDL_JoystickSetVirtualAxis(virtual_joystick, axis, value);
+ }
+ 
++// ---------------------------------------------------------------------------------------------------------------------
++// RomCore embedding. The host (RomCore) owns the loading screen, the menu, notices and error panels; 2Ship only renders the game.
++// ---------------------------------------------------------------------------------------------------------------------
++#include <chrono>
++#include <cstdlib>
++#include <thread>
++
++bool Ship::Mobile::RomCoreEmbedded() {
++    static const bool value = [] {
++        const char* env = std::getenv("ROMCORE_EMBED");
++        return env != nullptr && env[0] != '\0' && env[0] != '0';
++    }();
++    return value;
++}
++
++void Ship::Mobile::RomCoreEvent(int kind, const std::string& a, const std::string& b) {
++    JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
++    jobject activity = (jobject)SDL_AndroidGetActivity();
++    if (env == nullptr || activity == nullptr) {
++        return;
++    }
++    jclass cls = env->GetObjectClass(activity);
++    jmethodID method =
++        cls != nullptr ? env->GetMethodID(cls, "onRomCoreEvent", "(ILjava/lang/String;Ljava/lang/String;)V") : nullptr;
++    if (method != nullptr) {
++        jstring ja = env->NewStringUTF(a.c_str());
++        jstring jb = env->NewStringUTF(b.c_str());
++        env->CallVoidMethod(activity, method, (jint)kind, ja, jb);
++        if (ja != nullptr) env->DeleteLocalRef(ja);
++        if (jb != nullptr) env->DeleteLocalRef(jb);
++    }
++    if (env->ExceptionCheck()) {
++        env->ExceptionClear();
++    }
++    if (cls != nullptr) env->DeleteLocalRef(cls);
++    env->DeleteLocalRef(activity);
++}
++
++static std::atomic<bool> sRomCorePaused{ false };
++
++extern "C" void JNICALL Java_com_twoshipfork_mm_MainActivity_nativeRomCoreSetPaused(JNIEnv*, jobject, jboolean paused) {
++    sRomCorePaused = paused != JNI_FALSE;
++}
++
++// Release every virtual pad input (the host calls this when it takes the controller for its own menu).
++extern "C" void JNICALL Java_com_twoshipfork_mm_MainActivity_nativeRomCoreReleaseAll(JNIEnv*, jobject) {
++    if (virtual_joystick == nullptr) {
++        return;
++    }
++    for (int i = 0; i < 15; i++) {
++        SDL_JoystickSetVirtualButton(virtual_joystick, i, 0);
++    }
++    for (int a = 0; a < 6; a++) {
++        SDL_JoystickSetVirtualAxis(virtual_joystick, a, a >= 4 ? -SDL_MAX_SINT16 : 0);
++    }
++}
++
++void Ship::Mobile::RomCoreOnGameFrame() {
++    if (!RomCoreEmbedded()) {
++        return;
++    }
++    static std::atomic<int> frames{ 0 };
++    // "Ready" = the game has presented a few frames (the first ones are the N64 logo boot).
++    if (frames.load() < 6 && ++frames == 6) {
++        RomCoreEvent(0, "", "");
++    }
++    while (sRomCorePaused.load()) {
++        std::this_thread::sleep_for(std::chrono::milliseconds(8));
++    }
++}
++
+ extern "C" void JNICALL Java_com_twoshipfork_mm_MainActivity_detachController(JNIEnv *env, jobject jobj) {
+     SDL_JoystickClose(virtual_joystick);
+     SDL_JoystickDetachVirtual(virtual_joystick_id);
+diff --git a/src/ship/window/gui/Gui.cpp b/src/ship/window/gui/Gui.cpp
+index e5e5c045..a4126873 100644
+--- a/src/ship/window/gui/Gui.cpp
++++ b/src/ship/window/gui/Gui.cpp
+@@ -247,9 +247,14 @@ void Gui::DrawMenu() {
+         false;
+ #endif
+ 
+-    if (ImGui::IsKeyPressed(TOGGLE_BTN, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false) || touchBackPressed ||
+-        (ImGui::IsKeyPressed(TOGGLE_PAD_BTN, false) &&
+-         Ship::Context::GetRawInstance()->GetConsoleVariables()->GetInteger(CVAR_IMGUI_CONTROLLER_NAV, 0))) {
++    // RomCore embedding: the host owns the menu; 2Ship's own ImGui menu must never open.
++    if (
++#ifdef __ANDROID__
++        !Ship::Mobile::RomCoreEmbedded() &&
++#endif
++        (ImGui::IsKeyPressed(TOGGLE_BTN, false) || ImGui::IsKeyPressed(ImGuiKey_Escape, false) || touchBackPressed ||
++         (ImGui::IsKeyPressed(TOGGLE_PAD_BTN, false) &&
++          Ship::Context::GetRawInstance()->GetConsoleVariables()->GetInteger(CVAR_IMGUI_CONTROLLER_NAV, 0)))) {
+         if ((ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(TOGGLE_PAD_BTN, false) ||
+              touchBackPressed) &&
+             GetMenu()) {
+-- 
+2.54.0 (Apple Git-157)
+

@@ -1,0 +1,721 @@
+From ccea9f2c10149593118227a1fffdf79a8e2290ab Mon Sep 17 00:00:00 2001
+From: Ry <noryanfound@gmail.com>
+Date: Fri, 30 Oct 2026 22:47:05 -0500
+Subject: [PATCH] RomCore embedding: library build (AGP 9.2.1), SDL Java
+ package org.libsdl.apptwoship + libSDL2twoship.so, embedded MainActivity
+ mode, headless ROM extraction, dropped toasts, per-core asset root, JNI keep
+ rules
+
+---
+ Android/app/build.gradle                      | 58 +++++++-------
+ Android/app/consumer-rules.pro                |  4 +
+ Android/app/src/main/AndroidManifest.xml      |  4 +-
+ .../twoshipfork/mm/AndroidCrashReporter.java  |  2 +-
+ .../java/com/twoshipfork/mm/MainActivity.java | 52 ++++++++++---
+ .../libsdl/{app => apptwoship}/HIDDevice.java |  2 +-
+ .../HIDDeviceBLESteamController.java          |  2 +-
+ .../{app => apptwoship}/HIDDeviceManager.java |  4 +-
+ .../{app => apptwoship}/HIDDeviceUSB.java     |  2 +-
+ .../org/libsdl/{app => apptwoship}/SDL.java   |  2 +-
+ .../{app => apptwoship}/SDLActivity.java      |  4 +-
+ .../{app => apptwoship}/SDLAudioManager.java  |  2 +-
+ .../SDLControllerManager.java                 |  2 +-
+ .../{app => apptwoship}/SDLSurface.java       |  2 +-
+ Android/build.gradle                          |  6 +-
+ Android/gradle.properties                     |  3 +
+ CMakeLists.txt                                | 15 ++--
+ libultraship                                  |  2 +-
+ mm/2s2h/BenGui/Notification.cpp               |  9 +++
+ mm/2s2h/BenPort.cpp                           | 76 +++++++++++++++++++
+ mm/2s2h/Extractor/Extract.cpp                 | 12 +++
+ 21 files changed, 203 insertions(+), 62 deletions(-)
+ create mode 100644 Android/app/consumer-rules.pro
+ rename Android/app/src/main/java/org/libsdl/{app => apptwoship}/HIDDevice.java (95%)
+ rename Android/app/src/main/java/org/libsdl/{app => apptwoship}/HIDDeviceBLESteamController.java (99%)
+ rename Android/app/src/main/java/org/libsdl/{app => apptwoship}/HIDDeviceManager.java (99%)
+ rename Android/app/src/main/java/org/libsdl/{app => apptwoship}/HIDDeviceUSB.java (99%)
+ rename Android/app/src/main/java/org/libsdl/{app => apptwoship}/SDL.java (99%)
+ rename Android/app/src/main/java/org/libsdl/{app => apptwoship}/SDLActivity.java (99%)
+ rename Android/app/src/main/java/org/libsdl/{app => apptwoship}/SDLAudioManager.java (99%)
+ rename Android/app/src/main/java/org/libsdl/{app => apptwoship}/SDLControllerManager.java (99%)
+ rename Android/app/src/main/java/org/libsdl/{app => apptwoship}/SDLSurface.java (99%)
+
+diff --git a/Android/app/build.gradle b/Android/app/build.gradle
+index f2fd63458..7abb7efb6 100644
+--- a/Android/app/build.gradle
++++ b/Android/app/build.gradle
+@@ -12,19 +12,24 @@ else {
+     apply plugin: 'com.android.library'
+ }
+ 
++// RomCore: consumed as a library by the composite build (module com.twoshipfork:app).
++group = 'com.twoshipfork'
++version = 'embedded'
++
+ android {
+     buildFeatures {
+         buildConfig true
+     }
+-    ndkVersion "26.0.10792818"
+-    compileSdkVersion 33
++    ndkVersion "27.3.13750724"
++    compileSdk 37
++    namespace 'com.twoshipfork.mm'
+     defaultConfig {
+         if (buildAsApplication) {
+             applicationId project.findProperty('twoShipApplicationId') ?: "com.twoshipfork.mm"
+-            namespace("com.twoshipfork.mm")
+         }
+-        minSdkVersion 24
+-        targetSdkVersion 33
++        minSdk 30
++        consumerProguardFiles 'consumer-rules.pro'
++        targetSdk 33
+         versionCode androidAppVersionCode
+         versionName androidAppVersionName
+         manifestPlaceholders = [twoShipAppLabel: project.findProperty('twoShipAppLabel') ?: "@string/app_name"]
+@@ -37,7 +42,7 @@ android {
+                  if (project.hasProperty('twoShipPerformanceTest')) {
+                      arguments "-DTWO_SHIP_PERFORMANCE_TEST=ON"
+                  }
+-                 arguments "-DSDL_SHARED=ON", "-DANDROID_STL=c++_static", "-DHAVE_LD_VERSION_SCRIPT=OFF",'-DUSE_OPENGLES=ON', "-DPNG_SHARED=OFF", "-DPNG_STATIC=ON", "-DPNG_TESTS=OFF", "-DANDROID_VCPKG_ROOT=${androidVcpkgRootArg}", "-DANDROID_APP_VERSION_NAME=${androidAppVersionName}"
++                 arguments "-DCMAKE_BUILD_TYPE=Release", "-DSDL_SHARED=ON", "-DANDROID_STL=c++_static", "-DHAVE_LD_VERSION_SCRIPT=OFF",'-DUSE_OPENGLES=ON', "-DPNG_SHARED=OFF", "-DPNG_STATIC=ON", "-DPNG_TESTS=OFF", "-DANDROID_VCPKG_ROOT=${androidVcpkgRootArg}", "-DANDROID_APP_VERSION_NAME=${androidAppVersionName}"
+                  abiFilters 'arm64-v8a'
+             }
+         }
+@@ -63,12 +68,14 @@ android {
+         release {
+             signingConfig hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
+             minifyEnabled false
+-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
++            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+         }
+     }
+-    applicationVariants.all { variant ->
+-        tasks["merge${variant.name.capitalize()}Assets"]
+-            .dependsOn("externalNativeBuild${variant.name.capitalize()}", "verifyBundledAssets")
++    if (buildAsApplication) {
++        applicationVariants.all { variant ->
++            tasks["merge${variant.name.capitalize()}Assets"]
++                .dependsOn("externalNativeBuild${variant.name.capitalize()}", "verifyBundledAssets")
++        }
+     }
+     if (!project.hasProperty('EXCLUDE_NATIVE_LIBS')) {
+         sourceSets.main {
+@@ -80,26 +87,14 @@ android {
+             //}
+             cmake {
+                  path '../../CMakeLists.txt'
+-                 version "3.30.3"
++                 version "3.31.6"
+             }
+         }
+ 
+     }
+-    lintOptions {
++    lint {
+         abortOnError false
+     }
+-
+-    if (buildAsLibrary) {
+-        libraryVariants.all { variant ->
+-            variant.outputs.each { output ->
+-                def outputFile = output.outputFile
+-                if (outputFile != null && outputFile.name.endsWith(".aar")) {
+-                    def fileName = "org.libsdl.app.aar";
+-                    output.outputFile = new File(outputFile.parent, fileName);
+-                }
+-            }
+-        }
+-    }
+ }
+ 
+ dependencies {
+@@ -108,6 +103,15 @@ dependencies {
+     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+ }
+ 
++// RomCore: CMake's configure step copies the extractor assets into src/main/assets/twoship/assets (see ../CMakeLists.txt). In the stock
++// application build the asset merge already waits for the native build; do the same for the library variants, so a fresh checkout
++// packages them on the first build.
++afterEvaluate {
++    tasks.matching { it.name ==~ /merge\w+Assets/ }.configureEach { assetTask ->
++        assetTask.dependsOn({ tasks.matching { it.name.startsWith('configureCMake') }.toList() })
++    }
++}
++
+ tasks.register("verifyBundledAssets") {
+     def bundled2ShipOtr = file("src/main/assets/2ship.o2r")
+     def bundledRomOtr = file("src/main/assets/mm.o2r")
+@@ -123,9 +127,3 @@ tasks.register("verifyBundledAssets") {
+     }
+ }
+ 
+-task wrapper(type: Wrapper) {
+-    gradleVersion = '8.3.2'
+-}
+-
+-task prepareKotlinBuildScriptModel {
+-}
+diff --git a/Android/app/consumer-rules.pro b/Android/app/consumer-rules.pro
+new file mode 100644
+index 000000000..e4133804b
+--- /dev/null
++++ b/Android/app/consumer-rules.pro
+@@ -0,0 +1,4 @@
++# RomCore: the embedding app minifies even debug builds. Everything below is called from native code (JNI) by name, or registers its
++# natives by name (SDL's JNI_OnLoad register_methods), so it must keep its exact names.
++-keep class org.libsdl.apptwoship.** { *; }
++-keep class com.twoshipfork.mm.** { *; }
+diff --git a/Android/app/src/main/AndroidManifest.xml b/Android/app/src/main/AndroidManifest.xml
+index 69d8f5497..a0fb67d37 100644
+--- a/Android/app/src/main/AndroidManifest.xml
++++ b/Android/app/src/main/AndroidManifest.xml
+@@ -66,7 +66,7 @@
+ 
+          An example Java class can be found in README-android.md
+     -->
+-    <application android:label="${twoShipAppLabel}"
++    <application android:label="@string/app_name"
+         android:icon="@mipmap/ic_launcher"
+         android:allowBackup="true"
+         android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+@@ -82,7 +82,7 @@
+ 
+ 
+         <activity android:name="MainActivity"
+-            android:label="${twoShipAppLabel}"
++            android:label="@string/app_name"
+             android:alwaysRetainTaskState="true"
+             android:launchMode="singleInstance"
+             android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+diff --git a/Android/app/src/main/java/com/twoshipfork/mm/AndroidCrashReporter.java b/Android/app/src/main/java/com/twoshipfork/mm/AndroidCrashReporter.java
+index d2c5a37f2..3a79abacc 100644
+--- a/Android/app/src/main/java/com/twoshipfork/mm/AndroidCrashReporter.java
++++ b/Android/app/src/main/java/com/twoshipfork/mm/AndroidCrashReporter.java
+@@ -184,7 +184,7 @@ final class AndroidCrashReporter {
+         writer.println("2 Ship 2 Harkinian Android crash report");
+         writer.println("Report type: " + reportType);
+         writer.println("Recorded: " + formatTimestamp(System.currentTimeMillis()));
+-        writer.println("App version: " + BuildConfig.VERSION_NAME + " (" + BuildConfig.VERSION_CODE + ")");
++        writer.println("App version: " + MainActivity.APP_VERSION_NAME + " (" + MainActivity.APP_VERSION_CODE + ")");
+         writer.println("Android: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")");
+         writer.println("Device: " + Build.MANUFACTURER + " " + Build.MODEL);
+         writer.println();
+diff --git a/Android/app/src/main/java/com/twoshipfork/mm/MainActivity.java b/Android/app/src/main/java/com/twoshipfork/mm/MainActivity.java
+index 287c25806..75fa7651e 100644
+--- a/Android/app/src/main/java/com/twoshipfork/mm/MainActivity.java
++++ b/Android/app/src/main/java/com/twoshipfork/mm/MainActivity.java
+@@ -1,6 +1,6 @@
+ 
+ package com.twoshipfork.mm;
+-import org.libsdl.app.SDLActivity;
++import org.libsdl.apptwoship.SDLActivity;
+ 
+ import android.app.AlertDialog;
+ import android.content.Context;
+@@ -72,6 +72,9 @@ public class MainActivity extends SDLActivity{
+     private static final String SUPPORT_FILES_VERSION_MARKER = ".android_support_files_version";
+     private static final String SAFE_MODE_MARKER = ".android_safe_mode";
+     private static final String SUPPORT_ARCHIVE = "2ship.o2r";
++    // Library builds have no BuildConfig.VERSION_* / APPLICATION_ID; keep in step with androidAppVersionCode/Name in app/build.gradle.
++    static final int APP_VERSION_CODE = 5001035;
++    static final String APP_VERSION_NAME = "5.0.1-android.3";
+     private static final String DEFAULT_SHADER = "shaders/opengl/default.shader.glsl";
+     private AlertDialog dataRootMigrationDialog;
+     private AlertDialog setupProgressDialog;
+@@ -86,6 +89,17 @@ public class MainActivity extends SDLActivity{
+         updateCurrentDataRootPath();
+         recoverWithoutMods = AndroidCrashReporter.install(this, getTargetRootFolder());
+ 
++        if (isRomCoreEmbedded()) {
++            // RomCore embedding: the host prepares the data directory (2ship.o2r, assets/, config) before this Activity
++            // starts, owns every pixel that is not the game, and feeds the one virtual pad. No permission flow, no setup
++            // dialog, no touch overlay, no storage migration.
++            setupLatch.countDown();
++            super.onCreate(savedInstanceState);
++            attachController();
++            Log.i("2Ship", "onCreate complete (RomCore embedded)");
++            return;
++        }
++
+         if (hasStoragePermission()) {
+             beginSetupOrChooseDataRoot();
+         } else {
+@@ -107,11 +121,23 @@ public class MainActivity extends SDLActivity{
+         attachController();
+     }
+ 
++    /** RomCore subclasses return true: no overlay, no setup/permission flow, no Java dialogs. */
++    protected boolean isRomCoreEmbedded() {
++        return false;
++    }
++
++    /** Native -> host events (RomCore): 0 ready, 1 notice(a), 2 fatal(a=title, b=message), 3 progress(a=text, b=0..1). Default: ignore. */
++    public void onRomCoreEvent(int kind, String a, String b) {
++    }
++
++    public native void nativeRomCoreSetPaused(boolean paused);
++    public native void nativeRomCoreReleaseAll();
++
+     @Override
+     public void loadLibraries() {
+         super.loadLibraries();
+         nativeInstallCrashReporter(AndroidCrashReporter.getNativeReportFile().getAbsolutePath(),
+-                BuildConfig.VERSION_NAME);
++                APP_VERSION_NAME);
+     }
+ 
+     private native void nativeInstallCrashReporter(String reportPath, String versionName);
+@@ -132,6 +158,9 @@ public class MainActivity extends SDLActivity{
+     }
+ 
+     private void applyImmersiveFullscreen() {
++        if (isRomCoreEmbedded()) {
++            return; // RomCore's Activity owns the window flags
++        }
+         Window window = getWindow();
+         if (window == null) {
+             return;
+@@ -187,7 +216,7 @@ public class MainActivity extends SDLActivity{
+     }
+ 
+     private void doVersionCheck(){
+-        int currentVersion = BuildConfig.VERSION_CODE;
++        int currentVersion = APP_VERSION_CODE;
+         supportFilesNeedRefresh = !isSupportFilesMarkerCurrent() || !isSupportArchiveCurrent();
+         preferences.edit().putInt("appVersion", currentVersion).apply();
+     }
+@@ -242,7 +271,7 @@ public class MainActivity extends SDLActivity{
+                 return false;
+             }
+             String markerVersion = new String(buffer, 0, read).trim();
+-            return markerVersion.equals(String.valueOf(BuildConfig.VERSION_CODE));
++            return markerVersion.equals(String.valueOf(APP_VERSION_CODE));
+         } catch (IOException e) {
+             Log.w("setupFiles", "Unable to read support files marker", e);
+             return false;
+@@ -252,7 +281,7 @@ public class MainActivity extends SDLActivity{
+     private void writeSupportFilesMarker(File targetRootFolder) throws IOException {
+         File markerFile = getSupportFilesMarkerFile(targetRootFolder);
+         try (OutputStream out = new FileOutputStream(markerFile)) {
+-            out.write(String.valueOf(BuildConfig.VERSION_CODE).getBytes());
++            out.write(String.valueOf(APP_VERSION_CODE).getBytes());
+         }
+     }
+ 
+@@ -290,6 +319,12 @@ public class MainActivity extends SDLActivity{
+     }
+ 
+     private File getTargetRootFolder() {
++        if (isRomCoreEmbedded()) {
++            String shipHome = System.getenv("SHIP_HOME");
++            if (shipHome != null && !shipHome.isEmpty()) {
++                return new File(shipHome);
++            }
++        }
+         String configuredPath = preferences.getString(PREF_DATA_ROOT_PATH, null);
+         if (configuredPath == null || configuredPath.isEmpty()) {
+             return getDefaultDataRootFolder();
+@@ -299,10 +334,6 @@ public class MainActivity extends SDLActivity{
+     }
+ 
+     private File getDefaultDataRootFolder() {
+-        if (BuildConfig.APPLICATION_ID.equals("com.twoshipfork.mm.performancetest") ||
+-                BuildConfig.APPLICATION_ID.equals("com.twoshipfork.mm.performancetestci")) {
+-            return new File(Environment.getExternalStorageDirectory(), "2S2H-performance-test");
+-        }
+         return new File(Environment.getExternalStorageDirectory(), "2S2H");
+     }
+ 
+@@ -921,6 +952,9 @@ public class MainActivity extends SDLActivity{
+ 
+ 
+     public void openFilePicker() {
++        if (isRomCoreEmbedded()) {
++            return;
++        }
+         // Create an Intent to open the file picker dialog
+         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+         intent.setType("*/*");
+diff --git a/Android/app/src/main/java/org/libsdl/app/HIDDevice.java b/Android/app/src/main/java/org/libsdl/apptwoship/HIDDevice.java
+similarity index 95%
+rename from Android/app/src/main/java/org/libsdl/app/HIDDevice.java
+rename to Android/app/src/main/java/org/libsdl/apptwoship/HIDDevice.java
+index 955df5d14..57507097b 100644
+--- a/Android/app/src/main/java/org/libsdl/app/HIDDevice.java
++++ b/Android/app/src/main/java/org/libsdl/apptwoship/HIDDevice.java
+@@ -1,4 +1,4 @@
+-package org.libsdl.app;
++package org.libsdl.apptwoship;
+ 
+ import android.hardware.usb.UsbDevice;
+ 
+diff --git a/Android/app/src/main/java/org/libsdl/app/HIDDeviceBLESteamController.java b/Android/app/src/main/java/org/libsdl/apptwoship/HIDDeviceBLESteamController.java
+similarity index 99%
+rename from Android/app/src/main/java/org/libsdl/app/HIDDeviceBLESteamController.java
+rename to Android/app/src/main/java/org/libsdl/apptwoship/HIDDeviceBLESteamController.java
+index a90c2aec2..9d4293ae5 100644
+--- a/Android/app/src/main/java/org/libsdl/app/HIDDeviceBLESteamController.java
++++ b/Android/app/src/main/java/org/libsdl/apptwoship/HIDDeviceBLESteamController.java
+@@ -1,4 +1,4 @@
+-package org.libsdl.app;
++package org.libsdl.apptwoship;
+ 
+ import android.content.Context;
+ import android.bluetooth.BluetoothDevice;
+diff --git a/Android/app/src/main/java/org/libsdl/app/HIDDeviceManager.java b/Android/app/src/main/java/org/libsdl/apptwoship/HIDDeviceManager.java
+similarity index 99%
+rename from Android/app/src/main/java/org/libsdl/app/HIDDeviceManager.java
+rename to Android/app/src/main/java/org/libsdl/apptwoship/HIDDeviceManager.java
+index 21a1c1d18..b0cb4d39f 100644
+--- a/Android/app/src/main/java/org/libsdl/app/HIDDeviceManager.java
++++ b/Android/app/src/main/java/org/libsdl/apptwoship/HIDDeviceManager.java
+@@ -1,4 +1,4 @@
+-package org.libsdl.app;
++package org.libsdl.apptwoship;
+ 
+ import android.app.Activity;
+ import android.app.AlertDialog;
+@@ -27,7 +27,7 @@ import java.util.List;
+ 
+ public class HIDDeviceManager {
+     private static final String TAG = "hidapi";
+-    private static final String ACTION_USB_PERMISSION = "org.libsdl.app.USB_PERMISSION";
++    private static final String ACTION_USB_PERMISSION = "org.libsdl.apptwoship.USB_PERMISSION";
+ 
+     private static HIDDeviceManager sManager;
+     private static int sManagerRefCount = 0;
+diff --git a/Android/app/src/main/java/org/libsdl/app/HIDDeviceUSB.java b/Android/app/src/main/java/org/libsdl/apptwoship/HIDDeviceUSB.java
+similarity index 99%
+rename from Android/app/src/main/java/org/libsdl/app/HIDDeviceUSB.java
+rename to Android/app/src/main/java/org/libsdl/apptwoship/HIDDeviceUSB.java
+index bfe0cf954..dfd493588 100644
+--- a/Android/app/src/main/java/org/libsdl/app/HIDDeviceUSB.java
++++ b/Android/app/src/main/java/org/libsdl/apptwoship/HIDDeviceUSB.java
+@@ -1,4 +1,4 @@
+-package org.libsdl.app;
++package org.libsdl.apptwoship;
+ 
+ import android.hardware.usb.*;
+ import android.os.Build;
+diff --git a/Android/app/src/main/java/org/libsdl/app/SDL.java b/Android/app/src/main/java/org/libsdl/apptwoship/SDL.java
+similarity index 99%
+rename from Android/app/src/main/java/org/libsdl/app/SDL.java
+rename to Android/app/src/main/java/org/libsdl/apptwoship/SDL.java
+index b132fea08..250fb6646 100644
+--- a/Android/app/src/main/java/org/libsdl/app/SDL.java
++++ b/Android/app/src/main/java/org/libsdl/apptwoship/SDL.java
+@@ -1,4 +1,4 @@
+-package org.libsdl.app;
++package org.libsdl.apptwoship;
+ 
+ import android.content.Context;
+ 
+diff --git a/Android/app/src/main/java/org/libsdl/app/SDLActivity.java b/Android/app/src/main/java/org/libsdl/apptwoship/SDLActivity.java
+similarity index 99%
+rename from Android/app/src/main/java/org/libsdl/app/SDLActivity.java
+rename to Android/app/src/main/java/org/libsdl/apptwoship/SDLActivity.java
+index 5836acd7c..8179ee7bf 100644
+--- a/Android/app/src/main/java/org/libsdl/app/SDLActivity.java
++++ b/Android/app/src/main/java/org/libsdl/apptwoship/SDLActivity.java
+@@ -1,4 +1,4 @@
+-package org.libsdl.app;
++package org.libsdl.apptwoship;
+ 
+ import android.app.Activity;
+ import android.app.AlertDialog;
+@@ -269,7 +269,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
+      */
+     protected String[] getLibraries() {
+         return new String[] {
+-            "SDL2",
++            "SDL2twoship", // RomCore: renamed from "SDL2" (Ship of Harkinian ships libSDL2.so in the same APK)
+             // "SDL2_image",
+             // "SDL2_mixer",
+             // "SDL2_net",
+diff --git a/Android/app/src/main/java/org/libsdl/app/SDLAudioManager.java b/Android/app/src/main/java/org/libsdl/apptwoship/SDLAudioManager.java
+similarity index 99%
+rename from Android/app/src/main/java/org/libsdl/app/SDLAudioManager.java
+rename to Android/app/src/main/java/org/libsdl/apptwoship/SDLAudioManager.java
+index 7c821a409..ec1160dfc 100644
+--- a/Android/app/src/main/java/org/libsdl/app/SDLAudioManager.java
++++ b/Android/app/src/main/java/org/libsdl/apptwoship/SDLAudioManager.java
+@@ -1,4 +1,4 @@
+-package org.libsdl.app;
++package org.libsdl.apptwoship;
+ 
+ import android.content.Context;
+ import android.media.AudioDeviceCallback;
+diff --git a/Android/app/src/main/java/org/libsdl/app/SDLControllerManager.java b/Android/app/src/main/java/org/libsdl/apptwoship/SDLControllerManager.java
+similarity index 99%
+rename from Android/app/src/main/java/org/libsdl/app/SDLControllerManager.java
+rename to Android/app/src/main/java/org/libsdl/apptwoship/SDLControllerManager.java
+index 9d8b20b7b..8e159d45a 100644
+--- a/Android/app/src/main/java/org/libsdl/app/SDLControllerManager.java
++++ b/Android/app/src/main/java/org/libsdl/apptwoship/SDLControllerManager.java
+@@ -1,4 +1,4 @@
+-package org.libsdl.app;
++package org.libsdl.apptwoship;
+ 
+ import java.util.ArrayList;
+ import java.util.Collections;
+diff --git a/Android/app/src/main/java/org/libsdl/app/SDLSurface.java b/Android/app/src/main/java/org/libsdl/apptwoship/SDLSurface.java
+similarity index 99%
+rename from Android/app/src/main/java/org/libsdl/app/SDLSurface.java
+rename to Android/app/src/main/java/org/libsdl/apptwoship/SDLSurface.java
+index 0857e4b6f..219df06e1 100644
+--- a/Android/app/src/main/java/org/libsdl/app/SDLSurface.java
++++ b/Android/app/src/main/java/org/libsdl/apptwoship/SDLSurface.java
+@@ -1,4 +1,4 @@
+-package org.libsdl.app;
++package org.libsdl.apptwoship;
+ 
+ 
+ import android.content.Context;
+diff --git a/Android/build.gradle b/Android/build.gradle
+index fa574715c..f19f796a4 100644
+--- a/Android/build.gradle
++++ b/Android/build.gradle
+@@ -6,7 +6,7 @@ buildscript {
+         google()
+     }
+     dependencies {
+-        classpath 'com.android.tools.build:gradle:8.10.1'
++        classpath 'com.android.tools.build:gradle:9.2.1'
+ 
+         // NOTE: Do not place your application dependencies here; they belong
+         // in the individual module build.gradle files
+@@ -20,6 +20,6 @@ allprojects {
+     }
+ }
+ 
+-task clean(type: Delete) {
+-    delete rootProject.buildDir
++tasks.register('clean', Delete) {
++    delete rootProject.layout.buildDirectory
+ }
+diff --git a/Android/gradle.properties b/Android/gradle.properties
+index 48e100c5f..2fdaff69d 100644
+--- a/Android/gradle.properties
++++ b/Android/gradle.properties
+@@ -18,3 +18,6 @@ org.gradle.jvmargs=-Xmx1536m
+ # org.gradle.parallel=true
+ 
+ android.useAndroidX=true
++
++# RomCore: consumed as a library (composite build), never as the stock application.
++BUILD_AS_LIBRARY=true
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 630db968d..f4696fc18 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -217,11 +217,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Android" AND DEFINED ANDROID_VCPKG_ROOT)
+ endif()
+ add_subdirectory(ZAPDTR/ZAPD ${CMAKE_BINARY_DIR}/ZAPD)
+ add_subdirectory(OTRExporter)
++# RomCore: -DROMCORE_HOST_TOOLS_ONLY=ON builds only the host tools (ZAPD, OTRExporter) needed for the Generate2ShipOtr target.
++if(NOT ROMCORE_HOST_TOOLS_ONLY)
+ add_subdirectory(mm)
+ 
+ set_property(TARGET 2ship PROPERTY APPIMAGE_DESKTOP_FILE_TERMINAL YES)
+ set_property(TARGET 2ship PROPERTY APPIMAGE_DESKTOP_FILE "${CMAKE_SOURCE_DIR}/mm/linux/2s2h.desktop")
+ set_property(TARGET 2ship PROPERTY APPIMAGE_ICON_FILE "${CMAKE_BINARY_DIR}/2s2hIcon.png")
++endif()
+ 
+ if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
+ install(FILES "${CMAKE_BINARY_DIR}/mm/2ship.o2r" DESTINATION . COMPONENT ship)
+@@ -236,11 +239,11 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/mm/assets/xml/" DESTINATION ./assets/xml
+ endif()
+ 
+ if ("${CMAKE_SYSTEM_NAME}" STREQUAL "Android")
+-file(COPY "${CMAKE_SOURCE_DIR}/mm/assets/extractor/" DESTINATION "${CMAKE_SOURCE_DIR}/Android/app/src/main/assets/assets/extractor")
+-file(COPY "${CMAKE_SOURCE_DIR}/mm/assets/xml/" DESTINATION "${CMAKE_SOURCE_DIR}/Android/app/src/main/assets/assets/xml")
+-file(COPY "${CMAKE_SOURCE_DIR}/OTRExporter/CFG/ActorList_MM.txt" DESTINATION "${CMAKE_SOURCE_DIR}/Android/app/src/main/assets/assets/extractor/symbols")
+-file(COPY "${CMAKE_SOURCE_DIR}/OTRExporter/CFG/ObjectList_MM.txt" DESTINATION "${CMAKE_SOURCE_DIR}/Android/app/src/main/assets/assets/extractor/symbols")
+-file(COPY "${CMAKE_SOURCE_DIR}/OTRExporter/CFG/SymbolMap_MM.txt" DESTINATION "${CMAKE_SOURCE_DIR}/Android/app/src/main/assets/assets/extractor/symbols")
++file(COPY "${CMAKE_SOURCE_DIR}/mm/assets/extractor/" DESTINATION "${CMAKE_SOURCE_DIR}/Android/app/src/main/assets/twoship/assets/extractor")
++file(COPY "${CMAKE_SOURCE_DIR}/mm/assets/xml/" DESTINATION "${CMAKE_SOURCE_DIR}/Android/app/src/main/assets/twoship/assets/xml")
++file(COPY "${CMAKE_SOURCE_DIR}/OTRExporter/CFG/ActorList_MM.txt" DESTINATION "${CMAKE_SOURCE_DIR}/Android/app/src/main/assets/twoship/assets/extractor/symbols")
++file(COPY "${CMAKE_SOURCE_DIR}/OTRExporter/CFG/ObjectList_MM.txt" DESTINATION "${CMAKE_SOURCE_DIR}/Android/app/src/main/assets/twoship/assets/extractor/symbols")
++file(COPY "${CMAKE_SOURCE_DIR}/OTRExporter/CFG/SymbolMap_MM.txt" DESTINATION "${CMAKE_SOURCE_DIR}/Android/app/src/main/assets/twoship/assets/extractor/symbols")
+ endif()
+ 
+ 
+@@ -301,7 +304,9 @@ add_custom_target(CreateOSXIcons
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Creating OSX icons ..."
+    )
++if(NOT ROMCORE_HOST_TOOLS_ONLY)
+ add_dependencies(2ship CreateOSXIcons)
++endif()
+ 
+ install(TARGETS ZAPD DESTINATION ${CMAKE_BINARY_DIR}/assets/extractor)
+ 
+diff --git a/libultraship b/libultraship
+index 45081d078..b4dddccb4 160000
+--- a/libultraship
++++ b/libultraship
+@@ -1 +1 @@
+-Subproject commit 45081d0786df9bab787a8ef31c3efd8ad1bbebdd
++Subproject commit b4dddccb4378b7ccc136e16d3d2af59b556d0921
+diff --git a/mm/2s2h/BenGui/Notification.cpp b/mm/2s2h/BenGui/Notification.cpp
+index 5abbc9a8c..8cdd47e9f 100644
+--- a/mm/2s2h/BenGui/Notification.cpp
++++ b/mm/2s2h/BenGui/Notification.cpp
+@@ -1,4 +1,7 @@
+ 
++#ifdef __ANDROID__
++#include <ship/port/mobile/MobileImpl.h>
++#endif
+ #include "Notification.h"
+ #include <libultraship/libultraship.h>
+ 
+@@ -130,6 +133,12 @@ void Window::UpdateElement() {
+ }
+ 
+ void Emit(Options notification) {
++#ifdef __ANDROID__
++    // RomCore embedding: the host owns every overlay; 2Ship toasts (autosave, controller, ...) are dropped.
++    if (Ship::Mobile::RomCoreEmbedded()) {
++        return;
++    }
++#endif
+     notification.id = nextId++;
+     if (notification.remainingTime == 0.0f) {
+         notification.remainingTime = CVarGetFloat("gNotifications.Duration", 10.0f);
+diff --git a/mm/2s2h/BenPort.cpp b/mm/2s2h/BenPort.cpp
+index 185825313..fa437d5d3 100644
+--- a/mm/2s2h/BenPort.cpp
++++ b/mm/2s2h/BenPort.cpp
+@@ -71,6 +71,9 @@ CrowdControl* CrowdControl::Instance;
+ #include "2s2h/config/ConfigUpdaters.h"
+ 
+ #ifdef __ANDROID__
++#include <atomic>
++#include <cstdlib>
++#include <thread>
+ #include <ship/port/mobile/MobileImpl.h>
+ extern "C" void Android_SetDataRootPath(const char* path) {
+     if (path != nullptr) {
+@@ -283,7 +286,77 @@ namespace BenGui {
+ extern std::shared_ptr<BenGui::BenMenu> mBenMenu;
+ }
+ 
++#ifdef __ANDROID__
++// RomCore embedding: the host shows the loading screen / error panel; 2Ship shows nothing while it prepares its game files.
++[[noreturn]] static void RomCoreFatal(const std::string& title, const std::string& message) {
++    Ship::Mobile::RomCoreEvent(2, title, message);
++    // The host closes the game (ends this process) once the user dismisses its error panel.
++    for (;;) {
++        std::this_thread::sleep_for(std::chrono::seconds(1));
++    }
++}
++
++static void RomCoreExtract(const std::string& installPath, const std::string& dataPath) {
++    namespace fs = std::filesystem;
++    auto o2rExists = [&]() { return fs::exists(Ship::Context::LocateFileAcrossAppDirs("mm.o2r", appShortName)); };
++    if (!shipArchiveVersionMatch) {
++        RomCoreFatal("Majora's Mask", "The 2 Ship 2 Harkinian core is missing its 2ship.o2r asset archive (or it is outdated).");
++    }
++    if (!fs::exists(installPath + "/assets")) {
++        RomCoreFatal("Majora's Mask", "The 2 Ship 2 Harkinian core is missing its extractor assets.");
++    }
++    // A mm.o2r made by an incompatible 2Ship version is dropped and rebuilt from the ROM.
++    if (o2rExists() && VerifyArchiveVersion(DetectArchiveVersion("mm.o2r", true))) {
++        RemoveArchiveAcrossAppDirs("mm.o2r");
++    }
++    if (o2rExists()) {
++        return;
++    }
++    const char* rom = std::getenv("ROMCORE_2SHIP_ROM");
++    if (rom == nullptr || rom[0] == '\0') {
++        RomCoreFatal("Majora's Mask", "No ROM was passed to the 2 Ship 2 Harkinian core.");
++    }
++    Extractor extract;
++    if (!extract.RunFileStandalone(rom)) {
++        RomCoreFatal("Majora's Mask",
++                     "This file is not a supported Majora's Mask ROM. Use a .z64 / .n64 / .v64 dump of the NTSC-U 1.0 "
++                     "(or NTSC-U GameCube) release.");
++    }
++    std::atomic<size_t> count{ 0 };
++    std::atomic<size_t> total{ 0 };
++    std::atomic<bool> done{ false };
++    std::thread worker([&]() {
++        extract.CallZapd(installPath, dataPath, &count, &total);
++        done = true;
++    });
++    int lastPercent = -1;
++    while (!done) {
++        std::this_thread::sleep_for(std::chrono::milliseconds(250));
++        const size_t t = total.load();
++        const int percent = t > 0 ? (int)(count.load() * 100 / t) : 0;
++        if (percent != lastPercent) {
++            lastPercent = percent;
++            Ship::Mobile::RomCoreEvent(3, "Preparing Majora's Mask (first launch only) " + std::to_string(percent) + "%",
++                                       std::to_string(percent / 100.0f));
++        }
++    }
++    worker.join();
++    if (!o2rExists()) {
++        RomCoreFatal("Majora's Mask", "The game files could not be created from this ROM.");
++    }
++}
++#endif
++
+ void OTRGlobals::RunExtract(int argc, char* argv[]) {
++#ifdef __ANDROID__
++    // RomCore embedding: prepare mm.o2r headlessly (no popups, no file picker, no ImGui frames) and go straight to the game.
++    if (Ship::Mobile::RomCoreEmbedded()) {
++        CheckAndCreateModFolder();
++        RomCoreExtract(std::filesystem::absolute(Ship::Context::GetAppBundlePath()).string(),
++                       std::filesystem::absolute(Ship::Context::GetAppDirectoryPath(appShortName)).string());
++        return;
++    }
++#endif
+     bool extractDone = false;
+     ExtractSteps extractStep = ES_PORT_ARCHIVE;
+     WindowsSteps windowsStep = WS_TEMP;
+@@ -1242,6 +1315,9 @@ void RunCommands(Gfx* Commands, int time, int step, int denom, int count) {
+ 
+ // C->C++ Bridge
+ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
++#ifdef __ANDROID__
++    Ship::Mobile::RomCoreOnGameFrame();
++#endif
+     {
+         std::unique_lock<std::mutex> Lock(audio.mutex);
+         audio.processing = true;
+diff --git a/mm/2s2h/Extractor/Extract.cpp b/mm/2s2h/Extractor/Extract.cpp
+index 64bd20df6..72b968c70 100644
+--- a/mm/2s2h/Extractor/Extract.cpp
++++ b/mm/2s2h/Extractor/Extract.cpp
+@@ -43,6 +43,9 @@
+ #include <SDL2/SDL.h>
+ #include <jni.h>
+ #include <string>
++#include <chrono>
++#include <thread>
++#include <ship/port/mobile/MobileImpl.h>
+ #endif
+ 
+ #include <stdlib.h>
+@@ -103,6 +106,15 @@ extern "C" void JNICALL Java_com_twoshipfork_mm_MainActivity_nativeHandleSelecte
+ #endif
+ 
+ void Extractor::ShowErrorBox(const char* title, const char* text) {
++#ifdef __ANDROID__
++    if (Ship::Mobile::RomCoreEmbedded()) {
++        // RomCore shows its own error panel; wait here until the host closes the game.
++        Ship::Mobile::RomCoreEvent(2, title, text);
++        for (;;) {
++            std::this_thread::sleep_for(std::chrono::seconds(1));
++        }
++    }
++#endif
+ #ifdef _WIN32
+     MessageBoxA(nullptr, text, title, MB_OK | MB_ICONERROR);
+ #else
+-- 
+2.54.0 (Apple Git-157)
+

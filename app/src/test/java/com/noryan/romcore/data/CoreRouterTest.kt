@@ -99,4 +99,23 @@ class CoreRouterTest {
         assertEquals("cemu", CoreRouter.choose(System.WIIU, "Wind Waker HD", null, "cemu", null, wiiu)!!.id)
         assertEquals("cemu", CoreRouter.choose(System.WIIU, "Mario Kart 8", null, "wwhd", null, wiiu)!!.id)
     }
+
+    // ---- N64: Ocarina of Time -> shipwright, Majora's Mask -> twoship, everything else stays on Mupen64Plus-Next ----
+    private val n64Libretro = Fake("retroarch", "Libretro cores", setOf(System.N64), listOf(sub("mupen64plus_next", "Mupen64Plus-Next", System.N64)))
+    private val shipwright = Fake("shipwright", "Ship of Harkinian (Ocarina of Time)", setOf(System.N64))
+    private val twoship = Fake("twoship", "2 Ship 2 Harkinian (Majora's Mask)", setOf(System.N64))
+    private val n64 = listOf(n64Libretro, shipwright, twoship)
+
+    @Test fun n64ZeldaGamesRouteToTheirNativePorts() {
+        val c = CoreRouter.candidates(System.N64, n64)
+        assertEquals("twoship", CoreRouter.autoChoice(System.N64, "The Legend of Zelda - Majora's Mask", c)!!.id)
+        assertEquals("shipwright", CoreRouter.autoChoice(System.N64, "The Legend of Zelda - Ocarina of Time", c)!!.id)
+        assertEquals("retroarch:mupen64plus_next", CoreRouter.autoChoice(System.N64, "Super Mario 64", c)!!.id)
+        // each native port only offers its own game; Mupen64Plus-Next stays selectable for both
+        assertEquals(listOf("retroarch:mupen64plus_next", "twoship"), CoreRouter.candidatesFor(System.N64, null, n64, "Majora's Mask").map { it.id })
+        assertEquals(listOf("retroarch:mupen64plus_next", "shipwright"), CoreRouter.candidatesFor(System.N64, null, n64, "Ocarina of Time").map { it.id })
+        assertEquals(listOf("retroarch:mupen64plus_next"), CoreRouter.candidatesFor(System.N64, null, n64, "GoldenEye 007").map { it.id })
+        assertEquals("retroarch:mupen64plus_next", CoreRouter.choose(System.N64, "Majora's Mask", null, "retroarch:mupen64plus_next", null, n64)!!.id)
+        assertEquals("shipwright", CoreRouter.choose(System.N64, "Ocarina of Time", null, "twoship", null, n64)!!.id)
+    }
 }

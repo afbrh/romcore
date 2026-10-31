@@ -15,7 +15,7 @@ source of truth for what each core must still do. Code: `com.noryan.romcore.api.
   states/<coreId>/_unmatched/<hash>/  old states whose game could not be identified
   <coreId>/...                        the engine's OWN native save data   [PHASE 2: you map your dirs here, see table]
 ```
-`coreId` = the descriptor id (`retroarch`, `ppsspp`, `dolphin`, `primehack`, `cemu`, `eden`, `azahar`, `watermelonds`, `armsx2`, `dusklight`, `shipwright`).
+`coreId` = the descriptor id (`retroarch`, `ppsspp`, `dolphin`, `primehack`, `cemu`, `eden`, `azahar`, `watermelonds`, `armsx2`, `dusklight`, `shipwright`, `twoship`).
 `gameKey` = the ROM file name without extension, sanitized (`Metroid - Prime Trilogy`); Wii U: the title folder name. Two ROMs with
 the same name get ` [<size hex>]` (or ` [<size hex>-<hash>]`). Use `SaveRoot.gameKey(ctx, romPath)`; never hash paths yourself.
 
@@ -117,6 +117,7 @@ All paths are relative to `<root>` = `<ROM folder>/_romcore-save-data`. Verified
 | eden | `eden/save` (`user/save/...`, profile `system/save/8000000000000010`, Mii db `...30`) | NAND firmware/contents, keys, config, shaders, drivers, system settings saves | `save_directory` / `setSaveDir` applied between config load and `initializeSystem`; eden-src patched so profile + Mii DB use SaveDir (the save folder is named after the random profile UUID) |
 | dusklight | `dusklight/<USA\|EUR\|JAP>/Card A/*.gci` (Twilight Princess GC memory card as a GCI folder, e.g. `01-GZ2E-gczelda2.gci`; + the save manager's backups / `.mods` data) | `<filesDir>/dusklight/{config.json,achievements.json,controller files}`, `<filesDir>/{pipeline_cache.db,dawn_cache.db,logs}` | local aurora patch: `AURORA_CARD_DIR` env var (`lib/dolphin/card.cpp`) replaces the card base directory; exported with `Os.setenv` in the `:dusklight` process before the native library starts (`DusklightSaveData.prepare`). Every card write is committed immediately (tmp + rename), so only the pause before the kill is needed. No native states (menu: N/A) |
 | shipwright | `shipwright/Save/{file1.sav,global.sav,...}` (Ocarina of Time native-port saves; `<filesDir>/shipwright/Save` is a symlink to it) | `<filesDir>/shipwright/{shipofharkinian.json,oot.o2r,soh.o2r,assets/,logs/}` | none: SoH_HOME (`SHIP_HOME`) points at the local dir and the `Save` symlink relocates the saves. No native states (menu: N/A) |
+| twoship | `twoship/Save/{file*.json,...}` (Majora's Mask native-port saves; `<filesDir>/twoship/saves` is a symlink to it) | `<filesDir>/twoship/{2ship2harkinian.json,mm.o2r,2ship.o2r,assets/,logs/}` | none: SHIP_HOME points at the local dir and the `saves` symlink relocates the saves. No native states (menu: N/A) |
 
 General lessons: (1) engine path config must be applied before native System init, not merely before the Activity; (2) flush before our fast Close Game kills
 the process (RetroArch OP_FLUSH, melonDS stopEmulation, Azahar isEmulationFinished, Cemu pause+250 ms, Eden write-flush patch); (3) symlinks work from internal

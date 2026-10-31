@@ -83,6 +83,18 @@ includeBuild("../shipwright-src/Android") {
     dependencySubstitution { substitute(module("com.dishii:app")).using(project(":app")) }
 }
 
+// :core-twoship (N64, The Legend of Zelda: Majora's Mask ONLY). 2 Ship 2 Harkinian (decomp-based native port) through the community
+// Android fork linkzenic/2ship2harkinian-Android (v5.0.1-android.3), cloned to ../twoship-src (local branch `romcore-local`, never
+// pushed): its Android project is a library consumed as a composite build; native libs lib2ship.so + libSDL2twoship.so, SDL2 Java
+// package org.libsdl.apptwoship (all distinct from :core-shipwright's, so both live in one APK).
+// Build notes: core-twoship/README-twoship.md (2ship.o2r must exist in twoship-src/Android/app/src/main/assets, vcpkg deps in
+// twoship-src/build/vcpkg).
+include(":core-twoship")
+includeBuild("../twoship-src/Android") {
+    name = "twoship"
+    dependencySubstitution { substitute(module("com.twoshipfork:app")).using(project(":app")) }
+}
+
 // :core-wwhd (Wii U: The Wind Waker HD only). Native runtime from ../wwhd-src (CMake, local branch `romcore`), no game code in the library;
 // the game is translated on the device from the user's own .wua. See core-wwhd/README-wwhd.md.
 include(":core-wwhd")
