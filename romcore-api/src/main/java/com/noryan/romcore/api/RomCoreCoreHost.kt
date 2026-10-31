@@ -1,5 +1,7 @@
 package com.noryan.romcore.api
 
+import com.noryan.romcore.api.menu.StateSlotProvider
+import com.noryan.romcore.api.menu.StateSupport
 import com.noryan.romcore.api.menu.saveStateKeepingUndo
 import android.app.Activity
 import android.view.KeyEvent
@@ -26,6 +28,9 @@ object RomCoreCoreHost {
 
     /** State slot used by the Save/Load State hotkeys. */
     const val QUICK_SLOT = 1
+
+    /** State slot written when a game is closed and loaded when it is launched again (the same slot as the background resume point). */
+    const val AUTO_SLOT = 0
 
     /**
      * Also installs RomCore's own UI (see [RomCoreUi]): the loading screen goes up immediately, before the core has
@@ -61,6 +66,7 @@ object RomCoreCoreHost {
             menu.model.onFastForward = { setFastForward(!fastForwarding) }
             menu.model.isFastForwarding = { fastForwarding }
             menu.model.notice = { toast(it) }
+            menu.model.closeGame = { closeGame() }
             ui.attachTopLayer()
             ui.onErrorShown = {
                 if (menu.isOpen) menu.model.close()
@@ -71,12 +77,45 @@ object RomCoreCoreHost {
             ui.onErrorResult = { r ->
                 router.menuPadSink = savedSink
                 router.setMenuOpen(menu.isOpen)
-                if (r == ErrorResult.CLOSE_GAME) session.close()
+                if (r == ErrorResult.CLOSE_GAME) closeGame()
             }
         }
 
         /** The core drew its first real frame / finished native init: fades the loading screen out. */
-        fun onGameReady() { ui.onGameReady(); perf.gameReady() }
+        fun onGameReady() { ui.onGameReady(); perf.gameReady(); gameReady = true; autoLoad() }
+
+        @Volatile private var gameReady = false
+        @Volatile private var closing = false
+
+        /** Cores whose engine has no working save states (Switch, the N64 ports, ...) report why; they get no auto-state. */
+        private val statesWork get() = (session as? StateSupport)?.stateUnavailableReason == null
+
+        /** Close Game: write the auto-state first (only once the game had actually started), then close the session. */
+        private fun closeGame() {
+            if (closing) return
+            closing = true
+            if (!gameReady || !statesWork) { session.close(); return }
+            toast("Saving state...")
+            worker.execute {
+                runCatching { session.saveState(AUTO_SLOT) }
+                main.post { session.close() }
+            }
+        }
+
+        /** Launch: once the game is running, put it back where it was closed. Skipped when the launch is itself a resume (the core does that). */
+        private fun autoLoad() {
+            val resuming = activity.intent?.extras?.let { x -> x.keySet().any { k -> k.contains("resume", ignoreCase = true) && x.get(k) == true } } == true
+            if (resuming || !statesWork) return
+            val slots = session as? StateSlotProvider ?: return
+            worker.execute {
+                if (!runCatching { slots.slotInfo(AUTO_SLOT).exists }.getOrDefault(false)) return@execute
+                for (attempt in 0 until 8) {   // the engine may need a moment after its first frame before it accepts a state
+                    Thread.sleep(if (attempt == 0) 1500L else 1000L)
+                    if (closing) return@execute
+                    if (runCatching { session.loadState(AUTO_SLOT) }.getOrDefault(false)) { toast("State restored"); return@execute }
+                }
+            }
+        }
 
         /** Optional: determinate bar (0..1, NaN = indeterminate) and a line of status text under LOADING. */
         @JvmOverloads fun setLoadingProgress(fraction: Float, text: String? = null) = ui.setLoadingProgress(fraction, text)
@@ -119,7 +158,7 @@ object RomCoreCoreHost {
         private fun runAction(a: MenuAction) {
             when (a) {
                 MenuAction.FAST_FORWARD -> setFastForward(true)
-                MenuAction.CLOSE_GAME -> session.close()
+                MenuAction.CLOSE_GAME -> closeGame()
                 MenuAction.SAVE_STATE -> worker.execute {
                     val ok = runCatching { session.saveStateKeepingUndo(QUICK_SLOT) }.getOrDefault(false)
                     toast(if (ok) "State saved" else "Save failed")
